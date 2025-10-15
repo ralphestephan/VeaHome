@@ -204,6 +204,7 @@ export default function ProfileScreen() {
         {/* Actions */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.primaryButton}>
+            <MaterialCommunityIcons name="pencil" size={16} color="white" />
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton}>
@@ -430,10 +431,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   primaryButton: {
+    flexDirection: 'row',
     backgroundColor: colors.primary,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
