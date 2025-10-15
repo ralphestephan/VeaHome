@@ -2,35 +2,29 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '../constants/theme';
-import { Device } from '../types';
 
 interface DeviceTileProps {
-  device: Device;
+  icon: string;
+  name: string;
+  value?: number | string;
+  unit?: string;
+  isActive?: boolean;
   onPress?: () => void;
 }
 
-const getDeviceIcon = (type: Device['type']): string => {
-  const iconMap: Record<Device['type'], string> = {
-    light: 'lightbulb',
-    thermostat: 'thermometer',
-    tv: 'television',
-    ac: 'air-conditioner',
-    blind: 'window-shutter',
-    shutter: 'window-shutter-open',
-    lock: 'lock',
-    camera: 'cctv',
-    speaker: 'speaker',
-    sensor: 'gauge',
-  };
-  return iconMap[type] || 'devices';
-};
-
-export default function DeviceTile({ device, onPress }: DeviceTileProps) {
+export default function DeviceTile({
+  icon,
+  name,
+  value,
+  unit,
+  isActive = false,
+  onPress,
+}: DeviceTileProps) {
   return (
     <TouchableOpacity
       style={[
         styles.container,
-        device.isActive && styles.activeContainer,
+        isActive && styles.activeContainer,
       ]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -38,29 +32,31 @@ export default function DeviceTile({ device, onPress }: DeviceTileProps) {
       <View
         style={[
           styles.iconContainer,
-          device.isActive && styles.activeIconContainer,
+          isActive && styles.activeIconContainer,
         ]}
       >
         <MaterialCommunityIcons
-          name={getDeviceIcon(device.type)}
+          name={icon as any}
           size={20}
-          color={device.isActive ? 'white' : colors.primary}
+          color={isActive ? 'white' : colors.primary}
         />
       </View>
       
       <View style={styles.content}>
-        {device.value !== undefined ? (
+        {value !== undefined ? (
           <View style={styles.valueContainer}>
-            <Text style={[styles.value, device.isActive && styles.activeText]}>
-              {device.value}
+            <Text style={[styles.value, isActive && styles.activeText]}>
+              {value}
             </Text>
-            <Text style={[styles.unit, device.isActive && styles.activeUnit]}>
-              {device.unit}
-            </Text>
+            {unit && (
+              <Text style={[styles.unit, isActive && styles.activeUnit]}>
+                {unit}
+              </Text>
+            )}
           </View>
         ) : null}
-        <Text style={[styles.name, device.isActive && styles.activeText]}>
-          {device.name}
+        <Text style={[styles.name, isActive && styles.activeText]}>
+          {name}
         </Text>
       </View>
     </TouchableOpacity>
@@ -73,6 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     gap: spacing.sm,
+    width: '47%',
   },
   activeContainer: {
     backgroundColor: colors.primary,
@@ -111,7 +108,7 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
   },
   name: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.foreground,
   },
   activeText: {
