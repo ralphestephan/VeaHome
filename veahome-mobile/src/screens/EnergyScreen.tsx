@@ -5,12 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VictoryChart, VictoryArea, VictoryTheme, VictoryAxis } from 'victory-native';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import { mockEnergyData } from '../constants/mockData';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type TimeRange = 'day' | 'week' | 'month';
 
