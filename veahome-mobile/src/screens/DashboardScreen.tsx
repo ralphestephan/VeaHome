@@ -211,40 +211,93 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     marginTop: 4,
   },
-  seeAll: {
+  sectionLabel: {
     fontSize: 12,
+    color: colors.mutedForeground,
+  },
+  customizeText: {
+    fontSize: 11,
     color: colors.primary,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
+  viewAllText: {
+    fontSize: 11,
+    color: colors.primary,
+  },
+  roomPreview: {
     marginBottom: spacing.lg,
+    borderRadius: borderRadius.xxl,
+    overflow: 'hidden',
   },
-  statCard: {
+  roomImage: {
+    height: 200,
+    width: '100%',
+  },
+  roomImageStyle: {
+    borderRadius: borderRadius.xxl,
+  },
+  roomGradient: {
     flex: 1,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
+    justifyContent: 'flex-end',
+  },
+  roomContent: {
     padding: spacing.md,
+  },
+  roomHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.foreground,
+  currentSceneLabel: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 4,
   },
-  statLabel: {
+  roomSceneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
+  },
+  changeButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  changeButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  roomBadges: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  roomBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  roomBadgeText: {
     fontSize: 10,
-    color: colors.mutedForeground,
-    textAlign: 'center',
+    color: 'white',
   },
-  quickActions: {
+  quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
   },
-  actionButton: {
-    width: '22%',
+  quickActionButton: {
+    width: '21%',
     aspectRatio: 1,
     backgroundColor: colors.secondary,
     borderRadius: borderRadius.lg,
@@ -252,9 +305,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  actionText: {
-    fontSize: 10,
+  quickActionText: {
+    fontSize: 9,
     color: colors.foreground,
     textAlign: 'center',
+  },
+  controlsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  controlCard: {
+    width: '47%',
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  activeControlCard: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  controlIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlIconSecondary: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlValue: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: 'white',
+  },
+  controlValueSecondary: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: colors.foreground,
+  },
+  controlLabel: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  controlLabelSecondary: {
+    fontSize: 11,
+    color: colors.mutedForeground,
   },
 });
