@@ -5,13 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '../constants/theme';
-import { mockRooms } from '../constants/mockData';
+import { roomsData } from '../constants/rooms';
 import Header from '../components/Header';
-import RoomCard from '../components/RoomCard';
+import InteractiveFloorPlan from '../components/InteractiveFloorPlan';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
@@ -20,7 +22,13 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const [selectedRoom, setSelectedRoom] = useState(mockRooms[0]);
+  const [selectedRoom, setSelectedRoom] = useState('salon');
+
+  const currentRoomData = roomsData[selectedRoom];
+
+  const handleRoomSelect = (roomId: string) => {
+    setSelectedRoom(roomId);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -36,90 +44,134 @@ export default function DashboardScreen() {
           <Text style={styles.sectionSubtitle}>Smart Home Control</Text>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <MaterialCommunityIcons
-              name="home"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.statValue}>38</Text>
-            <Text style={styles.statLabel}>Devices</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialCommunityIcons
-              name="lightning-bolt"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.statValue}>24.5</Text>
-            <Text style={styles.statLabel}>kWh Today</Text>
-          </View>
-          <View style={styles.statCard}>
-            <MaterialCommunityIcons
-              name="thermometer"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.statValue}>23°</Text>
-            <Text style={styles.statLabel}>Avg Temp</Text>
-          </View>
-        </View>
+        {/* Interactive Floor Plan */}
+        <InteractiveFloorPlan
+          onRoomSelect={handleRoomSelect}
+          selectedRoom={selectedRoom}
+        />
 
-        {/* Rooms List */}
+        {/* Room Preview Card */}
+        {currentRoomData?.image && (
+          <TouchableOpacity
+            style={styles.roomPreview}
+            onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoom })}
+            activeOpacity={0.9}
+          >
+            <ImageBackground
+              source={{ uri: currentRoomData.image }}
+              style={styles.roomImage}
+              imageStyle={styles.roomImageStyle}
+            >
+              <LinearGradient
+                colors={['transparent', 'rgba(19, 21, 42, 0.95)']}
+                style={styles.roomGradient}
+              >
+                <View style={styles.roomContent}>
+                  <View style={styles.roomHeader}>
+                    <View>
+                      <Text style={styles.currentSceneLabel}>Current Scene</Text>
+                      <Text style={styles.roomSceneText}>{currentRoomData.scene}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.changeButton}>
+                      <Text style={styles.changeButtonText}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.roomBadges}>
+                    <View style={styles.roomBadge}>
+                      <MaterialCommunityIcons name="lightbulb" size={12} color="white" />
+                      <Text style={styles.roomBadgeText}>{currentRoomData.lights} lights on</Text>
+                    </View>
+                    <View style={styles.roomBadge}>
+                      <MaterialCommunityIcons name="lightning-bolt" size={12} color="white" />
+                      <Text style={styles.roomBadgeText}>{currentRoomData.power}</Text>
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+            </ImageBackground>
+          </TouchableOpacity>
+        )}
+
+        {/* Quick Actions Grid */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rooms</Text>
+            <Text style={styles.sectionLabel}>Quick Actions</Text>
             <TouchableOpacity>
-              <Text style={styles.seeAll}>View All</Text>
+              <Text style={styles.customizeText}>Customize</Text>
             </TouchableOpacity>
           </View>
-          
-          {mockRooms.map((room) => (
-            <RoomCard
-              key={room.id}
-              room={room}
-              onPress={() => navigation.navigate('RoomDetail', { roomId: room.id })}
-            />
-          ))}
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="lightbulb" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>All Lights</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="lock" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Lock All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="cctv" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Cameras</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="music" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Music</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="shield" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Security</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="wifi" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Network</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="volume-high" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>Audio</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickActionButton}>
+              <MaterialCommunityIcons name="cog" size={24} color={colors.primary} />
+              <Text style={styles.quickActionText}>More</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Room Controls */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialCommunityIcons
-                name="lightbulb"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.actionText}>All Lights</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Room Controls</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoom })}>
+              <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialCommunityIcons
-                name="lock"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.actionText}>Lock All</Text>
+          </View>
+          <View style={styles.controlsGrid}>
+            <TouchableOpacity style={[styles.controlCard, styles.activeControlCard]}>
+              <View style={styles.controlIcon}>
+                <MaterialCommunityIcons name="thermometer" size={20} color="white" />
+              </View>
+              <Text style={styles.controlValue}>{currentRoomData.temperature}°C</Text>
+              <Text style={styles.controlLabel}>Climate</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialCommunityIcons
-                name="cctv"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.actionText}>Cameras</Text>
+            <TouchableOpacity style={styles.controlCard}>
+              <View style={styles.controlIconSecondary}>
+                <MaterialCommunityIcons name="lightning-bolt" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.controlValueSecondary}>{currentRoomData.power}</Text>
+              <Text style={styles.controlLabelSecondary}>Power</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <MaterialCommunityIcons
-                name="music"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.actionText}>Music</Text>
+            <TouchableOpacity style={[styles.controlCard, styles.activeControlCard]}>
+              <View style={styles.controlIcon}>
+                <MaterialCommunityIcons name="lightbulb" size={20} color="white" />
+              </View>
+              <Text style={styles.controlValue}>{currentRoomData.lights}</Text>
+              <Text style={styles.controlLabel}>Lights On</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.controlCard}>
+              <View style={styles.controlIconSecondary}>
+                <MaterialCommunityIcons name="water-percent" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.controlValueSecondary}>{currentRoomData.humidity}%</Text>
+              <Text style={styles.controlLabelSecondary}>Humidity</Text>
             </TouchableOpacity>
           </View>
         </View>
