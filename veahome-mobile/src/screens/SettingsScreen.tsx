@@ -14,14 +14,22 @@ import { colors, spacing, borderRadius } from '../constants/theme';
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
+  const [autoMode, setAutoMode] = useState(false);
   const [energySaving, setEnergySaving] = useState(true);
+  const [pushNotifs, setPushNotifs] = useState(true);
+  const [emailNotifs, setEmailNotifs] = useState(false);
+  const [soundEffects, setSoundEffects] = useState(true);
+  const [vibration, setVibration] = useState(true);
   const [cloudSync, setCloudSync] = useState(true);
+  const [autoBackup, setAutoBackup] = useState(true);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Manage your preferences</Text>
+        <View>
+          <Text style={styles.title}>Settings</Text>
+          <Text style={styles.subtitle}>Manage your preferences</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -130,6 +138,22 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="brightness-auto" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Auto Mode</Text>
+              <Text style={styles.settingValue}>Adjust with sunlight</Text>
+            </View>
+            <Switch
+              value={autoMode}
+              onValueChange={setAutoMode}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
               <MaterialCommunityIcons name="lightning-bolt" size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
@@ -139,6 +163,74 @@ export default function SettingsScreen() {
             <Switch
               value={energySaving}
               onValueChange={setEnergySaving}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+        </View>
+
+        {/* Notifications */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notification Settings</Text>
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="bell-ring" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Push Notifications</Text>
+              <Text style={styles.settingValue}>Real-time alerts</Text>
+            </View>
+            <Switch
+              value={pushNotifs}
+              onValueChange={setPushNotifs}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="email" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Email Notifications</Text>
+              <Text style={styles.settingValue}>Daily summary</Text>
+            </View>
+            <Switch
+              value={emailNotifs}
+              onValueChange={setEmailNotifs}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="volume-high" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Sound Effects</Text>
+              <Text style={styles.settingValue}>App sounds</Text>
+            </View>
+            <Switch
+              value={soundEffects}
+              onValueChange={setSoundEffects}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="vibrate" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Vibration</Text>
+              <Text style={styles.settingValue}>Haptic feedback</Text>
+            </View>
+            <Switch
+              value={vibration}
+              onValueChange={setVibration}
               trackColor={{ false: colors.muted, true: colors.primary }}
               thumbColor="white"
             />
@@ -164,6 +256,22 @@ export default function SettingsScreen() {
             />
           </View>
 
+          <View style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="backup-restore" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Auto Backup</Text>
+              <Text style={styles.settingValue}>Daily backups</Text>
+            </View>
+            <Switch
+              value={autoBackup}
+              onValueChange={setAutoBackup}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor="white"
+            />
+          </View>
+
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
               <MaterialCommunityIcons name="download" size={20} color={colors.primary} />
@@ -171,6 +279,21 @@ export default function SettingsScreen() {
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Download Data</Text>
               <Text style={styles.settingValue}>Export your data</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="delete" size={20} color={colors.destructive} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Clear Cache</Text>
+              <Text style={styles.settingValue}>Free up space</Text>
             </View>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -212,6 +335,21 @@ export default function SettingsScreen() {
               color={colors.mutedForeground}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="eye" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Privacy Policy</Text>
+              <Text style={styles.settingValue}>View policy</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Support */}
@@ -239,6 +377,21 @@ export default function SettingsScreen() {
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Contact Support</Text>
               <Text style={styles.settingValue}>Get help from our team</Text>
+            </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <MaterialCommunityIcons name="star" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Rate App</Text>
+              <Text style={styles.settingValue}>Share your feedback</Text>
             </View>
             <MaterialCommunityIcons
               name="chevron-right"
