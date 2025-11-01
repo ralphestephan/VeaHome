@@ -2,8 +2,9 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Home, Grid3X3, Zap, Wand2, Settings } from 'lucide-react-native';
 import { colors } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -11,13 +12,25 @@ import DevicesScreen from '../screens/DevicesScreen';
 import EnergyScreen from '../screens/EnergyScreen';
 import ScenesScreen from '../screens/ScenesScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import SchedulesScreen from '../screens/SchedulesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RoomDetailScreen from '../screens/RoomDetailScreen';
 import ThermostatScreen from '../screens/ThermostatScreen';
+import LoginScreen from '../screens/Auth/LoginScreen';
+import SignupScreen from '../screens/Auth/SignupScreen';
+import HubPairScreen from '../screens/HubPairScreen';
+import HubSetupWizard from '../screens/HubSetupWizard';
+import DeviceOnboardingWizard from '../screens/DeviceOnboardingWizard';
+import SceneFormScreen from '../screens/SceneFormScreen';
+import HomeSelectorScreen from '../screens/HomeSelectorScreen';
+import DeviceGroupsScreen from '../screens/DeviceGroupsScreen';
+import AutomationsScreen from '../screens/AutomationsScreen';
+import DeviceHistoryScreen from '../screens/DeviceHistoryScreen';
 
 import type { RootStackParamList, BottomTabParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const AuthStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator<BottomTabParamList>();
 
 function MainTabs() {
@@ -47,7 +60,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" size={size} color={color} />
+            <Home size={size} color={color} />
           ),
         }}
       />
@@ -57,7 +70,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Devices',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="grid" size={size} color={color} />
+            <Grid3X3 size={size} color={color} />
           ),
         }}
       />
@@ -67,7 +80,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Energy',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="lightning-bolt" size={size} color={color} />
+            <Zap size={size} color={color} />
           ),
         }}
       />
@@ -77,7 +90,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Scenes',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="magic-staff" size={size} color={color} />
+            <Wand2 size={size} color={color} />
           ),
         }}
       />
@@ -87,7 +100,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" size={size} color={color} />
+            <Settings size={size} color={color} />
           ),
         }}
       />
@@ -96,15 +109,33 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
+  const { token, loading, user } = useAuth();
+
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Dashboard" component={MainTabs} />
-        <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />
-        <Stack.Screen name="Thermostat" component={ThermostatScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-      </Stack.Navigator>
+      {loading ? null : token ? (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Dashboard" component={MainTabs} />
+          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="HubPair" component={HubPairScreen} />
+          <Stack.Screen name="HubSetup" component={HubSetupWizard} />
+          <Stack.Screen name="DeviceOnboarding" component={DeviceOnboardingWizard} />
+          <Stack.Screen name="SceneForm" component={SceneFormScreen} />
+          <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />
+          <Stack.Screen name="Thermostat" component={ThermostatScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="Schedules" component={SchedulesScreen} />
+          <Stack.Screen name="HomeSelector" component={HomeSelectorScreen} />
+          <Stack.Screen name="DeviceGroups" component={DeviceGroupsScreen} />
+          <Stack.Screen name="Automations" component={AutomationsScreen} />
+          <Stack.Screen name="DeviceHistory" component={DeviceHistoryScreen} />
+        </Stack.Navigator>
+      ) : (
+        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Login" component={LoginScreen} />
+          <AuthStack.Screen name="Signup" component={SignupScreen} />
+        </AuthStack.Navigator>
+      )}
     </NavigationContainer>
   );
 }

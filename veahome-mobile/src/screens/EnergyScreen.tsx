@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,29 +6,69 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { VictoryChart, VictoryArea, VictoryTheme, VictoryAxis } from 'victory-native';
+import { 
+  Download, 
+  Zap, 
+  TrendingDown, 
+  TrendingUp, 
+  BarChart3, 
+  Lightbulb, 
+  Fan, 
+  Tv, 
+  Shield, 
+  Calendar, 
+  Info 
+} from 'lucide-react-native';
+import { LineChart } from 'react-native-chart-kit';
 import { colors, spacing, borderRadius } from '../constants/theme';
-import { mockEnergyData } from '../constants/mockData';
+import Header from '../components/Header';
+import { useAuth } from '../context/AuthContext';
+import { useEnergyData } from '../hooks/useEnergyData';
+import { useRealtime } from '../hooks/useRealtime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type TimeRange = 'day' | 'week' | 'month';
 
 export default function EnergyScreen() {
+  const { user } = useAuth();
+  const homeId = user?.homeId;
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
+  const { energyData, loading, refresh } = useEnergyData(homeId, timeRange);
+
+  // Real-time updates
+  useRealtime({
+    onEnergyUpdate: () => {
+      refresh();
+    },
+  });
+
+  useEffect(() => {
+    if (homeId) refresh();
+  }, [timeRange, homeId]);
+
+  // Calculate totals from real data
+  const totalEnergy = energyData.reduce((sum, e) => sum + (e.total || 0), 0);
+  const totalLighting = energyData.reduce((sum, e) => sum + (e.lighting || 0), 0);
+  const totalClimate = energyData.reduce((sum, e) => sum + (e.climate || 0), 0);
+  const totalMedia = energyData.reduce((sum, e) => sum + (e.media || 0), 0);
+  const totalSecurity = energyData.reduce((sum, e) => sum + (e.security || 0), 0);
+
+  const lightingPercent = totalEnergy > 0 ? Math.round((totalLighting / totalEnergy) * 100) : 0;
+  const climatePercent = totalEnergy > 0 ? Math.round((totalClimate / totalEnergy) * 100) : 0;
+  const mediaPercent = totalEnergy > 0 ? Math.round((totalMedia / totalEnergy) * 100) : 0;
+  const securityPercent = totalEnergy > 0 ? Math.round((totalSecurity / totalEnergy) * 100) : 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Energy Monitor</Text>
-          <Text style={styles.subtitle}>Track your consumption</Text>
-        </View>
+    <View style={styles.container}>
+      <Header title="Energy" />
+      <View style={styles.subHeader}>
+        <Text style={styles.subtitle}>Track your consumption</Text>
         <TouchableOpacity style={styles.iconButton}>
-          <MaterialCommunityIcons name="download" size={20} color={colors.foreground} />
+          <Download size={20} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
@@ -64,62 +104,82 @@ export default function EnergyScreen() {
           </TouchableOpacity>
         </View>
 
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading energy data...</Text>
+          </View>
+        )}
+
         {/* Total Usage Card */}
         <View style={styles.totalCard}>
           <View style={styles.totalHeader}>
             <View>
               <Text style={styles.totalLabel}>Total Energy Usage</Text>
               <View style={styles.totalValueContainer}>
-                <Text style={styles.totalValue}>24.5</Text>
+                <Text style={styles.totalValue}>{totalEnergy.toFixed(1)}</Text>
                 <Text style={styles.totalUnit}>kWh</Text>
               </View>
             </View>
             <View style={styles.iconCircle}>
-              <MaterialCommunityIcons name="lightning-bolt" size={32} color="white" />
+              <Zap size={32} color="white" />
             </View>
           </View>
           <View style={styles.trendBadge}>
-            <MaterialCommunityIcons name="trending-down" size={14} color={colors.success} />
-            <Text style={styles.trendText}>12% less than yesterday</Text>
+            <TrendingDown size={14} color={colors.success} />
+            <Text style={styles.trendText}>Track your consumption</Text>
           </View>
         </View>
 
         {/* Chart */}
         <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Energy Usage Today</Text>
-          <VictoryChart
-            theme={VictoryTheme.material}
-            height={200}
-            padding={{ left: 40, right: 20, top: 10, bottom: 30 }}
-          >
-            <VictoryAxis
-              style={{
-                axis: { stroke: colors.muted },
-                tickLabels: { fill: colors.mutedForeground, fontSize: 10 },
+          <Text style={styles.chartTitle}>Energy Usage {timeRange === 'day' ? 'Today' : timeRange === 'week' ? 'This Week' : 'This Month'}</Text>
+          {energyData.length > 0 ? (
+            <LineChart
+              data={{
+                labels: energyData.slice(-7).map((_, i) => {
+                  if (timeRange === 'day') return `${i * 4}h`;
+                  if (timeRange === 'week') return `Day ${i + 1}`;
+                  return `Week ${i + 1}`;
+                }),
+                datasets: [
+                  {
+                    data: energyData.slice(-7).map(e => e.total || 0),
+                    color: (opacity = 1) => colors.primary,
+                    strokeWidth: 2,
+                  },
+                ],
               }}
-            />
-            <VictoryAxis
-              dependentAxis
-              style={{
-                axis: { stroke: colors.muted },
-                tickLabels: { fill: colors.mutedForeground, fontSize: 10 },
-                grid: { stroke: colors.muted, strokeDasharray: '3,3' },
-              }}
-            />
-            <VictoryArea
-              data={mockEnergyData}
-              x="time"
-              y="total"
-              style={{
-                data: {
-                  fill: colors.primary,
-                  fillOpacity: 0.3,
+              width={SCREEN_WIDTH - 96}
+              height={200}
+              chartConfig={{
+                backgroundColor: colors.secondary,
+                backgroundGradientFrom: colors.secondary,
+                backgroundGradientTo: colors.secondary,
+                decimalPlaces: 1,
+                color: (opacity = 1) => colors.primary,
+                labelColor: (opacity = 1) => colors.mutedForeground,
+                style: {
+                  borderRadius: borderRadius.lg,
+                },
+                propsForDots: {
+                  r: '4',
+                  strokeWidth: '2',
                   stroke: colors.primary,
-                  strokeWidth: 2,
                 },
               }}
+              bezier
+              style={{
+                marginVertical: spacing.md,
+                borderRadius: borderRadius.lg,
+              }}
             />
-          </VictoryChart>
+          ) : (
+            <View style={styles.chartPlaceholder}>
+              <BarChart3 size={48} color={colors.primary} />
+              <Text style={styles.chartPlaceholderText}>No data available</Text>
+            </View>
+          )}
         </View>
 
         {/* Category Cards */}
@@ -127,57 +187,57 @@ export default function EnergyScreen() {
           <View style={styles.categoryCard}>
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
-                <MaterialCommunityIcons name="lightbulb" size={20} color={colors.primary} />
+                <Lightbulb size={20} color={colors.primary} />
               </View>
               <View style={styles.trendIndicator}>
-                <MaterialCommunityIcons name="trending-down" size={12} color={colors.success} />
+                <TrendingDown size={12} color={colors.success} />
                 <Text style={styles.trendPercent}>5%</Text>
               </View>
             </View>
-            <Text style={styles.categoryValue}>11.0</Text>
-            <Text style={styles.categoryLabel}>Lighting • 45%</Text>
+            <Text style={styles.categoryValue}>{totalLighting.toFixed(1)}</Text>
+            <Text style={styles.categoryLabel}>Lighting • {lightingPercent}%</Text>
           </View>
 
           <View style={styles.categoryCard}>
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
-                <MaterialCommunityIcons name="air-conditioner" size={20} color={colors.primary} />
+                <Fan size={20} color={colors.primary} />
               </View>
               <View style={styles.trendIndicator}>
-                <MaterialCommunityIcons name="trending-down" size={12} color={colors.success} />
+                <TrendingDown size={12} color={colors.success} />
                 <Text style={styles.trendPercent}>8%</Text>
               </View>
             </View>
-            <Text style={styles.categoryValue}>13.5</Text>
-            <Text style={styles.categoryLabel}>Climate • 55%</Text>
+            <Text style={styles.categoryValue}>{totalClimate.toFixed(1)}</Text>
+            <Text style={styles.categoryLabel}>Climate • {climatePercent}%</Text>
           </View>
 
           <View style={styles.categoryCard}>
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
-                <MaterialCommunityIcons name="television" size={20} color={colors.primary} />
+                <Tv size={20} color={colors.primary} />
               </View>
               <View style={styles.trendIndicator}>
-                <MaterialCommunityIcons name="trending-up" size={12} color={colors.destructive} />
+                <TrendingUp size={12} color={colors.destructive} />
                 <Text style={[styles.trendPercent, { color: colors.destructive }]}>3%</Text>
               </View>
             </View>
-            <Text style={styles.categoryValue}>6.8</Text>
-            <Text style={styles.categoryLabel}>Media • 28%</Text>
+            <Text style={styles.categoryValue}>{totalMedia.toFixed(1)}</Text>
+            <Text style={styles.categoryLabel}>Media • {mediaPercent}%</Text>
           </View>
 
           <View style={styles.categoryCard}>
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
-                <MaterialCommunityIcons name="shield" size={20} color={colors.primary} />
+                <Shield size={20} color={colors.primary} />
               </View>
               <View style={styles.trendIndicator}>
-                <MaterialCommunityIcons name="trending-down" size={12} color={colors.success} />
+                <TrendingDown size={12} color={colors.success} />
                 <Text style={styles.trendPercent}>2%</Text>
               </View>
             </View>
-            <Text style={styles.categoryValue}>2.2</Text>
-            <Text style={styles.categoryLabel}>Security • 9%</Text>
+            <Text style={styles.categoryValue}>{totalSecurity.toFixed(1)}</Text>
+            <Text style={styles.categoryLabel}>Security • {securityPercent}%</Text>
           </View>
         </View>
 
@@ -185,7 +245,7 @@ export default function EnergyScreen() {
         <View style={styles.costCard}>
           <View style={styles.costHeader}>
             <Text style={styles.costTitle}>Estimated Cost</Text>
-            <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
+            <Calendar size={20} color={colors.primary} />
           </View>
           <View style={styles.costValueContainer}>
             <Text style={styles.costValue}>$18.45</Text>
@@ -208,7 +268,7 @@ export default function EnergyScreen() {
           <Text style={styles.sectionTitle}>Energy Insights</Text>
           <View style={styles.insightCard}>
             <View style={styles.insightIcon}>
-              <MaterialCommunityIcons name="trending-down" size={16} color={colors.success} />
+              <TrendingDown size={16} color={colors.success} />
             </View>
             <View style={styles.insightContent}>
               <Text style={styles.insightTitle}>Great Job!</Text>
@@ -219,7 +279,7 @@ export default function EnergyScreen() {
           </View>
           <View style={styles.insightCard}>
             <View style={[styles.insightIcon, { backgroundColor: `${colors.info}20` }]}>
-              <MaterialCommunityIcons name="information" size={16} color={colors.info} />
+              <Info size={16} color={colors.info} />
             </View>
             <View style={styles.insightContent}>
               <Text style={styles.insightTitle}>Peak Hours Alert</Text>
@@ -230,7 +290,7 @@ export default function EnergyScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -245,6 +305,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+  },
+  subHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   title: {
     fontSize: 22,
@@ -359,6 +426,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.mutedForeground,
     marginBottom: spacing.sm,
+  },
+  chartPlaceholder: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chartPlaceholderText: {
+    fontSize: 12,
+    color: colors.mutedForeground,
   },
   categoriesGrid: {
     flexDirection: 'row',
@@ -490,5 +567,14 @@ const styles = StyleSheet.create({
   insightText: {
     fontSize: 11,
     color: colors.mutedForeground,
+  },
+  loadingContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    color: colors.mutedForeground,
+    fontSize: 12,
   },
 });

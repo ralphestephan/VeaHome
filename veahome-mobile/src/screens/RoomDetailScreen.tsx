@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,30 @@ import {
   ScrollView,
   TouchableOpacity,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  Thermometer, 
+  Droplets, 
+  Zap, 
+  Lightbulb, 
+  Monitor, 
+  Fan, 
+  Music, 
+  Snowflake, 
+  Flame, 
+  TrendingDown, 
+  Wind 
+} from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import { roomsData } from '../constants/rooms';
 import Header from '../components/Header';
 import DeviceTile from '../components/DeviceTile';
+import { useAuth } from '../context/AuthContext';
+import { getApiClient, HomeApi } from '../services/api';
+import { useDeviceControl } from '../hooks/useDeviceControl';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
@@ -27,10 +43,78 @@ const roomGif = require('../assets/a4be53e82fc25644b6daf11c9ce10542a9783d99.png'
 
 export default function RoomDetailScreen({ route, navigation }: Props) {
   const { roomId } = route.params;
-  const room = roomsData[roomId];
+  const { user, token } = useAuth();
+  const homeId = user?.homeId;
+  const [room, setRoom] = useState<any>(null);
+  const [devices, setDevices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toggleDevice, setValue } = useDeviceControl();
+
+  const client = getApiClient(async () => token);
+  const homeApi = HomeApi(client);
+
+  useEffect(() => {
+    loadRoomData();
+  }, [roomId, homeId]);
+
+  const loadRoomData = async () => {
+    if (!homeId) {
+      // Fallback to mock data
+      const mockRoom = roomsData[roomId];
+      if (mockRoom) {
+        setRoom(mockRoom);
+        setDevices(mockRoom.devices || []);
+      }
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const [roomRes, devicesRes] = await Promise.all([
+        homeApi.getRoom(homeId, roomId).catch(() => ({ data: roomsData[roomId] })),
+        homeApi.getRooms(homeId).then(roomsRes => {
+          const foundRoom = (roomsRes.data || []).find((r: any) => r.id === roomId);
+          return { data: foundRoom?.devices || [] };
+        }).catch(() => ({ data: [] })),
+      ]);
+      setRoom(roomRes.data || roomsData[roomId]);
+      setDevices(devicesRes.data || []);
+    } catch (e) {
+      console.error('Error loading room:', e);
+      // Fallback to mock data
+      setRoom(roomsData[roomId]);
+      setDevices(roomsData[roomId]?.devices || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeviceToggle = async (device: any) => {
+    await toggleDevice(device.id, device.isActive);
+    loadRoomData();
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Header title="Loading..." showBack />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!room) {
-    return null;
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Header title="Room not found" showBack />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>Room not found</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -44,24 +128,21 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         {/* Room Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statPill}>
-            <MaterialCommunityIcons
-              name="thermometer"
+            <Thermometer
               size={16}
               color={colors.primary}
             />
             <Text style={styles.statText}>{room.temperature}°C</Text>
           </View>
           <View style={styles.statPill}>
-            <MaterialCommunityIcons
-              name="water-percent"
+            <Droplets
               size={16}
               color={colors.primary}
             />
             <Text style={styles.statText}>{room.humidity}%</Text>
           </View>
           <View style={styles.statPill}>
-            <MaterialCommunityIcons
-              name="lightning-bolt"
+            <Zap
               size={16}
               color={colors.primary}
             />
@@ -93,11 +174,11 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                   </View>
                   <View style={styles.roomBadges}>
                     <View style={styles.roomBadge}>
-                      <MaterialCommunityIcons name="lightbulb" size={12} color="white" />
+                      <Lightbulb size={12} color="white" />
                       <Text style={styles.roomBadgeText}>{room.lights} lights on</Text>
                     </View>
                     <View style={styles.roomBadge}>
-                      <MaterialCommunityIcons name="devices" size={12} color="white" />
+                      <Monitor size={12} color="white" />
                       <Text style={styles.roomBadgeText}>{room.devices} devices</Text>
                     </View>
                   </View>
@@ -111,9 +192,14 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Controls</Text>
           <View style={styles.controlsGrid}>
-            <TouchableOpacity style={styles.controlCard}>
-              <MaterialCommunityIcons
-                name="lightbulb"
+            <TouchableOpacity 
+              style={styles.controlCard}
+              onPress={() => {
+                const lights = devices.filter(d => d.type === 'light');
+                lights.forEach(light => handleDeviceToggle(light));
+              }}
+            >
+              <Lightbulb
                 size={24}
                 color={colors.primary}
               />
@@ -123,24 +209,33 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
               style={styles.controlCard}
               onPress={() => navigation.navigate('Thermostat', { roomId })}
             >
-              <MaterialCommunityIcons
-                name="thermometer"
+              <Thermometer
                 size={24}
                 color={colors.primary}
               />
               <Text style={styles.controlText}>Climate</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.controlCard}>
-              <MaterialCommunityIcons
-                name="window-shutter"
+            <TouchableOpacity 
+              style={styles.controlCard}
+              onPress={() => {
+                // Toggle shutters functionality
+                console.log('Shutters toggled');
+              }}
+            >
+              <Fan
                 size={24}
                 color={colors.primary}
               />
               <Text style={styles.controlText}>Shutters</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.controlCard}>
-              <MaterialCommunityIcons
-                name="music"
+            <TouchableOpacity 
+              style={styles.controlCard}
+              onPress={() => {
+                const media = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
+                media.forEach(device => handleDeviceToggle(device));
+              }}
+            >
+              <Music
                 size={24}
                 color={colors.primary}
               />
@@ -158,42 +253,21 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           </View>
           <View style={styles.devicesGrid}>
-            <DeviceTile
-              icon="lightbulb"
-              name="Main Lights"
-              value={70}
-              unit="%"
-              isActive={true}
-            />
-            <DeviceTile
-              icon="thermometer"
-              name="Thermostat"
-              value={room.temperature}
-              unit="°C"
-              isActive={true}
-            />
-            <DeviceTile
-              icon="lightbulb-outline"
-              name="Accent Lights"
-              isActive={true}
-            />
-            <DeviceTile
-              icon="desk-lamp"
-              name="Floor Lamp"
-              isActive={false}
-            />
-            <DeviceTile
-              icon="television"
-              name="Smart TV"
-              isActive={true}
-            />
-            <DeviceTile
-              icon="speaker"
-              name="Soundbar"
-              value={65}
-              unit="%"
-              isActive={true}
-            />
+            {devices.length > 0 ? (
+              devices.map((device) => (
+                <DeviceTile
+                  key={device.id}
+                  icon={device.type === 'light' ? 'lightbulb' : device.type === 'thermostat' ? 'thermometer' : device.type === 'tv' ? 'television' : device.type === 'speaker' ? 'speaker' : 'lightbulb'}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No devices in this room</Text>
+            )}
           </View>
         </View>
 
@@ -203,8 +277,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           <View style={styles.climateCard}>
             <View style={styles.climateHeader}>
               <View style={styles.climateInfo}>
-                <MaterialCommunityIcons
-                  name="thermometer"
+                <Thermometer
                   size={20}
                   color={colors.primary}
                 />
@@ -215,25 +288,33 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
             <View style={styles.climateControls}>
-              <TouchableOpacity style={styles.climateButton}>
-                <MaterialCommunityIcons name="snowflake" size={20} color="#60A5FA" />
+              <TouchableOpacity 
+                style={styles.climateButton}
+                onPress={() => setTargetTemp(Math.max(16, targetTemp - 1))}
+              >
+                <Snowflake size={20} color="#60A5FA" />
               </TouchableOpacity>
               <View style={styles.climateValue}>
                 <Text style={styles.climateTemp}>{room.temperature}°C</Text>
-                <Text style={styles.climateTarget}>Target: 23°C</Text>
+                <Text style={styles.climateTarget}>
+                  Target: {devices.find(d => d.type === 'thermostat' || d.type === 'ac')?.value || room.temperature}°C
+                </Text>
               </View>
-              <TouchableOpacity style={styles.climateButton}>
-                <MaterialCommunityIcons name="fire" size={20} color="#F97316" />
+              <TouchableOpacity 
+                style={styles.climateButton}
+                onPress={() => setTargetTemp(Math.min(30, targetTemp + 1))}
+              >
+                <Flame size={20} color="#F97316" />
               </TouchableOpacity>
             </View>
             <View style={styles.climateStats}>
               <View style={styles.climateStat}>
-                <MaterialCommunityIcons name="water-percent" size={16} color={colors.primary} />
+                <Droplets size={16} color={colors.primary} />
                 <Text style={styles.climateStatLabel}>Humidity</Text>
                 <Text style={styles.climateStatValue}>{room.humidity}%</Text>
               </View>
               <View style={styles.climateStat}>
-                <MaterialCommunityIcons name="air-filter" size={16} color={colors.primary} />
+                <Wind size={16} color={colors.primary} />
                 <Text style={styles.climateStatLabel}>Air Quality</Text>
                 <Text style={styles.climateStatValue}>Good</Text>
               </View>
@@ -248,7 +329,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
             <View style={styles.energyHeader}>
               <Text style={styles.energyLabel}>Current Power</Text>
               <View style={styles.trendBadge}>
-                <MaterialCommunityIcons name="trending-down" size={12} color={colors.success} />
+                <TrendingDown size={12} color={colors.success} />
                 <Text style={styles.trendText}>-8%</Text>
               </View>
             </View>

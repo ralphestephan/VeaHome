@@ -1,0 +1,111 @@
+import axios, { AxiosInstance } from 'axios';
+import Constants from 'expo-constants';
+
+const { extra } = Constants.expoConfig ?? {};
+
+const API_BASE_URL: string = (extra?.apiBaseUrl as string) || 'http://localhost:3000';
+
+let apiClient: AxiosInstance | null = null;
+
+export const getApiClient = (getToken?: () => Promise<string | null>): AxiosInstance => {
+  if (!apiClient) {
+    apiClient = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: 15000,
+    });
+
+    apiClient.interceptors.request.use(async (config) => {
+      if (getToken) {
+        const token = await getToken();
+        if (token) {
+          config.headers = config.headers ?? {};
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      return config;
+    });
+  }
+  return apiClient;
+};
+
+// Auth endpoints
+export const AuthApi = (client: AxiosInstance) => ({
+  login: (email: string, password: string) => client.post('/auth/login', { email, password }),
+  register: (name: string, email: string, password: string) => client.post('/auth/register', { name, email, password }),
+  me: () => client.get('/auth/me'),
+});
+
+// Hub & devices
+export const HubApi = (client: AxiosInstance) => ({
+  pairHub: (qrCode: string, homeId: string) => client.post('/hub/pair', { qrCode, homeId }),
+  listDevices: (homeId: string) => client.get(`/homes/${homeId}/devices`),
+  addDevice: (homeId: string, payload: any) => client.post(`/homes/${homeId}/devices`, payload),
+  learnSignal: (hubId: string, deviceId: string, action: string) => client.post(`/hubs/${hubId}/devices/${deviceId}/learn`, { action }),
+  controlDevice: (homeId: string, deviceId: string, payload: any) => client.put(`/homes/${homeId}/devices/${deviceId}/control`, payload),
+  getDevice: (homeId: string, deviceId: string) => client.get(`/homes/${homeId}/devices/${deviceId}`),
+  // Hub setup
+  connectWifi: (hubId: string, ssid: string, password: string) => client.post(`/hubs/${hubId}/wifi`, { ssid, password }),
+  assignRooms: (hubId: string, roomIds: string[]) => client.post(`/hubs/${hubId}/rooms`, { roomIds }),
+  getHubStatus: (hubId: string) => client.get(`/hubs/${hubId}/status`),
+  // Get hubs
+  listHubs: (homeId: string) => client.get(`/homes/${homeId}/hubs`),
+});
+
+// Rooms & energy
+export const HomeApi = (client: AxiosInstance) => ({
+  getHome: (homeId: string) => client.get(`/homes/${homeId}`),
+  getRooms: (homeId: string) => client.get(`/homes/${homeId}/rooms`),
+  getRoom: (homeId: string, roomId: string) => client.get(`/homes/${homeId}/rooms/${roomId}`),
+  updateRoomLayout: (homeId: string, layout: any) => client.put(`/homes/${homeId}/layout`, { layout }),
+  getEnergy: (homeId: string, range?: 'day' | 'week' | 'month') => {
+    const params = range ? { range } : {};
+    return client.get(`/homes/${homeId}/energy`, { params });
+  },
+  getRoomEnergy: (homeId: string, roomId: string) => client.get(`/homes/${homeId}/rooms/${roomId}/energy`),
+});
+
+// Scenes & schedules
+export const ScenesApi = (client: AxiosInstance) => ({
+  listScenes: (homeId: string) => client.get(`/homes/${homeId}/scenes`),
+  createScene: (homeId: string, payload: any) => client.post(`/homes/${homeId}/scenes`, payload),
+  updateScene: (homeId: string, sceneId: string, payload: any) => client.put(`/homes/${homeId}/scenes/${sceneId}`, payload),
+  deleteScene: (homeId: string, sceneId: string) => client.delete(`/homes/${homeId}/scenes/${sceneId}`),
+  activateScene: (homeId: string, sceneId: string) => client.put(`/homes/${homeId}/scenes/${sceneId}/activate`, {}),
+});
+
+// Schedules
+export const SchedulesApi = (client: AxiosInstance) => ({
+  listSchedules: (homeId: string) => client.get(`/homes/${homeId}/schedules`),
+  createSchedule: (homeId: string, payload: any) => client.post(`/homes/${homeId}/schedules`, payload),
+  updateSchedule: (homeId: string, scheduleId: string, payload: any) => client.put(`/homes/${homeId}/schedules/${scheduleId}`, payload),
+  deleteSchedule: (homeId: string, scheduleId: string) => client.delete(`/homes/${homeId}/schedules/${scheduleId}`),
+});
+
+// Multi-home
+export const HomesApi = (client: AxiosInstance) => ({
+  listHomes: () => client.get(`/homes`),
+  createHome: (name: string) => client.post(`/homes`, { name }),
+});
+
+// Device Groups
+export const DeviceGroupsApi = (client: AxiosInstance) => ({
+  listGroups: (homeId: string) => client.get(`/homes/${homeId}/device-groups`),
+  createGroup: (homeId: string, payload: any) => client.post(`/homes/${homeId}/device-groups`, payload),
+  updateGroup: (homeId: string, groupId: string, payload: any) => client.put(`/homes/${homeId}/device-groups/${groupId}`, payload),
+  deleteGroup: (homeId: string, groupId: string) => client.delete(`/homes/${homeId}/device-groups/${groupId}`),
+});
+
+// Automations
+export const AutomationsApi = (client: AxiosInstance) => ({
+  listAutomations: (homeId: string) => client.get(`/homes/${homeId}/automations`),
+  createAutomation: (homeId: string, payload: any) => client.post(`/homes/${homeId}/automations`, payload),
+  updateAutomation: (homeId: string, automationId: string, payload: any) => client.put(`/homes/${homeId}/automations/${automationId}`, payload),
+  deleteAutomation: (homeId: string, automationId: string) => client.delete(`/homes/${homeId}/automations/${automationId}`),
+});
+
+// Device History
+export const DeviceHistoryApi = (client: AxiosInstance) => ({
+  getDeviceHistory: (homeId: string, deviceId: string, range?: string) => client.get(`/homes/${homeId}/devices/${deviceId}/history`, { params: { range } }),
+});
+
+

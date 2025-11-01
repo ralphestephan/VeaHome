@@ -1,9 +1,18 @@
 export type RootStackParamList = {
   Home: undefined;
   Dashboard: undefined;
+  HubPair: undefined;
+  HubSetup: { hubId: string; qrCode: string };
+  DeviceOnboarding: { hubId: string };
   RoomDetail: { roomId: string };
   Thermostat: { roomId: string };
   Profile: undefined;
+  SceneForm: { sceneId?: string; homeId: string };
+  Schedules: undefined;
+  HomeSelector: undefined;
+  DeviceGroups: undefined;
+  Automations: undefined;
+  DeviceHistory: { deviceId: string };
 };
 
 export type BottomTabParamList = {
@@ -18,11 +27,12 @@ export interface Device {
   id: string;
   name: string;
   type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor';
-  category: 'IR' | 'RF' | 'Relay' | 'Sensor';
+  category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
   isActive: boolean;
   value?: number;
   unit?: string;
   roomId: string;
+  hubId?: string;
 }
 
 export interface Room {
@@ -36,6 +46,7 @@ export interface Room {
   power: string;
   airQuality?: number;
   image?: string;
+  model3dUrl?: string;
 }
 
 export interface Home {
@@ -45,6 +56,7 @@ export interface Home {
   rooms: Room[];
   totalDevices: number;
   totalEnergy: number;
+  model3dUrl?: string;
 }
 
 export interface User {
@@ -70,4 +82,7 @@ export interface Scene {
   icon: string;
   schedule?: string;
   isActive: boolean;
+  devices?: number;
+  description?: string;
+  deviceStates?: Record<string, any>;
 }

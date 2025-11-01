@@ -1,7 +1,32 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  Lightbulb, 
+  Thermometer, 
+  Fan, 
+  Tv, 
+  Speaker, 
+  Wifi, 
+  Camera, 
+  Lock, 
+  LucideIcon 
+} from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '../constants/theme';
+
+// Icon mapping from MaterialCommunityIcons names to Lucide icons
+const iconMap: Record<string, LucideIcon> = {
+  'lightbulb': Lightbulb,
+  'lightbulb-outline': Lightbulb,
+  'desk-lamp': Lightbulb,
+  'thermometer': Thermometer,
+  'fan': Fan,
+  'television': Tv,
+  'speaker': Speaker,
+  'wifi': Wifi,
+  'camera': Camera,
+  'lock': Lock,
+  'window-shutter': Fan, // Using Fan as placeholder for window shutters
+};
 
 interface DeviceTileProps {
   icon: string;
@@ -20,6 +45,8 @@ export default function DeviceTile({
   isActive = false,
   onPress,
 }: DeviceTileProps) {
+  const IconComponent = iconMap[icon] || Lightbulb; // Default to Lightbulb if icon not found
+  
   return (
     <TouchableOpacity
       style={[
@@ -27,37 +54,38 @@ export default function DeviceTile({
         isActive && styles.activeContainer,
       ]}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
     >
-      <View
-        style={[
-          styles.iconContainer,
-          isActive && styles.activeIconContainer,
-        ]}
-      >
-        <MaterialCommunityIcons
-          name={icon as any}
-          size={20}
-          color={isActive ? 'white' : colors.primary}
-        />
-      </View>
-      
       <View style={styles.content}>
-        {value !== undefined ? (
-          <View style={styles.valueContainer}>
-            <Text style={[styles.value, isActive && styles.activeText]}>
-              {value}
-            </Text>
-            {unit && (
-              <Text style={[styles.unit, isActive && styles.activeUnit]}>
-                {unit}
+        <View
+          style={[
+            styles.iconContainer,
+            isActive && styles.activeIconContainer,
+          ]}
+        >
+          <IconComponent
+            size={20}
+            color={isActive ? 'white' : colors.primary}
+          />
+        </View>
+        
+        <View style={styles.textContent}>
+          {value !== undefined ? (
+            <View style={styles.valueContainer}>
+              <Text style={[styles.value, isActive && styles.activeText]}>
+                {value}
               </Text>
-            )}
-          </View>
-        ) : null}
-        <Text style={[styles.name, isActive && styles.activeText]}>
-          {name}
-        </Text>
+              {unit && (
+                <Text style={[styles.unit, isActive && styles.activeUnit]}>
+                  {unit}
+                </Text>
+              )}
+            </View>
+          ) : null}
+          <Text style={[styles.name, isActive && styles.activeText]}>
+            {name}
+          </Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -66,10 +94,10 @@ export default function DeviceTile({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     padding: spacing.md,
-    gap: spacing.sm,
     width: '47%',
+    overflow: 'hidden',
   },
   activeContainer: {
     backgroundColor: colors.primary,
@@ -78,6 +106,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 20,
     elevation: 8,
+  },
+  content: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
   iconContainer: {
     width: 40,
@@ -90,13 +123,15 @@ const styles = StyleSheet.create({
   activeIconContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  content: {
-    gap: spacing.xs,
+  textContent: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   valueContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
+    marginBottom: 2,
   },
   value: {
     fontSize: 24,
@@ -104,12 +139,12 @@ const styles = StyleSheet.create({
     color: colors.foreground,
   },
   unit: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.mutedForeground,
   },
   name: {
-    fontSize: 12,
-    color: colors.foreground,
+    fontSize: 14,
+    color: colors.mutedForeground,
   },
   activeText: {
     color: 'white',

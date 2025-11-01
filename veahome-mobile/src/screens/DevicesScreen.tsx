@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,44 @@ import {
   TouchableOpacity,
   ImageBackground,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabView, SceneMap, TabBar } from 'react-native-tab-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import DeviceTileComponent from '../components/DeviceTile';
+import Header from '../components/Header';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { useHomeData } from '../hooks/useHomeData';
+import { useHubs } from '../hooks/useHubs';
+import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useRealtime } from '../hooks/useRealtime';
+import { getApiClient, HubApi } from '../services/api';
+import type { RootStackParamList } from '../types';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const smartHomeImage = require('../assets/4239477678dba8bff484942536b80f83ac9c74f8.png');
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function DevicesScreen() {
   const layout = useWindowDimensions();
+  const navigation = useNavigation<NavigationProp>();
+  const { user } = useAuth();
+  const homeId = user?.homeId;
+  const { devices, rooms, loading, refresh } = useHomeData(homeId);
+  const { hubs } = useHubs(homeId);
+  const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);
+
+  // Real-time updates
+  useRealtime({
+    onDeviceUpdate: (data) => {
+      refresh();
+    },
+  });
   const [routes] = useState([
     { key: 'lights', title: 'Lights' },
     { key: 'climate', title: 'Climate' },
@@ -27,245 +53,265 @@ export default function DevicesScreen() {
     { key: 'security', title: 'Security' },
   ]);
 
-  // Device states
-  const [bedroomLight, setBedroomLight] = useState(false);
-  const [floorLight, setFloorLight] = useState(true);
-  const [mainLight, setMainLight] = useState(true);
-  const [deskLamp, setDeskLamp] = useState(false);
-  const [kitchenLight1, setKitchenLight1] = useState(true);
-  const [kitchenLight2, setKitchenLight2] = useState(true);
-  const [bathroomLight, setBathroomLight] = useState(false);
-  const [hallwayLight, setHallwayLight] = useState(true);
-  const [officeLight, setOfficeLight] = useState(false);
-  const [gardenLight, setGardenLight] = useState(false);
+  // Filter devices by category
+  const lightsDevices = devices.filter(d => d.type === 'light');
+  const climateDevices = devices.filter(d => d.type === 'thermostat' || d.type === 'ac');
+  const windowDevices = devices.filter(d => d.type === 'blind' || d.type === 'shutter');
+  const mediaDevices = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
+  const securityDevices = devices.filter(d => d.type === 'camera' || d.type === 'lock');
 
-  const [livingFan, setLivingFan] = useState(true);
-  const [bedroomThermostat, setBedroomThermostat] = useState(false);
-  const [kitchenThermostat, setKitchenThermostat] = useState(true);
+  // Group devices by room
+  const devicesByRoom = (deviceList: typeof devices) => {
+    const grouped: Record<string, typeof devices> = {};
+    deviceList.forEach(device => {
+      if (!grouped[device.roomId]) grouped[device.roomId] = [];
+      grouped[device.roomId].push(device);
+    });
+    return grouped;
+  };
 
-  const [tvActive, setTvActive] = useState(true);
-  const [soundbar, setSoundbar] = useState(true);
-  const [speaker, setSpeaker] = useState(false);
-  const [bedroomTv, setBedroomTv] = useState(false);
+  const handleDeviceToggle = async (device: typeof devices[0]) => {
+    await toggleDevice(device.id, device.isActive);
+    refresh();
+  };
 
-  const LightsRoute = () => (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
-      {/* Bedroom */}
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Bedroom</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Main Light"
-            isActive={bedroomLight}
-            onPress={() => setBedroomLight(!bedroomLight)}
-          />
-          <DeviceTileComponent
-            icon="lightbulb-outline"
-            name="Floor Lamp"
-            value={70}
-            unit="%"
-            isActive={floorLight}
-            onPress={() => setFloorLight(!floorLight)}
-          />
+  const getRoomName = (roomId: string) => {
+    return rooms.find(r => r.id === roomId)?.name || roomId;
+  };
+
+  const getDeviceIcon = (type: string) => {
+    const iconMap: Record<string, string> = {
+      light: 'lightbulb',
+      thermostat: 'thermometer',
+      ac: 'thermometer',
+      tv: 'television',
+      speaker: 'speaker',
+      camera: 'camera',
+      lock: 'lock',
+      blind: 'fan',
+      shutter: 'fan',
+    };
+    return iconMap[type] || 'lightbulb';
+  };
+  const LightsRoute = () => {
+    const groupedDevices = devicesByRoom(lightsDevices);
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading devices...</Text>
         </View>
-      </View>
+      );
+    }
 
-      {/* Living Room */}
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Living Room</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Main Lights"
-            value={70}
-            unit="%"
-            isActive={mainLight}
-            onPress={() => setMainLight(!mainLight)}
-          />
-          <DeviceTileComponent
-            icon="desk-lamp"
-            name="Desk Lamp"
-            isActive={deskLamp}
-            onPress={() => setDeskLamp(!deskLamp)}
-          />
+    if (lightsDevices.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No lights found</Text>
         </View>
-      </View>
+      );
+    }
 
-      {/* Kitchen */}
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Kitchen</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Ceiling Light 1"
-            isActive={kitchenLight1}
-            onPress={() => setKitchenLight1(!kitchenLight1)}
-          />
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Ceiling Light 2"
-            isActive={kitchenLight2}
-            onPress={() => setKitchenLight2(!kitchenLight2)}
-          />
-        </View>
-      </View>
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+        {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
+          <View key={roomId} style={styles.deviceSection}>
+            <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
+            <View style={styles.devicesGrid}>
+              {roomDevices.map(device => (
+                <DeviceTileComponent
+                  key={device.id}
+                  icon={getDeviceIcon(device.type)}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
 
-      {/* Other Areas */}
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Other Areas</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Bathroom"
-            isActive={bathroomLight}
-            onPress={() => setBathroomLight(!bathroomLight)}
-          />
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Hallway"
-            isActive={hallwayLight}
-            onPress={() => setHallwayLight(!hallwayLight)}
-          />
-          <DeviceTileComponent
-            icon="lightbulb"
-            name="Office"
-            isActive={officeLight}
-            onPress={() => setOfficeLight(!officeLight)}
-          />
-          <DeviceTileComponent
-            icon="outdoor-lamp"
-            name="Garden"
-            isActive={gardenLight}
-            onPress={() => setGardenLight(!gardenLight)}
-          />
+  const ClimateRoute = () => {
+    const groupedDevices = devicesByRoom(climateDevices);
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading devices...</Text>
         </View>
-      </View>
-    </ScrollView>
-  );
+      );
+    }
 
-  const ClimateRoute = () => (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Climate Control</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="fan"
-            name="Living Room"
-            value="Medium"
-            isActive={livingFan}
-            onPress={() => setLivingFan(!livingFan)}
-          />
-          <DeviceTileComponent
-            icon="thermometer"
-            name="Bedroom"
-            value={22}
-            unit="°C"
-            isActive={bedroomThermostat}
-            onPress={() => setBedroomThermostat(!bedroomThermostat)}
-          />
-          <DeviceTileComponent
-            icon="air-conditioner"
-            name="Kitchen AC"
-            value={24}
-            unit="°C"
-            isActive={kitchenThermostat}
-            onPress={() => setKitchenThermostat(!kitchenThermostat)}
-          />
+    if (climateDevices.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No climate devices found</Text>
         </View>
-      </View>
-    </ScrollView>
-  );
+      );
+    }
 
-  const WindowsRoute = () => (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Window Shutters</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="window-shutter"
-            name="Living Room"
-            value={75}
-            unit="%"
-            isActive={true}
-          />
-          <DeviceTileComponent
-            icon="window-shutter"
-            name="Bedroom"
-            value={50}
-            unit="%"
-            isActive={false}
-          />
-        </View>
-      </View>
-    </ScrollView>
-  );
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+        {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
+          <View key={roomId} style={styles.deviceSection}>
+            <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
+            <View style={styles.devicesGrid}>
+              {roomDevices.map(device => (
+                <DeviceTileComponent
+                  key={device.id}
+                  icon={getDeviceIcon(device.type)}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
 
-  const MediaRoute = () => (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Entertainment</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="television"
-            name="Smart TV"
-            isActive={tvActive}
-            onPress={() => setTvActive(!tvActive)}
-          />
-          <DeviceTileComponent
-            icon="speaker"
-            name="Soundbar"
-            value={65}
-            unit="%"
-            isActive={soundbar}
-            onPress={() => setSoundbar(!soundbar)}
-          />
-          <DeviceTileComponent
-            icon="cast"
-            name="Smart Speaker"
-            isActive={speaker}
-            onPress={() => setSpeaker(!speaker)}
-          />
-          <DeviceTileComponent
-            icon="television"
-            name="Bedroom TV"
-            isActive={bedroomTv}
-            onPress={() => setBedroomTv(!bedroomTv)}
-          />
+  const WindowsRoute = () => {
+    const groupedDevices = devicesByRoom(windowDevices);
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading devices...</Text>
         </View>
-      </View>
-    </ScrollView>
-  );
+      );
+    }
 
-  const SecurityRoute = () => (
-    <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
-      <View style={styles.deviceSection}>
-        <Text style={styles.deviceSectionTitle}>Security Devices</Text>
-        <View style={styles.devicesGrid}>
-          <DeviceTileComponent
-            icon="cctv"
-            name="Front Door"
-            isActive={true}
-          />
-          <DeviceTileComponent
-            icon="lock"
-            name="Main Lock"
-            isActive={true}
-          />
-          <DeviceTileComponent
-            icon="motion-sensor"
-            name="Motion Sensor"
-            isActive={true}
-          />
-          <DeviceTileComponent
-            icon="shield"
-            name="Alarm System"
-            isActive={false}
-          />
+    if (windowDevices.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No window devices found</Text>
         </View>
-      </View>
-    </ScrollView>
-  );
+      );
+    }
+
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+        {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
+          <View key={roomId} style={styles.deviceSection}>
+            <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
+            <View style={styles.devicesGrid}>
+              {roomDevices.map(device => (
+                <DeviceTileComponent
+                  key={device.id}
+                  icon={getDeviceIcon(device.type)}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  const MediaRoute = () => {
+    const groupedDevices = devicesByRoom(mediaDevices);
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading devices...</Text>
+        </View>
+      );
+    }
+
+    if (mediaDevices.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No media devices found</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+        {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
+          <View key={roomId} style={styles.deviceSection}>
+            <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
+            <View style={styles.devicesGrid}>
+              {roomDevices.map(device => (
+                <DeviceTileComponent
+                  key={device.id}
+                  icon={getDeviceIcon(device.type)}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
+
+  const SecurityRoute = () => {
+    const groupedDevices = devicesByRoom(securityDevices);
+    
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading devices...</Text>
+        </View>
+      );
+    }
+
+    if (securityDevices.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No security devices found</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+        {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
+          <View key={roomId} style={styles.deviceSection}>
+            <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
+            <View style={styles.devicesGrid}>
+              {roomDevices.map(device => (
+                <DeviceTileComponent
+                  key={device.id}
+                  icon={getDeviceIcon(device.type)}
+                  name={device.name}
+                  value={device.value}
+                  unit={device.unit}
+                  isActive={device.isActive}
+                  onPress={() => handleDeviceToggle(device)}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    );
+  };
 
   const renderScene = SceneMap({
     lights: LightsRoute,
@@ -284,7 +330,7 @@ export default function DevicesScreen() {
       labelStyle={styles.tabLabel}
       activeColor="white"
       inactiveColor={colors.mutedForeground}
-      renderLabel={({ route, focused }) => (
+      renderLabel={({ route, focused }: { route: any; focused: boolean }) => (
         <View
           style={[
             styles.tabButton,
@@ -305,14 +351,21 @@ export default function DevicesScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Devices</Text>
-          <Text style={styles.subtitle}>38 devices connected</Text>
-        </View>
-        <TouchableOpacity style={styles.addButton}>
+    <View style={styles.container}>
+      <Header title="Devices" />
+      <View style={styles.subHeader}>
+        <Text style={styles.subtitle}>{devices.length} devices connected</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => {
+            // Get hubId from existing hubs or devices
+            const hubId = hubs.length > 0 
+              ? hubs[0].id 
+              : devices.find(d => d.hubId)?.hubId 
+              || '';
+            navigation.navigate('DeviceOnboarding', { hubId });
+          }}
+        >
           <Text style={styles.addButtonText}>Add Device</Text>
         </TouchableOpacity>
       </View>
@@ -342,7 +395,7 @@ export default function DevicesScreen() {
         onIndexChange={setIndex}
         initialLayout={{ width: layout.width }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -357,6 +410,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+  },
+  subHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   title: {
     fontSize: 22,
@@ -461,5 +521,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  loadingContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+  },
+  emptyContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  emptyText: {
+    color: colors.mutedForeground,
+    fontSize: 12,
   },
 });

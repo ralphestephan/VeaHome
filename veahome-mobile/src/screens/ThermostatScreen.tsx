@@ -6,7 +6,19 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  Snowflake, 
+  Flame, 
+  RotateCcw, 
+  Plus, 
+  Minus, 
+  Thermometer, 
+  Droplets, 
+  Fan, 
+  Power, 
+  Timer, 
+  Settings 
+} from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import Header from '../components/Header';
 import type { RouteProp } from '@react-navigation/native';
@@ -35,8 +47,7 @@ export default function ThermostatScreen({ route }: Props) {
             style={[styles.modeButton, mode === 'cool' && styles.activeModeButton]}
             onPress={() => setMode('cool')}
           >
-            <MaterialCommunityIcons
-              name="snowflake"
+            <Snowflake
               size={20}
               color={mode === 'cool' ? 'white' : colors.primary}
             />
@@ -49,8 +60,7 @@ export default function ThermostatScreen({ route }: Props) {
             style={[styles.modeButton, mode === 'heat' && styles.activeModeButton]}
             onPress={() => setMode('heat')}
           >
-            <MaterialCommunityIcons
-              name="fire"
+            <Flame
               size={20}
               color={mode === 'heat' ? 'white' : colors.primary}
             />
@@ -63,8 +73,7 @@ export default function ThermostatScreen({ route }: Props) {
             style={[styles.modeButton, mode === 'auto' && styles.activeModeButton]}
             onPress={() => setMode('auto')}
           >
-            <MaterialCommunityIcons
-              name="autorenew"
+            <RotateCcw
               size={20}
               color={mode === 'auto' ? 'white' : colors.primary}
             />
@@ -88,14 +97,14 @@ export default function ThermostatScreen({ route }: Props) {
               style={styles.controlButton}
               onPress={() => adjustTemperature(1)}
             >
-              <MaterialCommunityIcons name="plus" size={32} color={colors.foreground} />
+              <Plus size={32} color={colors.foreground} />
             </TouchableOpacity>
             
             <TouchableOpacity
               style={styles.controlButton}
               onPress={() => adjustTemperature(-1)}
             >
-              <MaterialCommunityIcons name="minus" size={32} color={colors.foreground} />
+              <Minus size={32} color={colors.foreground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -103,8 +112,7 @@ export default function ThermostatScreen({ route }: Props) {
         {/* Current Status */}
         <View style={styles.statusCard}>
           <View style={styles.statusItem}>
-            <MaterialCommunityIcons
-              name="thermometer"
+            <Thermometer
               size={20}
               color={colors.primary}
             />
@@ -115,8 +123,7 @@ export default function ThermostatScreen({ route }: Props) {
           </View>
           
           <View style={styles.statusItem}>
-            <MaterialCommunityIcons
-              name="water-percent"
+            <Droplets
               size={20}
               color={colors.primary}
             />
@@ -127,8 +134,7 @@ export default function ThermostatScreen({ route }: Props) {
           </View>
           
           <View style={styles.statusItem}>
-            <MaterialCommunityIcons
-              name="fan"
+            <Fan
               size={20}
               color={colors.primary}
             />
@@ -142,22 +148,22 @@ export default function ThermostatScreen({ route }: Props) {
         {/* Action Buttons */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialCommunityIcons name="power" size={24} color={colors.primary} />
+            <Power size={24} color={colors.primary} />
             <Text style={styles.actionText}>Power</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialCommunityIcons name="fan" size={24} color={colors.primary} />
+            <Fan size={24} color={colors.primary} />
             <Text style={styles.actionText}>Fan</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialCommunityIcons name="timer" size={24} color={colors.primary} />
+            <Timer size={24} color={colors.primary} />
             <Text style={styles.actionText}>Timer</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialCommunityIcons name="cog" size={24} color={colors.primary} />
+            <Settings size={24} color={colors.primary} />
             <Text style={styles.actionText}>Settings</Text>
           </TouchableOpacity>
         </View>

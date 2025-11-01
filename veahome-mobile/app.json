@@ -6,12 +6,16 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "main": "index.ts",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vealive.veahome"
+      "bundleIdentifier": "com.vealive.veahome",
+      "infoPlist": {
+        "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,6 +26,14 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiBaseUrl": "https://YOUR_API_BASE_URL",
+      "region": "us-east-1",
+      "appsyncEndpoint": "https://YOUR_GRAPHQL_ENDPOINT",
+      "cognitoUserPoolId": "YOUR_USER_POOL_ID",
+      "cognitoClientId": "YOUR_CLIENT_ID",
+      "demoUserEnabled": true
     }
   }
 }

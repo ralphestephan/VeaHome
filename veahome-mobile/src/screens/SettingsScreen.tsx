@@ -8,10 +8,40 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  User, 
+  ChevronRight, 
+  Home, 
+  Wifi, 
+  Smartphone, 
+  Bell, 
+  Sun, 
+  Monitor, 
+  Zap, 
+  BellRing, 
+  Mail, 
+  Volume2, 
+  Vibrate, 
+  Cloud, 
+  RotateCcw, 
+  Download, 
+  Trash2, 
+  Shield, 
+  Lock, 
+  Eye, 
+  HelpCircle, 
+  MessageCircle, 
+  Star,
+  QrCode,
+  LogOut
+} from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 export default function SettingsScreen() {
+  const { logout } = useAuth();
+  const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(true);
   const [autoMode, setAutoMode] = useState(false);
@@ -22,6 +52,14 @@ export default function SettingsScreen() {
   const [vibration, setVibration] = useState(true);
   const [cloudSync, setCloudSync] = useState(true);
   const [autoBackup, setAutoBackup] = useState(true);
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const handleAddHub = () => {
+    navigation.navigate('HubPair');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -39,14 +77,13 @@ export default function SettingsScreen() {
         {/* Profile Section */}
         <TouchableOpacity style={styles.profileCard}>
           <View style={styles.profileIcon}>
-            <MaterialCommunityIcons name="account" size={32} color="white" />
+            <User size={32} color="white" />
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>VeaLive Client</Text>
             <Text style={styles.profilePlan}>Premium Account</Text>
           </View>
-          <MaterialCommunityIcons
-            name="chevron-right"
+          <ChevronRight
             size={20}
             color="white"
           />
@@ -57,14 +94,13 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Home Settings</Text>
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="home" size={20} color={colors.primary} />
+              <Home size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Home Information</Text>
               <Text style={styles.settingValue}>VeaHome Smart</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -72,14 +108,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="wifi" size={20} color={colors.primary} />
+              <Wifi size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Network & Connection</Text>
               <Text style={styles.settingValue}>Connected • 120 Mbps</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -87,14 +122,27 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="cellphone" size={20} color={colors.primary} />
+              <Smartphone size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Devices & Integrations</Text>
               <Text style={styles.settingValue}>38 devices connected</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem} onPress={handleAddHub}>
+            <View style={styles.settingIcon}>
+              <QrCode size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Add VeaHub</Text>
+              <Text style={styles.settingValue}>Scan QR code to pair</Text>
+            </View>
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -106,7 +154,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Preferences</Text>
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="bell" size={20} color={colors.primary} />
+              <Bell size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Notifications</Text>
@@ -122,7 +170,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="theme-light-dark" size={20} color={colors.primary} />
+              <Sun size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Dark Mode</Text>
@@ -138,7 +186,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="brightness-auto" size={20} color={colors.primary} />
+              <Monitor size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Auto Mode</Text>
@@ -154,7 +202,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="lightning-bolt" size={20} color={colors.primary} />
+              <Zap size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Energy Saving</Text>
@@ -174,7 +222,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Notification Settings</Text>
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="bell-ring" size={20} color={colors.primary} />
+              <BellRing size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Push Notifications</Text>
@@ -190,7 +238,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="email" size={20} color={colors.primary} />
+              <Mail size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Email Notifications</Text>
@@ -206,7 +254,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="volume-high" size={20} color={colors.primary} />
+              <Volume2 size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Sound Effects</Text>
@@ -222,7 +270,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="vibrate" size={20} color={colors.primary} />
+              <Vibrate size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Vibration</Text>
@@ -242,7 +290,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Data & Storage</Text>
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="cloud" size={20} color={colors.primary} />
+              <Cloud size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Cloud Sync</Text>
@@ -258,7 +306,7 @@ export default function SettingsScreen() {
 
           <View style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="backup-restore" size={20} color={colors.primary} />
+              <RotateCcw size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Auto Backup</Text>
@@ -274,14 +322,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="download" size={20} color={colors.primary} />
+              <Download size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Download Data</Text>
               <Text style={styles.settingValue}>Export your data</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -289,14 +336,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="delete" size={20} color={colors.destructive} />
+              <Trash2 size={20} color={colors.destructive} />
             </View>
             <View style={styles.settingContent}>
               <Text style={[styles.settingLabel, { color: colors.destructive }]}>Clear Cache</Text>
               <Text style={styles.settingValue}>Free up space</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -308,14 +354,13 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Security & Privacy</Text>
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="shield" size={20} color={colors.primary} />
+              <Shield size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Security Settings</Text>
               <Text style={styles.settingValue}>PIN & Biometric auth</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -323,14 +368,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="lock" size={20} color={colors.primary} />
+              <Lock size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Change Password</Text>
               <Text style={styles.settingValue}>Update your password</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -338,14 +382,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="eye" size={20} color={colors.primary} />
+              <Eye size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Privacy Policy</Text>
               <Text style={styles.settingValue}>View policy</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -357,14 +400,13 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Support & Help</Text>
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="help-circle" size={20} color={colors.primary} />
+              <HelpCircle size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Help Center</Text>
               <Text style={styles.settingValue}>FAQ & Guides</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -372,14 +414,13 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="message" size={20} color={colors.primary} />
+              <MessageCircle size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Contact Support</Text>
               <Text style={styles.settingValue}>Get help from our team</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
@@ -387,14 +428,31 @@ export default function SettingsScreen() {
 
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIcon}>
-              <MaterialCommunityIcons name="star" size={20} color={colors.primary} />
+              <Star size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Rate App</Text>
               <Text style={styles.settingValue}>Share your feedback</Text>
             </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
+            <ChevronRight
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Account */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <TouchableOpacity style={styles.settingItem} onPress={handleLogout}>
+            <View style={styles.settingIcon}>
+              <LogOut size={20} color={colors.destructive} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Logout</Text>
+              <Text style={styles.settingValue}>Sign out of your account</Text>
+            </View>
+            <ChevronRight
               size={20}
               color={colors.mutedForeground}
             />
