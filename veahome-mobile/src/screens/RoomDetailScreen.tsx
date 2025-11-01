@@ -48,6 +48,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const [room, setRoom] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [targetTemp, setTargetTemp] = useState(22);
   const { toggleDevice, setValue } = useDeviceControl();
 
   const client = getApiClient(async () => token);
@@ -63,7 +64,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       const mockRoom = roomsData[roomId];
       if (mockRoom) {
         setRoom(mockRoom);
-        setDevices(mockRoom.devices || []);
+        setDevices(Array.isArray(mockRoom.devices) ? mockRoom.devices : []);
       }
       setLoading(false);
       return;
@@ -84,7 +85,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       console.error('Error loading room:', e);
       // Fallback to mock data
       setRoom(roomsData[roomId]);
-      setDevices(roomsData[roomId]?.devices || []);
+      const roomDevices = roomsData[roomId]?.devices;
+      setDevices(Array.isArray(roomDevices) ? roomDevices : []);
     } finally {
       setLoading(false);
     }
@@ -604,5 +606,23 @@ const styles = StyleSheet.create({
   energyItemText: {
     fontSize: 10,
     color: colors.mutedForeground,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  errorText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    padding: spacing.xl,
   },
 });

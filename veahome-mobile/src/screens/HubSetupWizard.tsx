@@ -313,7 +313,7 @@ export default function HubSetupWizard() {
       
       <TouchableOpacity
         style={styles.secondaryButton}
-        onPress={() => navigation.navigate('MainTabs', { screen: 'DashboardTab' })}
+        onPress={() => navigation.navigate('Dashboard')}
       >
         <Text style={styles.secondaryButtonText}>Go to Dashboard</Text>
       </TouchableOpacity>

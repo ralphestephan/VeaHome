@@ -432,6 +432,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  subHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -543,7 +550,6 @@ const styles = StyleSheet.create({
   controlItem: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    backdropFilter: 'blur(10px)',
     borderRadius: borderRadius.md,  
     padding: spacing.md,
     alignItems: 'center',

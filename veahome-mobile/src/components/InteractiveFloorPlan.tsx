@@ -32,6 +32,21 @@ export default function InteractiveFloorPlan({
   const draggingRoomId = useRef<string | null>(null);
   const dragStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // Use real rooms if provided, otherwise fallback to roomsData
+  const roomsToRender = rooms && rooms.length > 0
+    ? rooms.map(r => ({
+        id: r.id,
+        name: r.name,
+        color: roomsData[r.id]?.color || colors.primary,
+        path: roomsData[r.id]?.path || 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
+        temperature: r.temperature,
+        humidity: r.humidity,
+        lights: r.lights,
+        power: r.power,
+        scene: r.scene,
+      }))
+    : Object.values(roomsData);
+
   const panResponder = useMemo(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => isEditMode,
@@ -57,21 +72,6 @@ export default function InteractiveFloorPlan({
       },
     }),
   [isEditMode, roomsToRender, roomPositions]);
-
-  // Use real rooms if provided, otherwise fallback to roomsData
-  const roomsToRender = rooms && rooms.length > 0
-    ? rooms.map(r => ({
-        id: r.id,
-        name: r.name,
-        color: roomsData[r.id]?.color || colors.primary,
-        path: roomsData[r.id]?.path || 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
-        temperature: r.temperature,
-        humidity: r.humidity,
-        lights: r.lights,
-        power: r.power,
-        scene: r.scene,
-      }))
-    : Object.values(roomsData);
 
   const renderRoom = (room: RoomData | any) => {
     const isSelected = selectedRoom === room.id;

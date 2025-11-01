@@ -207,15 +207,17 @@ export default function SceneFormScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header 
-        title={sceneId ? 'Edit Scene' : 'Create Scene'} 
-        showBack 
-        rightButton={sceneId ? (
+      <View style={styles.headerContainer}>
+        <Header 
+          title={sceneId ? 'Edit Scene' : 'Create Scene'} 
+          showBack 
+        />
+        {sceneId && (
           <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
             <Trash2 size={20} color={colors.destructive || '#ef4444'} />
           </TouchableOpacity>
-        ) : undefined}
-      />
+        )}
+      </View>
       
       <ScrollView
         style={styles.content}
@@ -375,6 +377,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: spacing.lg,
   },
   content: {
     flex: 1,
