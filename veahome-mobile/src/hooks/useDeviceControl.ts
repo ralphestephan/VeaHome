@@ -37,3 +37,4 @@ export const useDeviceControl = () => {
   return { controlDevice, toggleDevice, setValue, loading };
 };
 
+
