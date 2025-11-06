@@ -1,59 +1,155 @@
-import { LucideIcon } from "lucide-react";
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { 
+  Lightbulb, 
+  Thermometer, 
+  Fan, 
+  Tv, 
+  Speaker, 
+  Wifi, 
+  Camera, 
+  Lock, 
+  LucideIcon 
+} from 'lucide-react-native';
+import { colors, spacing, borderRadius } from '../constants/theme';
+
+// Icon mapping from MaterialCommunityIcons names to Lucide icons
+const iconMap: Record<string, LucideIcon> = {
+  'lightbulb': Lightbulb,
+  'lightbulb-outline': Lightbulb,
+  'desk-lamp': Lightbulb,
+  'thermometer': Thermometer,
+  'fan': Fan,
+  'television': Tv,
+  'speaker': Speaker,
+  'wifi': Wifi,
+  'camera': Camera,
+  'lock': Lock,
+  'window-shutter': Fan, // Using Fan as placeholder for window shutters
+};
 
 interface DeviceTileProps {
-  icon: LucideIcon;
+  icon: string;
   name: string;
-  value?: string | number;
+  value?: number | string;
   unit?: string;
   isActive?: boolean;
-  onClick?: () => void;
-  className?: string;
+  onPress?: () => void;
 }
 
-export function DeviceTile({
-  icon: Icon,
+export default function DeviceTile({
+  icon,
   name,
   value,
   unit,
   isActive = false,
-  onClick,
-  className = "",
+  onPress,
 }: DeviceTileProps) {
+  const IconComponent = iconMap[icon] || Lightbulb; // Default to Lightbulb if icon not found
+  
   return (
-    <button
-      onClick={onClick}
-      className={`relative overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:scale-105 ${
-        isActive
-          ? "bg-primary shadow-[0_0_20px_rgba(91,124,255,0.4)]"
-          : "bg-secondary"
-      } ${className}`}
+    <TouchableOpacity
+      style={[
+        styles.container,
+        isActive && styles.activeContainer,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
     >
-      <div className="flex flex-col items-start gap-3">
-        <div
-          className={`rounded-xl p-2 ${
-            isActive ? "bg-white/20" : "bg-muted"
-          }`}
+      <View style={styles.content}>
+        <View
+          style={[
+            styles.iconContainer,
+            isActive && styles.activeIconContainer,
+          ]}
         >
-          <Icon className={`h-5 w-5 ${isActive ? "text-white" : "text-primary"}`} />
-        </div>
-        <div className="flex flex-col items-start">
-          {value !== undefined && (
-            <div className="flex items-baseline gap-1">
-              <span className={`text-2xl ${isActive ? "text-white" : "text-foreground"}`}>
+          <IconComponent
+            size={20}
+            color={isActive ? 'white' : colors.primary}
+          />
+        </View>
+        
+        <View style={styles.textContent}>
+          {value !== undefined ? (
+            <View style={styles.valueContainer}>
+              <Text style={[styles.value, isActive && styles.activeText]}>
                 {value}
-              </span>
+              </Text>
               {unit && (
-                <span className={`text-sm ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
+                <Text style={[styles.unit, isActive && styles.activeUnit]}>
                   {unit}
-                </span>
+                </Text>
               )}
-            </div>
-          )}
-          <span className={`text-sm ${isActive ? "text-white/90" : "text-muted-foreground"}`}>
+            </View>
+          ) : null}
+          <Text style={[styles.name, isActive && styles.activeText]}>
             {name}
-          </span>
-        </div>
-      </div>
-    </button>
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    width: '47%',
+    overflow: 'hidden',
+  },
+  activeContainer: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  content: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeIconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  textContent: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  valueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginBottom: 2,
+  },
+  value: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: colors.foreground,
+  },
+  unit: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+  },
+  name: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+  },
+  activeText: {
+    color: 'white',
+  },
+  activeUnit: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+});
