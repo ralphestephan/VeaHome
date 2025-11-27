@@ -114,6 +114,8 @@ export interface JWTPayload {
   email: string;
 }
 
+import { Request } from 'express';
+
 export interface AuthRequest extends Request {
   user?: JWTPayload;
 }
