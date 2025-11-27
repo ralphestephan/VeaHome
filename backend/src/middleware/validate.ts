@@ -3,7 +3,7 @@ import { ObjectSchema } from 'joi';
 import { errorResponse } from '../utils/response';
 
 export function validate(schema: ObjectSchema) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const { error } = schema.validate(req.body, { abortEarly: false });
     
     if (error) {
@@ -11,7 +11,8 @@ export function validate(schema: ObjectSchema) {
         field: detail.path.join('.'),
         message: detail.message,
       }));
-      return errorResponse(res, 'Validation failed', 400, errors);
+      errorResponse(res, 'Validation failed', 400, errors);
+      return;
     }
     
     next();
