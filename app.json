@@ -28,7 +28,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8000",
+      "apiBaseUrl": "http://63.34.243.171:8000",
       "region": "us-east-1",
       "appsyncEndpoint": "https://YOUR_GRAPHQL_ENDPOINT",
       "cognitoUserPoolId": "YOUR_USER_POOL_ID",
