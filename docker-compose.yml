@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - AWS_REGION=${AWS_REGION}
+      - AWS_IOT_ENDPOINT=${AWS_IOT_ENDPOINT}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - veahome-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: veahome
+      POSTGRES_USER: ${POSTGRES_USER:-veahome}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - veahome-network
+
+volumes:
+  postgres-data:
+
+networks:
+  veahome-network:
+    driver: bridge
