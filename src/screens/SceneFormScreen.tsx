@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,8 +26,10 @@ import {
   CheckCircle,
   ChevronRight,
 } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
+import CreationHero from '../components/CreationHero';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, ScenesApi, HubApi, HomeApi } from '../services/api';
@@ -60,6 +62,8 @@ const SCENE_ICONS = [
 export default function SceneFormScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { user, token } = useAuth();
   const { sceneId, homeId } = route.params || { homeId: user?.homeId || '' };
   const { devices } = useHomeData(homeId);
@@ -196,7 +200,11 @@ export default function SceneFormScreen() {
   if (loading && sceneId) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <Header title={sceneId ? 'Edit Scene' : 'Create Scene'} showBack />
+        <Header
+          title={sceneId ? 'Edit Scene' : 'Create Scene'}
+          showBack
+          showSettings={false}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading scene...</Text>
@@ -205,19 +213,29 @@ export default function SceneFormScreen() {
     );
   }
 
+  const selectedCount = selectedDevices.size;
+  const heroMeta = selectedCount
+    ? `${selectedCount} device${selectedCount === 1 ? '' : 's'} included`
+    : 'Select at least one device';
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.headerContainer}>
-        <Header 
-          title={sceneId ? 'Edit Scene' : 'Create Scene'} 
-          showBack 
-        />
-        {sceneId && (
+      <Header
+        title={sceneId ? 'Edit Scene' : 'Create Scene'}
+        showBack
+        showSettings={false}
+      />
+      <CreationHero
+        eyebrow={sceneId ? 'Scene details' : 'New scene'}
+        title={sceneId ? 'Edit Scene' : 'Create Scene'}
+        description="Group lighting, climate, and utility states into a single tap experience."
+        meta={heroMeta}
+        actionSlot={sceneId ? (
           <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
-            <Trash2 size={20} color={colors.destructive || '#ef4444'} />
+            <Trash2 size={18} color={colors.destructive || '#ef4444'} />
           </TouchableOpacity>
-        )}
-      </View>
+        ) : undefined}
+      />
       
       <ScrollView
         style={styles.content}
@@ -373,16 +391,10 @@ export default function SceneFormScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: spacing.lg,
   },
   content: {
     flex: 1,

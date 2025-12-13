@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -35,15 +36,18 @@ import {
   QrCode,
   LogOut
 } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
+
 
 export default function SettingsScreen() {
   const { logout } = useAuth();
   const navigation = useNavigation<any>();
+  const { colors, gradients, shadows, mode, setMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
   const [autoMode, setAutoMode] = useState(false);
   const [energySaving, setEnergySaving] = useState(true);
   const [pushNotifs, setPushNotifs] = useState(true);
@@ -61,6 +65,58 @@ export default function SettingsScreen() {
     navigation.navigate('HubPair');
   };
 
+  const handleProfilePress = () => {
+    navigation.navigate('Profile');
+  };
+
+  const handleHomeInfoPress = () => {
+    navigation.navigate('HomeSelector');
+  };
+
+  const handleDevicesPress = () => {
+    navigation.navigate('Devices');
+  };
+
+  const handleThemeToggle = (value: boolean) => {
+    setMode(value ? 'dark' : 'light');
+  };
+
+  const showInfo = (title: string, message: string) => {
+    Alert.alert(title, message);
+  };
+
+  const handleDownloadData = () => {
+    showInfo('Data export', 'We just emailed your latest export to your inbox.');
+  };
+
+  const handleClearCache = () => {
+    showInfo('Cache cleared', 'Temporary files were cleared successfully.');
+  };
+
+  const handleSecuritySettings = () => {
+    showInfo('Security', 'Manage biometrics and PIN from your hub app.');
+  };
+
+  const handleChangePassword = () => {
+    showInfo('Change password', 'Use the Profile screen to update your password.');
+  };
+
+  const handlePrivacyPolicy = () => {
+    showInfo('Privacy policy', 'Opening policy in your browser soon.');
+  };
+
+  const handleHelpCenter = () => {
+    showInfo('Help center', 'Visit help.vealive.com for detailed guides.');
+  };
+
+  const handleSupport = () => {
+    showInfo('Support', 'We opened a ticket with the VeaLive team.');
+  };
+
+  const handleRateApp = () => {
+    showInfo('Thank you!', 'Redirecting you to the store to leave a review.');
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -75,7 +131,7 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Profile Section */}
-        <TouchableOpacity style={styles.profileCard}>
+        <TouchableOpacity style={styles.profileCard} onPress={handleProfilePress}>
           <View style={styles.profileIcon}>
             <User size={32} color="white" />
           </View>
@@ -92,7 +148,7 @@ export default function SettingsScreen() {
         {/* Home Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Home Settings</Text>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleHomeInfoPress}>
             <View style={styles.settingIcon}>
               <Home size={20} color={colors.primary} />
             </View>
@@ -106,7 +162,10 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => showInfo('Network & Connection', 'Manage Wi-Fi from your linked hub app.')}
+          >
             <View style={styles.settingIcon}>
               <Wifi size={20} color={colors.primary} />
             </View>
@@ -120,7 +179,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleDevicesPress}>
             <View style={styles.settingIcon}>
               <Smartphone size={20} color={colors.primary} />
             </View>
@@ -164,7 +223,7 @@ export default function SettingsScreen() {
               value={notifications}
               onValueChange={setNotifications}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -174,13 +233,15 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Dark Mode</Text>
-              <Text style={styles.settingValue}>Always on</Text>
+              <Text style={styles.settingValue}>
+                {mode === 'dark' ? 'Ambient glow' : 'Soft daylight'}
+              </Text>
             </View>
             <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
+              value={mode === 'dark'}
+              onValueChange={handleThemeToggle}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -196,7 +257,7 @@ export default function SettingsScreen() {
               value={autoMode}
               onValueChange={setAutoMode}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -212,7 +273,7 @@ export default function SettingsScreen() {
               value={energySaving}
               onValueChange={setEnergySaving}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
         </View>
@@ -232,7 +293,7 @@ export default function SettingsScreen() {
               value={pushNotifs}
               onValueChange={setPushNotifs}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -248,7 +309,7 @@ export default function SettingsScreen() {
               value={emailNotifs}
               onValueChange={setEmailNotifs}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -264,7 +325,7 @@ export default function SettingsScreen() {
               value={soundEffects}
               onValueChange={setSoundEffects}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -280,7 +341,7 @@ export default function SettingsScreen() {
               value={vibration}
               onValueChange={setVibration}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
         </View>
@@ -300,7 +361,7 @@ export default function SettingsScreen() {
               value={cloudSync}
               onValueChange={setCloudSync}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
@@ -316,11 +377,11 @@ export default function SettingsScreen() {
               value={autoBackup}
               onValueChange={setAutoBackup}
               trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor="white"
+              thumbColor={colors.foreground}
             />
           </View>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleDownloadData}>
             <View style={styles.settingIcon}>
               <Download size={20} color={colors.primary} />
             </View>
@@ -334,7 +395,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleClearCache}>
             <View style={styles.settingIcon}>
               <Trash2 size={20} color={colors.destructive} />
             </View>
@@ -352,7 +413,7 @@ export default function SettingsScreen() {
         {/* Security */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Security & Privacy</Text>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleSecuritySettings}>
             <View style={styles.settingIcon}>
               <Shield size={20} color={colors.primary} />
             </View>
@@ -366,7 +427,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
             <View style={styles.settingIcon}>
               <Lock size={20} color={colors.primary} />
             </View>
@@ -380,7 +441,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handlePrivacyPolicy}>
             <View style={styles.settingIcon}>
               <Eye size={20} color={colors.primary} />
             </View>
@@ -398,7 +459,7 @@ export default function SettingsScreen() {
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support & Help</Text>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleHelpCenter}>
             <View style={styles.settingIcon}>
               <HelpCircle size={20} color={colors.primary} />
             </View>
@@ -412,7 +473,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleSupport}>
             <View style={styles.settingIcon}>
               <MessageCircle size={20} color={colors.primary} />
             </View>
@@ -426,7 +487,7 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity style={styles.settingItem} onPress={handleRateApp}>
             <View style={styles.settingIcon}>
               <Star size={20} color={colors.primary} />
             </View>
@@ -470,118 +531,117 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.foreground,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    gap: spacing.md,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  profileIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 2,
-  },
-  profilePlan: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.muted,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingContent: {
-    flex: 1,
-  },
-  settingLabel: {
-    fontSize: 13,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  settingValue: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  aboutCard: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  aboutText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  aboutVersion: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-    marginTop: 2,
-  },
-  aboutCopyright: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginTop: spacing.sm,
-  },
-});
+const createStyles = (colors: any, gradients: any, shadows: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    title: {
+      fontSize: fontSize.xxl,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    subtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+      paddingBottom: 100,
+    },
+    profileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.xxl,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+      gap: spacing.md,
+      ...shadows.neonPrimary,
+    },
+    profileIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    profileInfo: {
+      flex: 1,
+    },
+    profileName: {
+      fontSize: fontSize.lg,
+      fontWeight: '600',
+      color: 'white',
+      marginBottom: 2,
+    },
+    profilePlan: {
+      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    section: {
+      marginBottom: spacing.lg,
+    },
+    sectionTitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.md,
+    },
+    settingItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      ...shadows.sm,
+    },
+    settingIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.muted,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    settingContent: {
+      flex: 1,
+    },
+    settingLabel: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    settingValue: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    aboutCard: {
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      alignItems: 'center',
+      ...shadows.md,
+    },
+    aboutText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    aboutVersion: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginTop: 2,
+    },
+    aboutCopyright: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginTop: spacing.sm,
+    },
+  });

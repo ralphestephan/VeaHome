@@ -1,45 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
+  Animated,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
-  ArrowRight, 
   Zap, 
-  TrendingDown, 
   Home as HomeIcon, 
-  CheckCircle, 
-  Thermometer, 
-  TrendingUp, 
   Lightbulb, 
-  Fan, 
-  Camera, 
   Lock, 
   Clock, 
-  BarChart3 
+  Moon,
+  Sun,
+  Shield,
+  ChevronRight,
+  Plus,
+  Edit3,
+  Save,
+  Sparkles,
 } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { 
+  spacing, 
+  borderRadius, 
+  fontSize, 
+  fontWeight,
+  ThemeColors,
+} from '../constants/theme';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabParamList, RootStackParamList } from '../types';
-import InteractiveFloorPlan from '../components/InteractiveFloorPlan';
+import InteractiveFloorPlan, { InteractiveFloorPlanHandle } from '../components/InteractiveFloorPlan';
 import RoomCard from '../components/RoomCard';
+import Model3DViewer from '../components/Model3DViewer';
 import { useAuth } from '../context/AuthContext';
 import { useHomeData } from '../hooks/useHomeData';
 import { useEnergyData } from '../hooks/useEnergyData';
 import { useRealtime } from '../hooks/useRealtime';
+import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useDemo } from '../context/DemoContext';
 import { Room, Device, Home } from '../types';
 import { getApiClient, HomeApi } from '../services/api';
+import { useToast } from '../components/Toast';
+import { useTheme } from '../context/ThemeContext';
+import { 
+  NeonCard, 
+  SectionHeader, 
+  SkeletonLoader, 
+  StatusBadge,
+  AnimatedPressable,
+} from '../components/ui';
+import HomeStatusBar from '../components/HomeStatusBar';
+import EnergyCard from '../components/EnergyCard';
+import QuickAction from '../components/QuickAction';
+import DeviceTile from '../components/DeviceTile';
+import DeviceControlModal from '../components/DeviceControlModal';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const VIEW_MODE_ORDER = ['2d', '3d'] as const;
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'DashboardTab'>,
@@ -48,13 +74,70 @@ type NavigationProp = CompositeNavigationProp<
 
 export default function DashboardScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
+  const viewContentFade = useRef(new Animated.Value(1)).current;
+  const heroScale = useRef(new Animated.Value(0.95)).current;
+  const heroOpacity = useRef(new Animated.Value(0)).current;
   const { user, token } = useAuth();
   const homeId = user?.homeId;
-  const { rooms, devices, loading, refresh } = useHomeData(homeId);
+  const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
+  const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene } = useDemo();
+  
+  // Use demo data if in demo mode
+  const rooms = isDemoMode ? demoRooms : homeRooms;
+  const devices = isDemoMode ? demoDevices : homeDevices;
+  
   const { energyData } = useEnergyData(homeId, 'day');
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [home, setHome] = useState<Home | null>(null);
+  const [isFloorPlanEditing, setIsFloorPlanEditing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const canEditLayout = viewMode === '2d';
+  const isEditSession = canEditLayout && isFloorPlanEditing;
+  const floorPlanRef = useRef<InteractiveFloorPlanHandle>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const roomPreviewPosition = useRef(0);
+  const { controlDevice } = useDeviceControl();
+  const [quickActionLoading, setQuickActionLoading] = useState<null | 'lights' | 'locks' | 'scene'>(null);
+  const { showToast } = useToast();
+  
+  // Device control modal state
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+
+  // Hero animation on mount
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(heroScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(heroOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    viewContentFade.setValue(0.4);
+    Animated.timing(viewContentFade, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [viewMode, viewContentFade]);
+
+  useEffect(() => {
+    if (!canEditLayout && isFloorPlanEditing) {
+      setIsFloorPlanEditing(false);
+    }
+  }, [canEditLayout, isFloorPlanEditing]);
 
   // Load home data for 3D model URL
   useEffect(() => {
@@ -74,25 +157,48 @@ export default function DashboardScreen() {
   }, [homeId, token]);
 
   // Real-time updates
-  useRealtime({
-    onDeviceUpdate: (data) => {
-      // Refresh devices when real-time update received
-      refresh();
-    },
-    onEnergyUpdate: () => {
-      // Energy data will refresh on next fetch
-    },
+  const { isConnected: isCloudConnected } = useRealtime({
+    onDeviceUpdate: () => refresh(),
+    onEnergyUpdate: () => {},
   });
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       if (homeId) refresh();
-    }, [homeId])
+    }, [homeId, refresh])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  const scrollToRoomPreview = () => {
+    if (!scrollRef.current) return;
+    const targetY = Math.max(roomPreviewPosition.current - spacing.xl, 0);
+    scrollRef.current.scrollTo({ y: targetY, animated: true });
+  };
 
   const handleRoomSelect = (roomId: string) => {
     setSelectedRoom(roomId);
-    navigation.navigate('RoomDetail', { roomId });
+    requestAnimationFrame(scrollToRoomPreview);
+  };
+
+  const handleEditRoomsPress = () => {
+    if (!canEditLayout) return;
+    const controls = floorPlanRef.current;
+    if (!controls) return;
+    if (isEditSession) {
+      controls.saveLayout();
+    } else {
+      controls.enterEditMode();
+    }
+  };
+
+  const handleAddRoomPress = () => {
+    if (!canEditLayout) return;
+    floorPlanRef.current?.openAddRoomModal();
   };
 
   const handleLayoutUpdate = async (layout: any) => {
@@ -107,804 +213,808 @@ export default function DashboardScreen() {
     }
   };
 
-  // Calculate stats from real data
-  const activeDevicesCount = devices.filter(d => d.isActive).length;
-  const avgTemperature = rooms.length > 0 
-    ? rooms.reduce((sum, r) => sum + (r.temperature || 0), 0) / rooms.length 
+  const handleRoomCreated = async (room: Room) => {
+    try {
+      await createRoom(room);
+    } catch (error) {
+      console.error('Room creation error:', error);
+    }
+  };
+
+  const runBulkDeviceCommand = async (
+    targets: Device[],
+    desiredState: boolean,
+    actionKey: 'lights' | 'locks',
+    successMessage: string,
+  ) => {
+    if (!targets.length) {
+      showToast('No devices available for this action.', { type: 'info' });
+      return;
+    }
+    setQuickActionLoading(actionKey);
+    try {
+      if (isDemoMode) {
+        // In demo mode, toggle each device using demo context
+        targets.forEach((device) => {
+          if (device.isActive !== desiredState) {
+            demoToggleDevice(device.id);
+          }
+        });
+      } else {
+        await Promise.all(targets.map((device) => controlDevice(device.id, { isActive: desiredState })));
+        refresh();
+      }
+      showToast(successMessage, { type: 'success' });
+    } catch (error) {
+      console.error('Quick action error:', error);
+      showToast('Unable to complete action.', { type: 'error' });
+    } finally {
+      setQuickActionLoading(null);
+    }
+  };
+
+  const handleToggleAllLights = async () => {
+    const lights = devices.filter((device) => device.type === 'light');
+    const shouldTurnOn = lights.some((device) => !device.isActive);
+    await runBulkDeviceCommand(
+      lights,
+      shouldTurnOn,
+      'lights',
+      shouldTurnOn ? 'All lights have been turned on.' : 'All lights have been turned off.',
+    );
+  };
+
+  const handleLockAllDoors = async () => {
+    const locks = devices.filter((device) => device.type === 'lock');
+    await runBulkDeviceCommand(locks, true, 'locks', 'All doors secured');
+  };
+
+  const handleSceneActivate = async () => {
+    setQuickActionLoading('scene');
+    if (isDemoMode) {
+      activateScene('s2'); // Activate "Evening Relax" scene
+    }
+    setTimeout(() => {
+      setQuickActionLoading(null);
+      showToast('Evening scene activated', { type: 'success' });
+    }, 500);
+  };
+
+  // Device modal handlers
+  const handleDeviceLongPress = (device: Device) => {
+    setSelectedDevice(device);
+    setShowDeviceModal(true);
+  };
+
+  const handleModalToggle = (deviceId: string) => {
+    if (isDemoMode) {
+      demoToggleDevice(deviceId);
+    } else {
+      controlDevice(deviceId, { isActive: !selectedDevice?.isActive });
+      refresh();
+    }
+  };
+
+  const handleModalSetValue = (deviceId: string, value: number) => {
+    if (isDemoMode) {
+      const demo = demoDevices.find((d) => d.id === deviceId);
+      if (demo) {
+        demoToggleDevice(deviceId); // Toggle to update state in demo
+      }
+    } else {
+      controlDevice(deviceId, { value });
+      refresh();
+    }
+  };
+
+  // Computed values
+  const firstName = user?.name?.split(' ')[0] || 'Guest';
+  const selectedRoomData = selectedRoom ? rooms.find((room) => room.id === selectedRoom) : null;
+  const activeDevicesCount = devices.filter((device) => device.isActive).length;
+  const lightsOnCount = devices.filter((d) => d.type === 'light' && d.isActive).length;
+  const totalLights = devices.filter((d) => d.type === 'light').length;
+  const avgTemperature = rooms.length
+    ? rooms.reduce((sum, room) => sum + (room.temperature || 0), 0) / rooms.length
     : 0;
-  const todayEnergy = energyData.length > 0
-    ? energyData.reduce((sum, e) => sum + (e.total || 0), 0)
-    : 0;
+  const todayEnergy = energyData.reduce((sum, point) => sum + (point.total || 0), 0);
+
+  // Get favorite/active devices for quick access
+  const favoriteDevices = devices
+    .filter((d) => d.isActive || d.type === 'thermostat')
+    .slice(0, 4);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  useEffect(() => {
+    if (!selectedRoomData) return;
+    const timeout = setTimeout(scrollToRoomPreview, 150);
+    return () => clearTimeout(timeout);
+  }, [selectedRoomData]);
+
+  const handleNotificationsPress = () => {
+    navigation.navigate('Notifications');
+  };
+
+  const renderViewToggle = () => (
+    <View style={styles.viewModeToggle}>
+      {VIEW_MODE_ORDER.map((modeKey) => {
+        const isActive = viewMode === modeKey;
+        return (
+          <TouchableOpacity
+            key={modeKey}
+            style={[styles.viewChip, isActive && styles.viewChipActive]}
+            onPress={() => setViewMode(modeKey)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.viewChipText, isActive && styles.viewChipTextActive]}>
+              {modeKey.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const renderViewActions = () => (
+    <View style={styles.viewIconActions}>
+      <TouchableOpacity
+        style={[
+          styles.viewIconButton,
+          isEditSession && styles.viewIconButtonActive,
+          !canEditLayout && styles.viewIconButtonDisabled,
+        ]}
+        onPress={handleEditRoomsPress}
+        activeOpacity={0.85}
+        disabled={!canEditLayout}
+      >
+        {isEditSession ? (
+          <Save size={18} color="#FFFFFF" />
+        ) : (
+          <Edit3 size={18} color={colors.primary} />
+        )}
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.viewIconButton,
+          styles.viewIconButtonPrimary,
+          !canEditLayout && styles.viewIconButtonDisabled,
+        ]}
+        onPress={handleAddRoomPress}
+        activeOpacity={0.85}
+        disabled={!canEditLayout}
+      >
+        <Plus size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Loading skeleton
+  if (loading && !refreshing && devices.length === 0) {
+    return (
+      <View style={styles.safeArea}>
+        <Header showBack={false} showNotifications />
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+          <SkeletonLoader width="100%" height={180} borderRadius={borderRadius.xxl} />
+          <View style={{ height: spacing.lg }} />
+          <SkeletonLoader width="100%" height={80} borderRadius={borderRadius.xl} />
+          <View style={{ height: spacing.lg }} />
+          <SkeletonLoader width={120} height={20} borderRadius={borderRadius.md} />
+          <View style={{ height: spacing.md }} />
+          <View style={styles.skeletonRow}>
+            <SkeletonLoader width="48%" height={100} borderRadius={borderRadius.xl} />
+            <SkeletonLoader width="48%" height={100} borderRadius={borderRadius.xl} />
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <Header />
+    <View style={styles.safeArea}>
+      <Header showBack={false} showNotifications />
       <ScrollView
+        ref={scrollRef}
         style={styles.content}
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
-        {/* Interactive Floor Plan - moved to top */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Home</Text>
-          {viewMode === '2d' ? (
-            <InteractiveFloorPlan
-              onRoomSelect={handleRoomSelect}
-              selectedRoom={selectedRoom}
-              rooms={rooms}
-              onLayoutUpdate={handleLayoutUpdate}
-              homeId={homeId}
-            />
-          ) : (
-            <View style={styles.viewModeContainer}>
-              <View style={styles.viewModeHeader}>
-                <Text style={styles.viewModeTitle}>3D Floor Plan</Text>
-                <Text style={styles.viewModeSubtitle}>Coming Soon</Text>
-              </View>
-              {home?.model3dUrl ? (
-                <WebView
-                  source={{ uri: home.model3dUrl }}
-                  style={styles.model3dWebView}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
-                  startInLoadingState={true}
-                />
-              ) : (
-                <View style={styles.model3dPlaceholder}>
-                  <Text style={styles.model3dPlaceholderText}>
-                    No 3D model available
-                  </Text>
-                  <Text style={styles.model3dPlaceholderSubtext}>
-                    Add a 3D model URL in your home settings
-                  </Text>
+        {/* Hero Welcome Card */}
+        <Animated.View style={{ 
+          transform: [{ scale: heroScale }], 
+          opacity: heroOpacity 
+        }}>
+          <LinearGradient
+            colors={gradients.accent}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroGlowOverlay} />
+            <View style={styles.heroContent}>
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroBadge}>
+                  <Sparkles size={12} color={colors.neonCyan} />
+                  <Text style={styles.heroBadgeText}>VeaHome</Text>
                 </View>
-              )}
+                <StatusBadge 
+                  variant={isCloudConnected ? 'online' : 'offline'} 
+                  size="sm" 
+                  pulse={isCloudConnected}
+                />
+              </View>
+              
+              <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
+              <Text style={styles.heroSubtitle}>Your home is running smoothly</Text>
+              
+              <View style={styles.heroStats}>
+                <View style={styles.heroStatItem}>
+                  <View style={styles.heroStatIcon}>
+                    <HomeIcon size={14} color={colors.neonCyan} />
+                  </View>
+                  <Text style={styles.heroStatValue}>{rooms.length}</Text>
+                  <Text style={styles.heroStatLabel}>Rooms</Text>
+                </View>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStatItem}>
+                  <View style={styles.heroStatIcon}>
+                    <Lightbulb size={14} color={colors.warning} />
+                  </View>
+                  <Text style={styles.heroStatValue}>{activeDevicesCount}</Text>
+                  <Text style={styles.heroStatLabel}>Active</Text>
+                </View>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStatItem}>
+                  <View style={styles.heroStatIcon}>
+                    <Zap size={14} color={colors.success} />
+                  </View>
+                  <Text style={styles.heroStatValue}>{todayEnergy.toFixed(1)}</Text>
+                  <Text style={styles.heroStatLabel}>kWh</Text>
+                </View>
+              </View>
             </View>
-          )}
-          <View style={styles.viewModeToggle}>
-            <TouchableOpacity
-              style={[styles.viewModeButton, viewMode === '2d' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('2d')}
-            >
-              <Text style={[styles.viewModeButtonText, viewMode === '2d' && styles.viewModeButtonTextActive]}>
-                2D
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.viewModeButton, viewMode === '3d' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('3d')}
-            >
-              <Text style={[styles.viewModeButtonText, viewMode === '3d' && styles.viewModeButtonTextActive]}>
-                3D
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Home Status Bar */}
+        <View style={styles.section}>
+          <HomeStatusBar
+            homeName={home?.name || 'My Home'}
+            isOnline={isCloudConnected}
+            hubCount={1}
+            deviceCount={devices.length}
+            activeDeviceCount={activeDevicesCount}
+            onHomeSelect={() => navigation.navigate('HomeSelector')}
+          />
         </View>
 
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading home data...</Text>
+        {/* Spatial View - Moved above Quick Actions */}
+        <View style={styles.section}>
+          <View style={styles.viewModeHeader}>
+            <View style={styles.viewModeTitleRow}>
+              <Text style={styles.viewModeTitle}>Floor Plan</Text>
+              <View style={styles.viewModeTools}>
+                {renderViewToggle()}
+                {renderViewActions()}
+              </View>
+            </View>
           </View>
-        )}
+          
+          <Animated.View style={[styles.viewModeWrapper, { opacity: viewContentFade }]}>
+            {viewMode === '2d' ? (
+              <InteractiveFloorPlan
+                ref={floorPlanRef}
+                onRoomSelect={handleRoomSelect}
+                selectedRoom={selectedRoom}
+                rooms={rooms}
+                onLayoutUpdate={handleLayoutUpdate}
+                onRoomCreate={handleRoomCreated}
+                showToolbar={false}
+                onEditModeChange={setIsFloorPlanEditing}
+                showSelectedRoomInfo={false}
+              />
+            ) : (
+              <NeonCard style={styles.model3dCard}>
+                {home?.model3dUrl ? (
+                  <View style={styles.model3dWrapper}>
+                    <Model3DViewer modelUrl={home.model3dUrl} />
+                  </View>
+                ) : (
+                  <View style={styles.model3dPlaceholder}>
+                    <HomeIcon size={48} color={colors.mutedForeground} />
+                    <Text style={styles.model3dPlaceholderText}>No 3D model available</Text>
+                    <Text style={styles.model3dPlaceholderSubtext}>
+                      Upload a model in settings
+                    </Text>
+                  </View>
+                )}
+              </NeonCard>
+            )}
+          </Animated.View>
 
-        {/* Selected Room Preview - clickable */}
-        {selectedRoom && rooms.find(r => r.id === selectedRoom) && (
-          (() => {
-            const room = rooms.find(r => r.id === selectedRoom)!;
-            return (
-              <TouchableOpacity
-                style={styles.roomPreviewContainer}
-                onPress={() => navigation.navigate('RoomDetail', { 
-                  roomId: selectedRoom
-                })}
-                activeOpacity={0.8}
-              >
+          {/* Selected Room Preview */}
+          {selectedRoomData && (
+            <AnimatedPressable
+              onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoomData.id })}
+              style={styles.roomPreviewTouchable}
+              onLayout={(event: { nativeEvent: { layout: { y: number } } }) => {
+                roomPreviewPosition.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <NeonCard glow="primary" style={styles.roomPreviewCard}>
                 <RoomCard
-                  room={room}
-                  onPress={() => {}}
+                  room={selectedRoomData}
+                  onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoomData.id })}
                 />
                 <View style={styles.tapToEnterBadge}>
                   <Text style={styles.tapToEnterText}>Tap to enter room</Text>
-                  <ArrowRight size={16} color={colors.primary} />
+                  <ChevronRight size={16} color={colors.primary} />
                 </View>
-              </TouchableOpacity>
-            );
-          })()
-        )}
-
-        {/* Quick Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Overview</Text>
-          <View style={styles.statsGrid}>
-          <TouchableOpacity
-            style={styles.statCard}
-            onPress={() => navigation.navigate('Energy')}
-          >
-            <View style={styles.statHeader}>
-              <View style={styles.statIcon}>
-                <Zap size={20} color={colors.primary} />
-              </View>
-              <View style={styles.trendIndicator}>
-                <TrendingDown size={12} color="#10b981" />
-                <Text style={styles.trendText}>-12%</Text>
-              </View>
-            </View>
-            <Text style={styles.statValue}>{todayEnergy.toFixed(1)} kWh</Text>
-            <Text style={styles.statLabel}>Energy Today</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.statCard}
-            onPress={() => navigation.navigate('Devices')}
-          >
-            <View style={styles.statHeader}>
-              <View style={styles.statIcon}>
-                <HomeIcon size={20} color={colors.primary} />
-              </View>
-              <View style={styles.statusIndicator}>
-                <CheckCircle size={12} color={colors.primary} />
-              </View>
-            </View>
-            <Text style={styles.statValue}>{activeDevicesCount}</Text>
-            <Text style={styles.statLabel}>Active Devices</Text>
-          </TouchableOpacity>
-
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={styles.statIcon}>
-                <Thermometer size={20} color={colors.primary} />
-              </View>
-            </View>
-            <Text style={styles.statValue}>{Math.round(avgTemperature)}°C</Text>
-            <Text style={styles.statLabel}>Avg Temperature</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={styles.statIcon}>
-                <BarChart3 size={20} color={colors.primary} />
-              </View>
-            </View>
-            <Text style={styles.statValue}>287</Text>
-            <Text style={styles.statLabel}>Actions Today</Text>
-          </View>
-        </View>
-
-        {/* Active Devices */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Devices</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Devices')}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.devicesGrid}>
-            <View style={[styles.deviceCard, styles.activeDeviceCard]}>
-              <View style={styles.deviceHeader}>
-                <View style={styles.deviceIconActive}>
-                  <Lightbulb size={20} color="white" />
-                </View>
-                <View style={styles.statusBadgeActive}>
-                  <Text style={styles.statusTextActive}>On</Text>
-                </View>
-              </View>
-              <Text style={styles.deviceNameActive}>Living Room</Text>
-              <Text style={styles.deviceDetailActive}>6 lights active</Text>
-            </View>
-
-            <View style={styles.deviceCard}>
-              <View style={styles.deviceHeader}>
-                <View style={styles.deviceIcon}>
-                  <Fan size={20} color={colors.primary} />
-                </View>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>Auto</Text>
-                </View>
-              </View>
-              <Text style={styles.deviceName}>Climate</Text>
-              <Text style={styles.deviceDetail}>23°C target</Text>
-            </View>
-
-            <View style={styles.deviceCard}>
-              <View style={styles.deviceHeader}>
-                <View style={styles.deviceIcon}>
-                  <Camera size={20} color={colors.primary} />
-                </View>
-                <View style={[styles.statusBadge, styles.statusBadgeGreen]}>
-                  <Text style={styles.statusTextGreen}>Active</Text>
-                </View>
-              </View>
-              <Text style={styles.deviceName}>Security</Text>
-              <Text style={styles.deviceDetail}>3 cameras</Text>
-            </View>
-
-            <View style={styles.deviceCard}>
-              <View style={styles.deviceHeader}>
-                <View style={styles.deviceIcon}>
-                  <Lock size={20} color={colors.primary} />
-                </View>
-                <View style={[styles.statusBadge, styles.statusBadgeGreen]}>
-                  <Text style={styles.statusTextGreen}>Locked</Text>
-                </View>
-              </View>
-              <Text style={styles.deviceName}>Doors</Text>
-              <Text style={styles.deviceDetail}>All secured</Text>
-            </View>
-          </View>
+              </NeonCard>
+            </AnimatedPressable>
+          )}
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <SectionHeader 
+            title="Quick Actions" 
+            action={{ label: 'All Scenes', onPress: () => navigation.navigate('Scenes') }}
+          />
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('Scenes')}
-            >
-              <View style={styles.quickActionIcon}>
-                <Clock size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.quickActionText}>Evening Scene</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard}>
-              <View style={styles.quickActionIcon}>
-                <Lightbulb size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.quickActionText}>All Lights</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.quickActionCard}>
-              <View style={styles.quickActionIcon}>
-                <Lock size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.quickActionText}>Lock All</Text>
-            </TouchableOpacity>
+            <View style={styles.quickActionItem}>
+              <QuickAction
+                icon={Moon}
+                label="Evening Mode"
+                sublabel="5 devices"
+                variant="default"
+                onPress={handleSceneActivate}
+                loading={quickActionLoading === 'scene'}
+              />
+            </View>
+            <View style={styles.quickActionItem}>
+              <QuickAction
+                icon={Lightbulb}
+                label={lightsOnCount > 0 ? 'Lights Off' : 'Lights On'}
+                sublabel={`${lightsOnCount}/${totalLights} on`}
+                variant={lightsOnCount > 0 ? 'warning' : 'default'}
+                onPress={handleToggleAllLights}
+                loading={quickActionLoading === 'lights'}
+                isActive={lightsOnCount > 0}
+              />
+            </View>
+            <View style={styles.quickActionItem}>
+              <QuickAction
+                icon={Lock}
+                label="Lock All"
+                sublabel="2 locks"
+                variant="default"
+                onPress={handleLockAllDoors}
+                loading={quickActionLoading === 'locks'}
+              />
+            </View>
+            <View style={styles.quickActionItem}>
+              <QuickAction
+                icon={Shield}
+                label="Arm Away"
+                sublabel="Security"
+                variant="default"
+                onPress={() => showToast('Security mode coming soon', { type: 'info' })}
+              />
+            </View>
           </View>
         </View>
 
-        {/* Energy Overview */}
-        <LinearGradient
-          colors={[colors.secondary, colors.muted]}
-          style={styles.energyCard}
-        >
-          <View style={styles.energyHeader}>
-            <Text style={styles.energyTitle}>Today's Energy</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Energy')}>
-              <Text style={styles.viewAllText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.energyValue}>
-            <Text style={styles.energyNumber}>{todayEnergy.toFixed(1)}</Text>
-            <Text style={styles.energyUnit}>kWh</Text>
-          </View>
-          <View style={styles.energyBreakdown}>
-            <View style={styles.energyItem}>
-              <View style={styles.energyItemHeader}>
-                <Text style={styles.energyItemLabel}>Lights</Text>
-                <Text style={styles.energyItemPercent}>45%</Text>
-              </View>
-              <View style={styles.energyBar}>
-                <View style={[styles.energyBarFill, { width: '45%' }]} />
-              </View>
-            </View>
-            <View style={styles.energyItem}>
-              <View style={styles.energyItemHeader}>
-                <Text style={styles.energyItemLabel}>Climate</Text>
-                <Text style={styles.energyItemPercent}>55%</Text>
-              </View>
-              <View style={styles.energyBar}>
-                <View style={[styles.energyBarFill, { width: '55%' }]} />
-              </View>
+        {/* Favorite Devices */}
+        {favoriteDevices.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader 
+              title="Active Devices" 
+              action={{ label: 'All Devices', onPress: () => navigation.navigate('Devices') }}
+            />
+            <View style={styles.devicesGrid}>
+              {favoriteDevices.map((device) => (
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTile
+                    icon={device.type}
+                    name={device.name}
+                    isActive={device.isActive}
+                    isOnline={true}
+                    value={device.value}
+                    unit={device.unit}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => {
+                      if (isDemoMode) {
+                        demoToggleDevice(device.id);
+                      } else {
+                        controlDevice(device.id, { isActive: !device.isActive });
+                        refresh();
+                      }
+                    }}
+                  />
+                </View>
+              ))}
             </View>
           </View>
-        </LinearGradient>
+        )}
 
-        {/* Notifications */}
+        {/* Energy Overview */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Notifications</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.notificationsList}>
-            <View style={styles.notificationCard}>
-              <View style={[styles.notificationIcon, styles.notificationIconGreen]}>
-                <CheckCircle size={16} color="#10b981" />
-              </View>
-              <View style={styles.notificationContent}>
-                <Text style={styles.notificationTitle}>All systems operational</Text>
-                <Text style={styles.notificationTime}>2 min ago</Text>
-              </View>
-            </View>
-            <View style={styles.notificationCard}>
-              <View style={[styles.notificationIcon, styles.notificationIconBlue]}>
-                <BarChart3 size={16} color="#3b82f6" />
-              </View>
-              <View style={styles.notificationContent}>
-                <Text style={styles.notificationTitle}>Evening scene activated</Text>
-                <Text style={styles.notificationTime}>15 min ago</Text>
-              </View>
-            </View>
-          </View>
+          <SectionHeader 
+            title="Energy" 
+            action={{ label: 'Details', onPress: () => navigation.navigate('Energy') }}
+          />
+          <EnergyCard
+            currentUsage={`${(todayEnergy / 24).toFixed(1)}`}
+            unit="kW"
+            trend="down"
+            changePercent={12}
+            period="Today"
+            onPress={() => navigation.navigate('Energy')}
+          />
         </View>
 
         {/* Scheduled */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Scheduled</Text>
-          <View style={styles.scheduledCard}>
-            <View style={styles.scheduledIcon}>
-              <Clock size={16} color={colors.primary} />
+          <SectionHeader 
+            title="Upcoming" 
+            action={{ label: 'All Schedules', onPress: () => navigation.navigate('Schedules') }}
+          />
+          <NeonCard style={styles.scheduleCard}>
+            <View style={styles.scheduleItem}>
+              <View style={styles.scheduleIcon}>
+                <Clock size={18} color={colors.primary} />
+              </View>
+              <View style={styles.scheduleContent}>
+                <Text style={styles.scheduleTitle}>Night Mode</Text>
+                <Text style={styles.scheduleTime}>Today at 10:00 PM</Text>
+              </View>
+              <View style={styles.scheduleBadge}>
+                <Text style={styles.scheduleBadgeText}>Active</Text>
+              </View>
             </View>
-            <View style={styles.scheduledContent}>
-              <Text style={styles.scheduledTitle}>Night Mode</Text>
-              <Text style={styles.scheduledTime}>10:00 PM</Text>
+            <View style={styles.scheduleDivider} />
+            <View style={styles.scheduleItem}>
+              <View style={[styles.scheduleIcon, { backgroundColor: colors.warning + '20' }]}>
+                <Sun size={18} color={colors.warning} />
+              </View>
+              <View style={styles.scheduleContent}>
+                <Text style={styles.scheduleTitle}>Morning Routine</Text>
+                <Text style={styles.scheduleTime}>Tomorrow at 7:00 AM</Text>
+              </View>
             </View>
-            <View style={styles.scheduledBadge}>
-              <Text style={styles.scheduledBadgeText}>Active</Text>
-            </View>
-          </View>
+          </NeonCard>
         </View>
-      </View>
+
+        {/* Bottom spacing */}
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Device Control Modal */}
+      {selectedDevice && (
+        <DeviceControlModal
+          visible={showDeviceModal}
+          device={selectedDevice}
+          onClose={() => {
+            setShowDeviceModal(false);
+            setSelectedDevice(null);
+          }}
+          onToggle={handleModalToggle}
+          onSetValue={handleModalSetValue}
+        />
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  viewAllText: {
-    fontSize: 12,
-    color: colors.primary,
-  },
-  welcomeCard: {
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  welcomeLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 4,
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 4,
-  },
-  welcomeSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  statCard: {
-    width: '47%',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trendIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  trendText: {
-    fontSize: 12,
-    color: '#10b981',
-  },
-  statusIndicator: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  devicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  deviceCard: {
-    width: '47%',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  activeDeviceCard: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  deviceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  deviceIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.muted,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deviceIconActive: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    backgroundColor: colors.muted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  statusBadgeGreen: {
-    backgroundColor: '#10b98120',
-  },
-  statusText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  statusTextActive: {
-    fontSize: 12,
-    color: 'white',
-  },
-  statusTextGreen: {
-    fontSize: 12,
-    color: '#10b981',
-  },
-  deviceName: {
-    fontSize: 14,
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  deviceNameActive: {
-    fontSize: 14,
-    color: 'white',
-    marginBottom: 4,
-  },
-  deviceDetail: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  deviceDetailActive: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  quickActionCard: {
-    flex: 1,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  quickActionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickActionText: {
-    fontSize: 12,
-    color: colors.foreground,
-    textAlign: 'center',
-  },
-  energyCard: {
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  energyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  energyTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  energyValue: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  energyNumber: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: colors.foreground,
-  },
-  energyUnit: {
-    fontSize: 20,
-    color: colors.mutedForeground,
-    marginBottom: 4,
-  },
-  energyBreakdown: {
-    gap: spacing.md,
-  },
-  energyItem: {
-    gap: 4,
-  },
-  energyItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  energyItemLabel: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  energyItemPercent: {
-    fontSize: 12,
-    color: colors.foreground,
-  },
-  energyBar: {
-    height: 8,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
-  },
-  energyBarFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.sm,
-  },
-  notificationsList: {
-    gap: spacing.sm,
-  },
-  notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  notificationIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationIconGreen: {
-    backgroundColor: '#10b98120',
-  },
-  notificationIconBlue: {
-    backgroundColor: '#3b82f620',
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: 12,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  notificationTime: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  scheduledCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  scheduledIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scheduledContent: {
-    flex: 1,
-  },
-  scheduledTitle: {
-    fontSize: 12,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  scheduledTime: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  scheduledBadge: {
-    backgroundColor: `${colors.primary}20`,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  scheduledBadgeText: {
-    fontSize: 12,
-    color: colors.primary,
-  },
-  roomPreviewContainer: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  tapToEnterBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${colors.primary}15`,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.md,
-    gap: spacing.xs,
-  },
-  tapToEnterText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-  },
-  viewModeToggle: {
-    flexDirection: 'row',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    gap: 4,
-    marginTop: spacing.md,
-  },
-  viewModeButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  viewModeButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  viewModeButtonText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    fontWeight: '600',
-  },
-  viewModeButtonTextActive: {
-    color: 'white',
-  },
-  viewModeContainer: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    minHeight: 300,
-  },
-  viewModeHeader: {
-    marginBottom: spacing.md,
-  },
-  viewModeTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  viewModeSubtitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  model3dWebView: {
-    width: '100%',
-    height: 300,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.muted,
-  },
-  model3dPlaceholder: {
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-  },
-  model3dPlaceholderText: {
-    fontSize: 14,
-    color: colors.foreground,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  model3dPlaceholderSubtext: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    textAlign: 'center',
-  },
-});
+const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+    },
+    section: {
+      marginBottom: spacing.xl,
+    },
+    skeletonRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+
+    // Hero Card
+    heroCard: {
+      borderRadius: borderRadius.xxl,
+      overflow: 'hidden',
+      marginBottom: spacing.lg,
+      ...shadows.glow,
+    },
+    heroGlowOverlay: {
+      position: 'absolute',
+      top: -50,
+      right: -50,
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      backgroundColor: colors.neonCyan,
+      opacity: 0.1,
+    },
+    heroContent: {
+      padding: spacing.lg,
+    },
+    heroTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      borderRadius: borderRadius.lg,
+    },
+    heroBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: colors.neonCyan,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    heroGreeting: {
+      fontSize: fontSize.xxl,
+      fontWeight: fontWeight.bold,
+      color: '#FFFFFF',
+      marginBottom: spacing.xs,
+    },
+    heroSubtitle: {
+      fontSize: fontSize.md,
+      color: 'rgba(255, 255, 255, 0.8)',
+      marginBottom: spacing.lg,
+    },
+    heroStats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+      borderRadius: borderRadius.xl,
+      padding: spacing.md,
+    },
+    heroStatItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    heroStatIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    heroStatValue: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.bold,
+      color: '#FFFFFF',
+    },
+    heroStatLabel: {
+      fontSize: fontSize.xs,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    heroStatDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    },
+
+    // Quick Actions
+    quickActionsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    quickActionItem: {
+      width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+    },
+
+    // View Mode
+    viewModeHeader: {
+      marginBottom: spacing.md,
+    },
+    viewModeTitleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    viewModeTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+    },
+    viewModeTools: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    viewModeWrapper: {
+      marginTop: spacing.sm,
+    },
+    viewModeToggle: {
+      flexDirection: 'row',
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    viewChip: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+    },
+    viewChipActive: {
+      backgroundColor: colors.primary,
+    },
+    viewChipText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: colors.mutedForeground,
+      letterSpacing: 0.5,
+    },
+    viewChipTextActive: {
+      color: '#FFFFFF',
+    },
+    viewIconActions: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    viewIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: borderRadius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    viewIconButtonPrimary: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    viewIconButtonActive: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
+    },
+    viewIconButtonDisabled: {
+      opacity: 0.4,
+    },
+
+    // 3D Model
+    model3dCard: {
+      minHeight: 300,
+    },
+    model3dWrapper: {
+      height: 300,
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+    },
+    model3dPlaceholder: {
+      height: 250,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    model3dPlaceholderText: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+    },
+    model3dPlaceholderSubtext: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+
+    // Room Preview
+    roomPreviewTouchable: {
+      marginTop: spacing.lg,
+    },
+    roomPreviewCard: {
+      padding: spacing.md,
+    },
+    tapToEnterBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      marginTop: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.primary + '15',
+      borderRadius: borderRadius.md,
+    },
+    tapToEnterText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.primary,
+    },
+
+    // Devices Grid
+    devicesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    deviceTileWrapper: {
+      width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+    },
+
+    // Schedule
+    scheduleCard: {
+      padding: spacing.md,
+    },
+    scheduleItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    scheduleIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.lg,
+      backgroundColor: colors.primary + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    scheduleContent: {
+      flex: 1,
+    },
+    scheduleTitle: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    scheduleTime: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    scheduleBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      backgroundColor: colors.success + '20',
+      borderRadius: borderRadius.md,
+    },
+    scheduleBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: colors.success,
+    },
+    scheduleDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: spacing.md,
+    },
+  });
+};

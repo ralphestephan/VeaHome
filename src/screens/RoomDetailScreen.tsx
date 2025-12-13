@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   ImageBackground,
-  ActivityIndicator,
+  Animated,
+  Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,50 +23,117 @@ import {
   Snowflake, 
   Flame, 
   TrendingDown, 
-  Wind 
+  Wind,
+  ChevronRight,
+  Play,
+  Settings,
+  Sparkles,
 } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { 
+  spacing, 
+  borderRadius, 
+  fontSize, 
+  fontWeight,
+  ThemeColors,
+} from '../constants/theme';
 import { roomsData } from '../constants/rooms';
 import Header from '../components/Header';
 import DeviceTile from '../components/DeviceTile';
+import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
+import { useDemo } from '../context/DemoContext';
 import { getApiClient, HomeApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useTheme } from '../context/ThemeContext';
+import { 
+  NeonCard, 
+  SectionHeader, 
+  SkeletonLoader, 
+  StatusBadge,
+  AnimatedPressable,
+  Chip,
+} from '../components/ui';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Props = {
   route: RouteProp<RootStackParamList, 'RoomDetail'>;
   navigation: NativeStackNavigationProp<RootStackParamList, 'RoomDetail'>;
 };
 
-const roomGif = require('../assets/a4be53e82fc25644b6daf11c9ce10542a9783d99.png');
-
 export default function RoomDetailScreen({ route, navigation }: Props) {
   const { roomId } = route.params;
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroScale = useRef(new Animated.Value(0.95)).current;
   const { user, token } = useAuth();
+  const demo = useDemo();
+  const isDemoMode = !token || token === 'DEMO_TOKEN';
   const homeId = user?.homeId;
   const [room, setRoom] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [targetTemp, setTargetTemp] = useState(22);
-  const { toggleDevice, setValue } = useDeviceControl();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [autoClimate, setAutoClimate] = useState(true);
+  const { controlDevice, toggleDevice, setValue } = useDeviceControl();
+  const { showToast } = useToast();
 
   const client = getApiClient(async () => token);
   const homeApi = HomeApi(client);
+
+  // Hero animation on mount
+  useEffect(() => {
+    if (!loading && room) {
+      Animated.parallel([
+        Animated.spring(heroScale, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading, room]);
 
   useEffect(() => {
     loadRoomData();
   }, [roomId, homeId]);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadRoomData();
+    setRefreshing(false);
+  };
+
   const loadRoomData = async () => {
-    if (!homeId) {
-      // Fallback to mock data
+    // Demo mode - use demo context devices
+    if (isDemoMode) {
       const mockRoom = roomsData[roomId];
       if (mockRoom) {
         setRoom(mockRoom);
-        setDevices(Array.isArray(mockRoom.devices) ? mockRoom.devices : []);
+        // Get devices for this room from demo context
+        const roomDevices = demo.demoDevices
+          .filter(d => d.roomId === roomId)
+          .map(d => ({
+            ...d,
+            isActive: demo.deviceStates[d.id]?.isActive ?? d.isActive,
+            value: demo.deviceStates[d.id]?.value ?? d.value,
+          }));
+        setDevices(roomDevices.length > 0 ? roomDevices : (Array.isArray(mockRoom.devices) ? mockRoom.devices : []));
+        if (typeof mockRoom.temperature === 'number') {
+          setTargetTemp(mockRoom.temperature);
+        }
       }
       setLoading(false);
       return;
@@ -80,30 +149,155 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         }).catch(() => ({ data: [] })),
       ]);
       setRoom(roomRes.data || roomsData[roomId]);
-      setDevices(devicesRes.data || []);
+      const nextDevices = devicesRes.data || [];
+      setDevices(nextDevices);
+      const thermostat = nextDevices.find(
+        (device: any) => device.type === 'thermostat' || device.type === 'ac'
+      );
+      if (thermostat) {
+        if (typeof thermostat.value === 'number') {
+          setTargetTemp(thermostat.value);
+        }
+        if (typeof thermostat.mode === 'string') {
+          setAutoClimate(thermostat.mode === 'auto');
+        }
+      }
     } catch (e) {
       console.error('Error loading room:', e);
       // Fallback to mock data
       setRoom(roomsData[roomId]);
       const roomDevices = roomsData[roomId]?.devices;
       setDevices(Array.isArray(roomDevices) ? roomDevices : []);
+      const fallbackTemp = roomsData[roomId]?.temperature;
+      if (typeof fallbackTemp === 'number') {
+        setTargetTemp(fallbackTemp);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeviceToggle = async (device: any) => {
-    await toggleDevice(device.id, device.isActive);
-    loadRoomData();
+  useEffect(() => {
+    const thermostat = devices.find(
+      (device) => device.type === 'thermostat' || device.type === 'ac'
+    );
+    if (thermostat && typeof thermostat.value === 'number') {
+      setTargetTemp(thermostat.value);
+    }
+    if (thermostat && typeof thermostat.mode === 'string') {
+      setAutoClimate(thermostat.mode === 'auto');
+    }
+  }, [devices]);
+
+  const handleDeviceToggle = async (device: any, options?: { skipReload?: boolean }) => {
+    try {
+      if (isDemoMode) {
+        // Use demo context for device control
+        demo.toggleDevice(device.id);
+        // Update local state immediately
+        setDevices(prev => prev.map(d => 
+          d.id === device.id ? { ...d, isActive: !d.isActive } : d
+        ));
+        showToast(`${device.name} ${device.isActive ? 'turned off' : 'turned on'}`, { type: 'success' });
+        return;
+      }
+      await toggleDevice(device.id, device.isActive);
+      if (!options?.skipReload) {
+        await loadRoomData();
+      }
+    } catch (e) {
+      showToast('Unable to toggle the selected device.', { type: 'error' });
+    }
+  };
+
+  const toggleDevicesByType = async (types: string[], actionKey: string) => {
+    const targets = devices.filter((device) => types.includes(device.type));
+    if (!targets.length) {
+      showToast('No matching devices in this room yet.', { type: 'info' });
+      return;
+    }
+
+    setActionLoading(actionKey);
+    try {
+      await Promise.all(
+        targets.map((device) => handleDeviceToggle(device, { skipReload: true }))
+      );
+      await loadRoomData();
+    } catch (e) {
+      showToast('Unable to run that quick action. Please try again.', { type: 'error' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const adjustTargetTemperature = async (delta: number) => {
+    const nextTemp = Math.max(16, Math.min(30, targetTemp + delta));
+    setTargetTemp(nextTemp);
+
+    if (!devices.length) return;
+    const thermostat = devices.find(
+      (device) => device.type === 'thermostat' || device.type === 'ac'
+    );
+    if (!thermostat) {
+      showToast('Add a thermostat to control climate in this room.', { type: 'info' });
+      return;
+    }
+
+    try {
+      if (isDemoMode) {
+        // Use demo context for value setting
+        demo.setValue(thermostat.id, nextTemp);
+        setDevices(prev => prev.map(d => 
+          d.id === thermostat.id ? { ...d, value: nextTemp } : d
+        ));
+        return;
+      }
+      await setValue(thermostat.id, nextTemp, thermostat.unit);
+    } catch (e) {
+      showToast('Failed to update thermostat temperature.', { type: 'error' });
+    }
+  };
+
+  const handleAutoClimateToggle = async () => {
+    const thermostat = devices.find(
+      (device) => device.type === 'thermostat' || device.type === 'ac'
+    );
+
+    if (!thermostat) {
+      showToast('Add a thermostat to enable auto climate mode.', { type: 'info' });
+      return;
+    }
+
+    const nextAuto = !autoClimate;
+    setAutoClimate(nextAuto);
+    try {
+      await controlDevice(thermostat.id, { mode: nextAuto ? 'auto' : 'manual' });
+    } catch (e) {
+      setAutoClimate(!nextAuto);
+      showToast('Failed to update thermostat mode.', { type: 'error' });
+    }
   };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header title="Loading..." showBack />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+          <SkeletonLoader width="100%" height={200} borderRadius={borderRadius.xxl} />
+          <View style={{ height: spacing.lg }} />
+          <View style={styles.statsRowSkeleton}>
+            <SkeletonLoader width="30%" height={40} borderRadius={borderRadius.lg} />
+            <SkeletonLoader width="30%" height={40} borderRadius={borderRadius.lg} />
+            <SkeletonLoader width="30%" height={40} borderRadius={borderRadius.lg} />
+          </View>
+          <View style={{ height: spacing.lg }} />
+          <SkeletonLoader width={120} height={16} borderRadius={borderRadius.md} />
+          <View style={{ height: spacing.md }} />
+          <View style={styles.devicesGridSkeleton}>
+            <SkeletonLoader width="48%" height={100} borderRadius={borderRadius.xl} />
+            <SkeletonLoader width="48%" height={100} borderRadius={borderRadius.xl} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -112,420 +306,636 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <Header title="Room not found" showBack />
-        <View style={styles.loadingContainer}>
+        <View style={styles.emptyContainer}>
           <Text style={styles.errorText}>Room not found</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  const thermostatDevice = devices.find(
+    (device) => device.type === 'thermostat' || device.type === 'ac'
+  );
+  const hasLights = devices.some((device) => device.type === 'light');
+  const hasUtility = devices.some((device) => device.type === 'tv' || device.type === 'speaker');
+  const hasShutters = devices.some((device) => device.type === 'blind' || device.type === 'shutter');
+  const lightsCount = devices.filter((device) => device.type === 'light').length;
+  const utilityCount = devices.filter((device) => device.type === 'tv' || device.type === 'speaker').length;
+  const shuttersCount = devices.filter((device) => device.type === 'blind' || device.type === 'shutter').length;
+  const roomDeviceCount = Array.isArray(room.devices)
+    ? room.devices.length
+    : typeof room.devices === 'number'
+    ? room.devices
+    : devices.length;
+
+  const handleClimatePress = () => {
+    if (!thermostatDevice) {
+      showToast('Add a thermostat to control climate from here.', { type: 'info' });
+      return;
+    }
+    navigation.navigate('Thermostat', { roomId, deviceId: thermostatDevice.id });
+  };
+
+  const quickControls = [
+    {
+      key: 'lights',
+      label: 'All Lights',
+      icon: Lightbulb,
+      meta: hasLights
+        ? `${lightsCount || room.lights || 0} connected`
+        : 'No lights connected',
+      onPress: () => toggleDevicesByType(['light'], 'lights'),
+      disabled: actionLoading === 'lights' || !hasLights,
+    },
+    {
+      key: 'climate',
+      label: 'Climate',
+      icon: Thermometer,
+      meta: thermostatDevice
+        ? `Target ${targetTemp.toFixed(0)}°C`
+        : 'Add a thermostat',
+      onPress: handleClimatePress,
+      disabled: !thermostatDevice,
+    },
+    {
+      key: 'shutters',
+      label: 'Shutters',
+      icon: Fan,
+      meta: hasShutters ? `${shuttersCount} shade${shuttersCount === 1 ? '' : 's'}` : 'No shutters yet',
+      onPress: () => toggleDevicesByType(['blind', 'shutter'], 'shutters'),
+      disabled: actionLoading === 'shutters' || !hasShutters,
+    },
+    {
+      key: 'utility',
+      label: 'Utility',
+      icon: Music,
+      meta: hasUtility ? `${utilityCount} media device${utilityCount === 1 ? '' : 's'}` : 'No media devices',
+      onPress: () => toggleDevicesByType(['tv', 'speaker'], 'utility'),
+      disabled: actionLoading === 'utility' || !hasUtility,
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title={room.name} showBack />
+      <Header
+        title={room.name || 'Room'}
+        showBack
+        showSettings={false}
+      />
       
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
-        {/* Room Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statPill}>
-            <Thermometer
-              size={16}
-              color={colors.primary}
-            />
-            <Text style={styles.statText}>{room.temperature}°C</Text>
-          </View>
-          <View style={styles.statPill}>
-            <Droplets
-              size={16}
-              color={colors.primary}
-            />
-            <Text style={styles.statText}>{room.humidity}%</Text>
-          </View>
-          <View style={styles.statPill}>
-            <Zap
-              size={16}
-              color={colors.primary}
-            />
-            <Text style={styles.statText}>{room.power}</Text>
-          </View>
-        </View>
-
-        {/* Room Image */}
-        {room.image && (
-          <TouchableOpacity style={styles.roomPreview} activeOpacity={0.9}>
+        {/* Hero Section */}
+        <Animated.View style={{ 
+          transform: [{ scale: heroScale }], 
+          opacity: heroOpacity 
+        }}>
+          {room.image ? (
             <ImageBackground
               source={{ uri: room.image }}
-              style={styles.roomImage}
-              imageStyle={styles.roomImageStyle}
+              style={styles.heroImage}
+              imageStyle={styles.heroImageStyle}
             >
               <LinearGradient
-                colors={['transparent', 'rgba(19, 21, 42, 0.95)']}
-                style={styles.roomGradient}
+                colors={['transparent', 'rgba(6, 8, 22, 0.95)']}
+                style={styles.heroGradient}
               >
-                <View style={styles.roomContent}>
-                  <View style={styles.roomHeader}>
-                    <View>
-                      <Text style={styles.currentSceneLabel}>Current Scene</Text>
-                      <Text style={styles.roomSceneText}>{room.scene}</Text>
+                <View style={styles.heroContent}>
+                  <View style={styles.heroBadges}>
+                    <View style={styles.heroBadge}>
+                      <Sparkles size={12} color={colors.neonCyan} />
+                      <Text style={styles.heroBadgeText}>{room.scene || 'No Scene'}</Text>
                     </View>
-                    <TouchableOpacity style={styles.changeButton}>
-                      <Text style={styles.changeButtonText}>Change</Text>
-                    </TouchableOpacity>
+                    <StatusBadge variant="online" size="sm" />
                   </View>
-                  <View style={styles.roomBadges}>
-                    <View style={styles.roomBadge}>
-                      <Lightbulb size={12} color="white" />
-                      <Text style={styles.roomBadgeText}>{room.lights} lights on</Text>
-                    </View>
-                    <View style={styles.roomBadge}>
-                      <Monitor size={12} color="white" />
-                      <Text style={styles.roomBadgeText}>{room.devices} devices</Text>
-                    </View>
-                  </View>
+                  <Text style={styles.heroTitle}>{room.name}</Text>
+                  <Text style={styles.heroSubtitle}>
+                    {roomDeviceCount} devices • {room.power || '0W'}
+                  </Text>
                 </View>
               </LinearGradient>
             </ImageBackground>
-          </TouchableOpacity>
-        )}
+          ) : (
+            <LinearGradient
+              colors={gradients.accent}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroGradientFallback}
+            >
+              <View style={styles.heroGlowOverlay} />
+              <View style={styles.heroContent}>
+                <View style={styles.heroBadges}>
+                  <View style={styles.heroBadge}>
+                    <Sparkles size={12} color={colors.neonCyan} />
+                    <Text style={styles.heroBadgeText}>{room.scene || 'No Scene'}</Text>
+                  </View>
+                  <StatusBadge variant="online" size="sm" />
+                </View>
+                <Text style={styles.heroTitle}>{room.name}</Text>
+                <Text style={styles.heroSubtitle}>
+                  {roomDeviceCount} devices • {room.power || '0W'}
+                </Text>
+              </View>
+            </LinearGradient>
+          )}
+        </Animated.View>
+
+        {/* Room Stats */}
+        <View style={styles.statsRow}>
+          <NeonCard style={styles.statCard}>
+            <Thermometer size={18} color={colors.neonBlue} />
+            <Text style={styles.statValue}>{room.temperature}°C</Text>
+            <Text style={styles.statLabel}>Temp</Text>
+          </NeonCard>
+          <NeonCard style={styles.statCard}>
+            <Droplets size={18} color={colors.neonCyan} />
+            <Text style={styles.statValue}>{room.humidity}%</Text>
+            <Text style={styles.statLabel}>Humidity</Text>
+          </NeonCard>
+          <NeonCard style={styles.statCard}>
+            <Zap size={18} color={colors.warning} />
+            <Text style={styles.statValue}>{room.power}</Text>
+            <Text style={styles.statLabel}>Power</Text>
+          </NeonCard>
+        </View>
+
+        {/* Scene Controls */}
+        <View style={styles.section}>
+          <SectionHeader 
+            title="Active Scene" 
+            actionLabel="Change"
+            onAction={() => navigation.navigate('Dashboard', { screen: 'Scenes' })}
+          />
+          <NeonCard glowColor={colors.primary} style={styles.sceneCard}>
+            <View style={styles.sceneInfo}>
+              <View style={styles.sceneIcon}>
+                <Play size={20} color={colors.primary} />
+              </View>
+              <View style={styles.sceneText}>
+                <Text style={styles.sceneName}>{room.scene || 'No Scene Active'}</Text>
+                <Text style={styles.sceneDetail}>{room.lights || 0} lights • Climate auto</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.sceneButton}>
+              <Settings size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </NeonCard>
+        </View>
 
         {/* Quick Controls */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Controls</Text>
+          <SectionHeader title="Quick Controls" />
           <View style={styles.controlsGrid}>
-            <TouchableOpacity 
-              style={styles.controlCard}
-              onPress={() => {
-                const lights = devices.filter(d => d.type === 'light');
-                lights.forEach(light => handleDeviceToggle(light));
-              }}
-            >
-              <Lightbulb
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.controlText}>All Lights</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.controlCard}
-              onPress={() => navigation.navigate('Thermostat', { roomId })}
-            >
-              <Thermometer
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.controlText}>Climate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.controlCard}
-              onPress={() => {
-                // Toggle shutters functionality
-                console.log('Shutters toggled');
-              }}
-            >
-              <Fan
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.controlText}>Shutters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.controlCard}
-              onPress={() => {
-                const media = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
-                media.forEach(device => handleDeviceToggle(device));
-              }}
-            >
-              <Music
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.controlText}>Audio</Text>
-            </TouchableOpacity>
+            {quickControls.map((control) => (
+              <AnimatedPressable
+                key={control.key}
+                onPress={control.onPress}
+                disabled={control.disabled}
+                style={[styles.controlCard, control.disabled && styles.controlCardDisabled]}
+              >
+                <LinearGradient
+                  colors={gradients.card}
+                  style={styles.controlCardGradient}
+                >
+                  <View style={[styles.controlIcon, { backgroundColor: colors.primary + '20' }]}>
+                    <control.icon size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.controlCopy}>
+                    <Text style={styles.controlLabel}>{control.label}</Text>
+                    <Text style={styles.controlMeta}>{control.meta}</Text>
+                  </View>
+                  <ChevronRight size={16} color={colors.mutedForeground} />
+                </LinearGradient>
+              </AnimatedPressable>
+            ))}
           </View>
         </View>
 
         {/* Devices Section */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Devices in this room</Text>
-            <TouchableOpacity>
-              <Text style={styles.manageText}>Manage</Text>
-            </TouchableOpacity>
-          </View>
+          <SectionHeader 
+            title="Devices" 
+            actionLabel="Manage"
+            onAction={() => navigation.navigate('Dashboard', { screen: 'Devices' })}
+          />
           <View style={styles.devicesGrid}>
             {devices.length > 0 ? (
               devices.map((device) => (
-                <DeviceTile
-                  key={device.id}
-                  icon={device.type === 'light' ? 'lightbulb' : device.type === 'thermostat' ? 'thermometer' : device.type === 'tv' ? 'television' : device.type === 'speaker' ? 'speaker' : 'lightbulb'}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTile
+                    icon={device.type}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit}
+                    isActive={device.isActive}
+                    onPress={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>No devices in this room</Text>
+              <NeonCard style={styles.emptyDevices}>
+                <Text style={styles.emptyText}>No devices in this room</Text>
+              </NeonCard>
             )}
           </View>
         </View>
 
         {/* Climate Control */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Climate Control</Text>
-          <View style={styles.climateCard}>
+          <SectionHeader title="Climate Control" />
+          <NeonCard style={styles.climateCard}>
             <View style={styles.climateHeader}>
               <View style={styles.climateInfo}>
-                <Thermometer
-                  size={20}
-                  color={colors.primary}
-                />
+                <View style={styles.climateIconContainer}>
+                  <Thermometer size={20} color={colors.neonBlue} />
+                </View>
                 <Text style={styles.climateLabel}>Temperature</Text>
               </View>
-              <TouchableOpacity style={styles.autoButton}>
-                <Text style={styles.autoButtonText}>Auto</Text>
+              <TouchableOpacity
+                style={[
+                  styles.autoButton,
+                  autoClimate && styles.autoButtonActive,
+                  !thermostatDevice && styles.controlCardDisabled
+                ]}
+                onPress={handleAutoClimateToggle}
+                disabled={!thermostatDevice}
+              >
+                <Text style={[styles.autoButtonText, autoClimate && styles.autoButtonTextActive]}>
+                  {autoClimate ? 'Auto On' : 'Manual'}
+                </Text>
               </TouchableOpacity>
             </View>
+            
             <View style={styles.climateControls}>
               <TouchableOpacity 
                 style={styles.climateButton}
-                onPress={() => setTargetTemp(Math.max(16, targetTemp - 1))}
+                onPress={() => adjustTargetTemperature(-1)}
               >
-                <Snowflake size={20} color="#60A5FA" />
+                <Snowflake size={22} color={colors.neonBlue} />
               </TouchableOpacity>
               <View style={styles.climateValue}>
                 <Text style={styles.climateTemp}>{room.temperature}°C</Text>
                 <Text style={styles.climateTarget}>
-                  Target: {devices.find(d => d.type === 'thermostat' || d.type === 'ac')?.value || room.temperature}°C
+                  Target: {targetTemp}°C
                 </Text>
               </View>
               <TouchableOpacity 
                 style={styles.climateButton}
-                onPress={() => setTargetTemp(Math.min(30, targetTemp + 1))}
+                onPress={() => adjustTargetTemperature(1)}
               >
-                <Flame size={20} color="#F97316" />
+                <Flame size={22} color={colors.destructive} />
               </TouchableOpacity>
             </View>
+            
             <View style={styles.climateStats}>
               <View style={styles.climateStat}>
-                <Droplets size={16} color={colors.primary} />
+                <Droplets size={16} color={colors.neonCyan} />
                 <Text style={styles.climateStatLabel}>Humidity</Text>
                 <Text style={styles.climateStatValue}>{room.humidity}%</Text>
               </View>
               <View style={styles.climateStat}>
-                <Wind size={16} color={colors.primary} />
+                <Wind size={16} color={colors.success} />
                 <Text style={styles.climateStatLabel}>Air Quality</Text>
                 <Text style={styles.climateStatValue}>Good</Text>
               </View>
             </View>
-          </View>
+          </NeonCard>
         </View>
 
         {/* Energy Usage */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Energy Usage</Text>
-          <View style={styles.energyCard}>
+          <SectionHeader title="Energy Usage" />
+          <NeonCard style={styles.energyCard}>
             <View style={styles.energyHeader}>
-              <Text style={styles.energyLabel}>Current Power</Text>
+              <View>
+                <Text style={styles.energyLabel}>Current Power</Text>
+                <Text style={styles.energyValue}>{room.power}</Text>
+              </View>
               <View style={styles.trendBadge}>
-                <TrendingDown size={12} color={colors.success} />
+                <TrendingDown size={14} color={colors.success} />
                 <Text style={styles.trendText}>-8%</Text>
               </View>
             </View>
-            <Text style={styles.energyValue}>{room.power}</Text>
             <View style={styles.energyBreakdown}>
               <View style={styles.energyItem}>
-                <View style={[styles.energyBar, { width: '45%', backgroundColor: colors.primary }]} />
-                <Text style={styles.energyItemText}>Lights 45%</Text>
+                <View style={styles.energyItemHeader}>
+                  <Text style={styles.energyItemLabel}>Lights</Text>
+                  <Text style={styles.energyItemPercent}>45%</Text>
+                </View>
+                <View style={styles.energyBarContainer}>
+                  <View style={[styles.energyBar, { width: '45%' }]} />
+                </View>
               </View>
               <View style={styles.energyItem}>
-                <View style={[styles.energyBar, { width: '55%', backgroundColor: colors.primary }]} />
-                <Text style={styles.energyItemText}>Climate 55%</Text>
+                <View style={styles.energyItemHeader}>
+                  <Text style={styles.energyItemLabel}>Climate</Text>
+                  <Text style={styles.energyItemPercent}>55%</Text>
+                </View>
+                <View style={styles.energyBarContainer}>
+                  <View style={[styles.energyBar, { width: '55%' }]} />
+                </View>
               </View>
             </View>
-          </View>
+          </NeonCard>
         </View>
+
+        {/* Bottom spacing */}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
+  content: {
+    flex: 1,
+  },
   scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
-  statsRow: {
+  statsRowSkeleton: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
   },
-  statPill: {
+  devicesGridSkeleton: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: 4,
+    padding: spacing.xl,
   },
-  statText: {
-    fontSize: 11,
-    color: colors.foreground,
-  },
-  roomPreview: {
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.xxl,
-    overflow: 'hidden',
-  },
-  roomImage: {
-    height: 200,
+  
+  // Hero Section
+  heroImage: {
+    height: 220,
     width: '100%',
+    marginBottom: spacing.lg,
   },
-  roomImageStyle: {
+  heroImageStyle: {
     borderRadius: borderRadius.xxl,
   },
-  roomGradient: {
+  heroGradient: {
     flex: 1,
     justifyContent: 'flex-end',
+    borderRadius: borderRadius.xxl,
   },
-  roomContent: {
-    padding: spacing.md,
+  heroGradientFallback: {
+    height: 180,
+    borderRadius: borderRadius.xxl,
+    marginBottom: spacing.lg,
+    overflow: 'hidden',
+    ...shadows.glow,
   },
-  roomHeader: {
+  heroGlowOverlay: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: colors.neonCyan,
+    opacity: 0.1,
+  },
+  heroContent: {
+    padding: spacing.lg,
+  },
+  heroBadges: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
-  currentSceneLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 4,
-  },
-  roomSceneText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  changeButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  changeButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  roomBadges: {
+  heroBadge: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: borderRadius.lg,
+  },
+  heroBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.neonCyan,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  heroTitle: {
+    fontSize: fontSize.xxl,
+    fontWeight: fontWeight.bold,
+    color: '#FFFFFF',
+    marginBottom: spacing.xs,
+  },
+  heroSubtitle: {
+    fontSize: fontSize.md,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  statValue: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.foreground,
+  },
+  statLabel: {
+    fontSize: fontSize.xs,
+    color: colors.mutedForeground,
+  },
+  
+  // Scene Section
+  sceneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  sceneInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  sceneIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sceneText: {
+    flex: 1,
+  },
+  sceneName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+  },
+  sceneDetail: {
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+    marginTop: 2,
+  },
+  sceneButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.muted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Section
+  section: {
+    marginBottom: spacing.xl,
+  },
+  
+  // Controls Grid
+  controlsGrid: {
     gap: spacing.sm,
   },
-  roomBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    gap: 4,
-  },
-  roomBadgeText: {
-    fontSize: 10,
-    color: 'white',
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  manageText: {
-    fontSize: 11,
-    color: colors.primary,
-  },
-  controlsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
   controlCard: {
-    width: '22%',
-    aspectRatio: 1,
-    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+  controlCardGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  controlCardDisabled: {
+    opacity: 0.5,
+  },
+  controlIcon: {
+    width: 40,
+    height: 40,
     borderRadius: borderRadius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xs,
   },
-  controlText: {
-    fontSize: 9,
+  controlCopy: {
+    flex: 1,
+  },
+  controlLabel: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
     color: colors.foreground,
-    textAlign: 'center',
   },
+  controlMeta: {
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+    marginTop: 2,
+  },
+  
+  // Devices Grid
   devicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
   },
+  deviceTileWrapper: {
+    width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.md) / 2,
+  },
+  emptyDevices: {
+    width: '100%',
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: fontSize.md,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+  },
+  
+  // Climate Card
   climateCard: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.xxl,
     padding: spacing.lg,
   },
   climateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   climateInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
+  climateIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.neonBlue + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   climateLabel: {
-    fontSize: 13,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
     color: colors.foreground,
   },
   autoButton: {
-    backgroundColor: colors.primary,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.muted,
+  },
+  autoButtonActive: {
+    backgroundColor: colors.primary,
   },
   autoButtonText: {
-    fontSize: 11,
-    color: 'white',
-    fontWeight: '600',
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.mutedForeground,
+  },
+  autoButtonTextActive: {
+    color: '#FFFFFF',
   },
   climateControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   climateButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
@@ -534,13 +944,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   climateTemp: {
-    fontSize: 32,
-    fontWeight: '600',
+    fontSize: fontSize.display,
+    fontWeight: fontWeight.bold,
     color: colors.foreground,
   },
   climateTarget: {
-    fontSize: 11,
+    fontSize: fontSize.sm,
     color: colors.mutedForeground,
+    marginTop: spacing.xs,
   },
   climateStats: {
     flexDirection: 'row',
@@ -549,80 +960,89 @@ const styles = StyleSheet.create({
   climateStat: {
     flex: 1,
     backgroundColor: colors.muted,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
-  climateStatLabel: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  climateStatValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.foreground,
-  },
-  energyCard: {
-    backgroundColor: colors.secondary,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
+    gap: spacing.xs,
+  },
+  climateStatLabel: {
+    fontSize: fontSize.xs,
+    color: colors.mutedForeground,
+  },
+  climateStatValue: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+  },
+  
+  // Energy Card
+  energyCard: {
+    padding: spacing.lg,
   },
   energyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
   },
   energyLabel: {
-    fontSize: 11,
+    fontSize: fontSize.sm,
     color: colors.mutedForeground,
+    marginBottom: spacing.xs,
+  },
+  energyValue: {
+    fontSize: fontSize.xxxl,
+    fontWeight: fontWeight.bold,
+    color: colors.foreground,
   },
   trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.success + '20',
+    borderRadius: borderRadius.md,
   },
   trendText: {
-    fontSize: 11,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
     color: colors.success,
   },
-  energyValue: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: colors.foreground,
-    marginBottom: spacing.md,
-  },
   energyBreakdown: {
-    gap: spacing.sm,
-  },
-  energyItem: {
-    gap: 4,
-  },
-  energyBar: {
-    height: 8,
-    borderRadius: 4,
-  },
-  energyItemText: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
     gap: spacing.md,
   },
-  errorText: {
-    fontSize: 14,
-    color: colors.mutedForeground,
-    textAlign: 'center',
+  energyItem: {
+    gap: spacing.xs,
   },
-  emptyText: {
-    fontSize: 14,
+  energyItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  energyItemLabel: {
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+  },
+  energyItemPercent: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.foreground,
+  },
+  energyBarContainer: {
+    height: 8,
+    backgroundColor: colors.muted,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+  },
+  energyBar: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.sm,
+  },
+  
+  errorText: {
+    fontSize: fontSize.md,
     color: colors.mutedForeground,
     textAlign: 'center',
-    padding: spacing.xl,
   },
 });

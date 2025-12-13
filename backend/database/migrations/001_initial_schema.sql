@@ -1,5 +1,10 @@
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Track executed migrations
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    name VARCHAR(255) PRIMARY KEY,
+    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Users table
 CREATE TABLE users (

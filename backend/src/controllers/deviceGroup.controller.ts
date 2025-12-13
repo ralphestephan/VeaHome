@@ -1,8 +1,14 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getDeviceGroups,
+  createDeviceGroupRecord,
+  updateDeviceGroupRecord,
+  deleteDeviceGroupRecord,
+  getDeviceGroupById,
+} from '../repositories/deviceGroupsRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
 
 export async function listDeviceGroups(req: Request, res: Response) {
   try {
@@ -10,21 +16,11 @@ export async function listDeviceGroups(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const groupsResult = await query(
-      'SELECT * FROM device_groups WHERE home_id = $1 ORDER BY created_at DESC',
-      [homeId]
-    );
-
-    return successResponse(res, { groups: groupsResult.rows });
+    const groups = await getDeviceGroups(home.id);
+    return successResponse(res, { groups });
   } catch (error: any) {
     console.error('List device groups error:', error);
     return errorResponse(res, error.message || 'Failed to list device groups', 500);
@@ -38,25 +34,24 @@ export async function createDeviceGroup(req: Request, res: Response) {
     const { homeId } = req.params;
     const { name, deviceIds } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Group name is required', 400);
     }
 
-    const groupId = uuidv4();
-    await query(
-      `INSERT INTO device_groups (id, home_id, name, device_ids)
-       VALUES ($1, $2, $3, $4)`,
-      [groupId, homeId, name, JSON.stringify(deviceIds)]
-    );
+    const devices = normalizeDeviceIds(deviceIds);
+
+    const group = await createDeviceGroupRecord({
+      homeId: home.id,
+      name: name.trim(),
+      deviceIds: devices,
+    });
 
     return successResponse(res, {
-      id: groupId,
       message: 'Device group created successfully',
+      group,
     }, 201);
   } catch (error: any) {
     console.error('Create device group error:', error);
@@ -71,24 +66,23 @@ export async function updateDeviceGroup(req: Request, res: Response) {
     const { homeId, groupId } = req.params;
     const { name, deviceIds } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const group = await getDeviceGroupById(groupId);
+    if (!group || group.home_id !== home.id) {
+      return errorResponse(res, 'Group not found', 404);
     }
 
-    await query(
-      `UPDATE device_groups 
-       SET name = $1, device_ids = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3 AND home_id = $4`,
-      [name, JSON.stringify(deviceIds), groupId, homeId]
-    );
+    await updateDeviceGroupRecord(groupId, {
+      name: name?.trim() || undefined,
+      deviceIds: deviceIds ? normalizeDeviceIds(deviceIds) : undefined,
+    });
 
+    const updatedGroup = await getDeviceGroupById(groupId);
     return successResponse(res, {
       message: 'Device group updated successfully',
+      group: updatedGroup,
     });
   } catch (error: any) {
     console.error('Update device group error:', error);
@@ -102,19 +96,15 @@ export async function deleteDeviceGroup(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, groupId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const group = await getDeviceGroupById(groupId);
+    if (!group || group.home_id !== home.id) {
+      return errorResponse(res, 'Group not found', 404);
     }
 
-    await query(
-      'DELETE FROM device_groups WHERE id = $1 AND home_id = $2',
-      [groupId, homeId]
-    );
+    await deleteDeviceGroupRecord(groupId);
 
     return successResponse(res, {
       message: 'Device group deleted successfully',
@@ -123,4 +113,9 @@ export async function deleteDeviceGroup(req: Request, res: Response) {
     console.error('Delete device group error:', error);
     return errorResponse(res, error.message || 'Failed to delete device group', 500);
   }
+}
+
+function normalizeDeviceIds(deviceIds: unknown): string[] {
+  if (!Array.isArray(deviceIds)) return [];
+  return deviceIds.map((id) => String(id));
 }

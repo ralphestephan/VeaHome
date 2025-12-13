@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -23,7 +25,8 @@ import {
   Info 
 } from 'lucide-react-native';
 import { LineChart } from 'react-native-chart-kit';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, fontSize } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { useEnergyData } from '../hooks/useEnergyData';
@@ -37,7 +40,10 @@ export default function EnergyScreen() {
   const { user } = useAuth();
   const homeId = user?.homeId;
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
+  const [exporting, setExporting] = useState(false);
   const { energyData, loading, refresh } = useEnergyData(homeId, timeRange);
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
 
   // Real-time updates
   useRealtime({
@@ -49,6 +55,40 @@ export default function EnergyScreen() {
   useEffect(() => {
     if (homeId) refresh();
   }, [timeRange, homeId]);
+
+  const handleExport = async () => {
+    if (!energyData.length) {
+      Alert.alert('No Data', 'There is no energy data to export for the selected range yet.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const headers = 'time,total,lighting,climate,media,security';
+      const rows = energyData
+        .map((entry) =>
+          [
+            entry.time,
+            entry.total ?? 0,
+            entry.lighting ?? 0,
+            entry.climate ?? 0,
+            entry.media ?? 0,
+            entry.security ?? 0,
+          ].join(',')
+        )
+        .join('\n');
+      const csv = `${headers}\n${rows}`;
+
+      await Share.share({
+        title: `Energy report (${timeRange})`,
+        message: csv,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to export energy data. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Calculate totals from real data
   const totalEnergy = energyData.reduce((sum, e) => sum + (e.total || 0), 0);
@@ -67,7 +107,14 @@ export default function EnergyScreen() {
       <Header title="Energy" />
       <View style={styles.subHeader}>
         <Text style={styles.subtitle}>Track your consumption</Text>
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity
+          style={[
+            styles.iconButton,
+            (exporting || !energyData.length) && styles.iconButtonDisabled,
+          ]}
+          onPress={handleExport}
+          disabled={exporting || !energyData.length}
+        >
           <Download size={20} color={colors.foreground} />
         </TouchableOpacity>
       </View>
@@ -223,7 +270,7 @@ export default function EnergyScreen() {
               </View>
             </View>
             <Text style={styles.categoryValue}>{totalMedia.toFixed(1)}</Text>
-            <Text style={styles.categoryLabel}>Media • {mediaPercent}%</Text>
+            <Text style={styles.categoryLabel}>Utility • {mediaPercent}%</Text>
           </View>
 
           <View style={styles.categoryCard}>
@@ -294,287 +341,297 @@ export default function EnergyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  subHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.foreground,
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  rangeSelector: {
-    flexDirection: 'row',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    gap: 4,
-    marginBottom: spacing.lg,
-  },
-  rangeButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  activeRange: {
-    backgroundColor: colors.primary,
-  },
-  rangeText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  activeRangeText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  totalCard: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  totalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  totalLabel: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  totalValueContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  totalValue: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: 'white',
-  },
-  totalUnit: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    gap: 4,
-    alignSelf: 'flex-start',
-  },
-  trendText: {
-    fontSize: 12,
-    color: 'white',
-  },
-  chartCard: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  chartTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.sm,
-  },
-  chartPlaceholder: {
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  chartPlaceholderText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  categoryCard: {
-    width: '47%',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: `${colors.primary}33`,
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  categoryIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    backgroundColor: `${colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trendIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  trendPercent: {
-    fontSize: 10,
-    color: colors.success,
-  },
-  categoryValue: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  categoryLabel: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  costCard: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  costHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  costTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  costValueContainer: {
-    marginBottom: spacing.xs,
-  },
-  costValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: colors.foreground,
-  },
-  costLabel: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  costBreakdown: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  costItem: {
-    flex: 1,
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-  },
-  costItemLabel: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginBottom: 4,
-  },
-  costItemValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.foreground,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  insightCard: {
-    flexDirection: 'row',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  insightIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.success}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  insightContent: {
-    flex: 1,
-  },
-  insightTitle: {
-    fontSize: 12,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  insightText: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  loadingContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-  },
-});
+const createStyles = (colors: any, gradients: any, shadows: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    subHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
+    },
+    title: {
+      fontSize: fontSize.xl,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    subtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.secondary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    iconButtonDisabled: {
+      opacity: 0.5,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+      paddingBottom: 100,
+    },
+    rangeSelector: {
+      flexDirection: 'row',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: 4,
+      gap: 4,
+      marginBottom: spacing.lg,
+    },
+    rangeButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+    },
+    activeRange: {
+      backgroundColor: colors.primary,
+    },
+    rangeText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    activeRangeText: {
+      color: 'white',
+      fontWeight: '600',
+    },
+    totalCard: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.xxl,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+      ...shadows.neonPrimary,
+    },
+    totalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: spacing.md,
+    },
+    totalLabel: {
+      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    totalValueContainer: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    totalValue: {
+      fontSize: fontSize.display,
+      fontWeight: '700',
+      color: 'white',
+    },
+    totalUnit: {
+      fontSize: fontSize.lg,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    iconCircle: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    trendBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      borderRadius: borderRadius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      gap: 4,
+      alignSelf: 'flex-start',
+    },
+    trendText: {
+      fontSize: fontSize.sm,
+      color: 'white',
+    },
+    chartCard: {
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.xxl,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.lg,
+    },
+    chartTitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.sm,
+    },
+    chartPlaceholder: {
+      height: 200,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    chartPlaceholderText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    categoriesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    categoryCard: {
+      width: '47%',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.md,
+    },
+    categoryHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: spacing.md,
+    },
+    categoryIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: borderRadius.md,
+      backgroundColor: `${colors.primary}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    trendIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+    },
+    trendPercent: {
+      fontSize: fontSize.xs,
+      color: colors.success,
+    },
+    categoryValue: {
+      fontSize: fontSize.xxl,
+      fontWeight: '600',
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    categoryLabel: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    costCard: {
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.xxl,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.lg,
+    },
+    costHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    costTitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    costValueContainer: {
+      marginBottom: spacing.xs,
+    },
+    costValue: {
+      fontSize: fontSize.xxxl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    costLabel: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.md,
+    },
+    costBreakdown: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    costItem: {
+      flex: 1,
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+    },
+    costItemLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginBottom: 4,
+    },
+    costItemValue: {
+      fontSize: fontSize.lg,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    section: {
+      marginBottom: spacing.lg,
+    },
+    sectionTitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.md,
+    },
+    insightCard: {
+      flexDirection: 'row',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    insightIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: borderRadius.sm,
+      backgroundColor: `${colors.success}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    insightContent: {
+      flex: 1,
+    },
+    insightTitle: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    insightText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    loadingContainer: {
+      padding: spacing.xl,
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    loadingText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.sm,
+    },
+  });

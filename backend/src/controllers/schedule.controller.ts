@@ -1,8 +1,15 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getSchedules,
+  saveSchedule,
+  updateSchedule as updateScheduleRecord,
+  deleteSchedule as deleteScheduleRecord,
+  getScheduleById,
+} from '../repositories/automationsRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
+import { triggerNodeRedFlow } from '../services/nodeRedService';
 
 export async function listSchedules(req: Request, res: Response) {
   try {
@@ -10,21 +17,11 @@ export async function listSchedules(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const schedulesResult = await query(
-      'SELECT * FROM schedules WHERE home_id = $1 ORDER BY time ASC',
-      [homeId]
-    );
-
-    return successResponse(res, { schedules: schedulesResult.rows });
+    const schedules = await getSchedules(home.id);
+    return successResponse(res, { schedules });
   } catch (error: any) {
     console.error('List schedules error:', error);
     return errorResponse(res, error.message || 'Failed to list schedules', 500);
@@ -36,27 +33,33 @@ export async function createSchedule(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, time, days, actions } = req.body;
+    const { name, time, days, actions, enabled } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Schedule name is required', 400);
     }
 
-    const scheduleId = uuidv4();
-    await query(
-      `INSERT INTO schedules (id, home_id, name, time, days, actions)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [scheduleId, homeId, name, time, JSON.stringify(days), JSON.stringify(actions)]
-    );
+    if (!time) {
+      return errorResponse(res, 'Schedule time is required', 400);
+    }
+
+    const schedule = await saveSchedule({
+      home_id: home.id,
+      name: name.trim(),
+      time,
+      days: normalizeStringArray(days),
+      actions: normalizeActions(actions),
+      enabled: typeof enabled === 'boolean' ? enabled : true,
+    });
+
+    await notifyScheduleFlow('create', { homeId: home.id, schedule });
 
     return successResponse(res, {
-      id: scheduleId,
       message: 'Schedule created successfully',
+      schedule,
     }, 201);
   } catch (error: any) {
     console.error('Create schedule error:', error);
@@ -69,26 +72,29 @@ export async function updateSchedule(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId, scheduleId } = req.params;
-    const { name, time, days, actions } = req.body;
+    const { name, time, days, actions, enabled } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const schedule = await getScheduleById(scheduleId);
+    if (!schedule || schedule.home_id !== home.id) {
+      return errorResponse(res, 'Schedule not found', 404);
     }
 
-    await query(
-      `UPDATE schedules 
-       SET name = $1, time = $2, days = $3, actions = $4, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5 AND home_id = $6`,
-      [name, time, JSON.stringify(days), JSON.stringify(actions), scheduleId, homeId]
-    );
+    await updateScheduleRecord(scheduleId, {
+      name: name?.trim() || undefined,
+      time,
+      days: days ? normalizeStringArray(days) : undefined,
+      actions: actions ? normalizeActions(actions) : undefined,
+      enabled: typeof enabled === 'boolean' ? enabled : undefined,
+    });
 
+    const updatedSchedule = await getScheduleById(scheduleId);
+    await notifyScheduleFlow('update', { homeId: home.id, schedule: updatedSchedule });
     return successResponse(res, {
       message: 'Schedule updated successfully',
+      schedule: updatedSchedule,
     });
   } catch (error: any) {
     console.error('Update schedule error:', error);
@@ -102,19 +108,17 @@ export async function deleteSchedule(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, scheduleId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const schedule = await getScheduleById(scheduleId);
+    if (!schedule || schedule.home_id !== home.id) {
+      return errorResponse(res, 'Schedule not found', 404);
     }
 
-    await query(
-      'DELETE FROM schedules WHERE id = $1 AND home_id = $2',
-      [scheduleId, homeId]
-    );
+    await deleteScheduleRecord(scheduleId);
+
+    await notifyScheduleFlow('delete', { homeId: home.id, scheduleId });
 
     return successResponse(res, {
       message: 'Schedule deleted successfully',
@@ -122,5 +126,26 @@ export async function deleteSchedule(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Delete schedule error:', error);
     return errorResponse(res, error.message || 'Failed to delete schedule', 500);
+  }
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item));
+}
+
+function normalizeActions(value: unknown): any[] {
+  if (!Array.isArray(value)) return [];
+  return value;
+}
+
+async function notifyScheduleFlow(action: string, payload: Record<string, unknown>) {
+  try {
+    await triggerNodeRedFlow({
+      flow: 'schedules.sync',
+      data: { action, ...payload },
+    });
+  } catch (error) {
+    console.error('Schedule flow notification failed', error);
   }
 }

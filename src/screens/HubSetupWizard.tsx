@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle, Wifi, Home, ArrowRight, Loader } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -35,6 +36,8 @@ type Step = 'confirm' | 'wifi' | 'rooms' | 'ready';
 export default function HubSetupWizard() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { token, user } = useAuth();
   const { hubId, qrCode } = route.params || { hubId: '', qrCode: '' };
   
@@ -322,7 +325,7 @@ export default function HubSetupWizard() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Hub Setup" showBack />
+      <Header title="Hub Setup" showBack showSettings={false} />
       
       <ScrollView
         style={styles.content}
@@ -349,7 +352,7 @@ export default function HubSetupWizard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

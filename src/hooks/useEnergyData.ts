@@ -4,12 +4,14 @@ import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, HomeApi } from '../services/api';
 import { EnergyData } from '../types';
+import { mockEnergyData } from '../constants/mockData';
 
 export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 'week' | 'month' = 'day') => {
   const { token } = useAuth();
   const [energyData, setEnergyData] = useState<EnergyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isDemoMode = !token || token === 'DEMO_TOKEN';
 
   const client = getApiClient(async () => token);
   const homeApi = HomeApi(client);
@@ -21,6 +23,12 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
     }
 
     const loadData = async () => {
+      if (isDemoMode) {
+        setEnergyData(mockEnergyData);
+        setError(null);
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         setError(null);
@@ -53,10 +61,14 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
     };
 
     loadData();
-  }, [homeId, range, token]);
+  }, [homeId, range, token, isDemoMode]);
 
   const refresh = async () => {
     if (!homeId) return;
+    if (isDemoMode) {
+      setEnergyData(mockEnergyData);
+      return;
+    }
     try {
       const response = await homeApi.getEnergy(homeId, range);
       const data = response.data || [];

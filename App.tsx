@@ -3,19 +3,53 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
+import { ToastProvider } from './src/components/Toast';
 import { registerForPushNotificationsAsync } from './src/services/notifications';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { NotificationsProvider } from './src/context/NotificationsContext';
+import { DemoProvider } from './src/context/DemoContext';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 
-export default function App() {
+function AppContent() {
+  const { mode } = useTheme();
+
   useEffect(() => {
-    // Fire and forget; store token on backend later
     registerForPushNotificationsAsync();
   }, []);
+
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
+    <>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} backgroundColor="transparent" />
       <AuthProvider>
-        <AppNavigator />
+        <DemoProvider>
+          <NotificationsProvider>
+            <ToastProvider>
+              <AppNavigator />
+            </ToastProvider>
+          </NotificationsProvider>
+        </DemoProvider>
       </AuthProvider>
-    </SafeAreaProvider>
+    </>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  return (
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }

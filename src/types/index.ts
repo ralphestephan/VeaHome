@@ -1,11 +1,11 @@
 export type RootStackParamList = {
   Home: undefined;
-  Dashboard: undefined;
+  Dashboard: { screen?: keyof BottomTabParamList; params?: Record<string, unknown> } | undefined;
   HubPair: undefined;
   HubSetup: { hubId: string; qrCode: string };
   DeviceOnboarding: { hubId: string };
   RoomDetail: { roomId: string };
-  Thermostat: { roomId: string };
+  Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;
   SceneForm: { sceneId?: string; homeId: string };
   Schedules: undefined;
@@ -13,26 +13,35 @@ export type RootStackParamList = {
   DeviceGroups: undefined;
   Automations: undefined;
   DeviceHistory: { deviceId: string };
+  Settings: undefined;
+  Notifications: undefined;
 };
 
 export type BottomTabParamList = {
-  DashboardTab: undefined;
   Devices: undefined;
   Energy: undefined;
+  DashboardTab: undefined;
   Scenes: undefined;
-  Settings: undefined;
+  SettingsTab: undefined;
 };
 
 export interface Device {
   id: string;
   name: string;
-  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor';
+  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan';
   category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
   isActive: boolean;
   value?: number;
   unit?: string;
   roomId: string;
   hubId?: string;
+}
+
+export interface RoomLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface Room {
@@ -47,6 +56,11 @@ export interface Room {
   airQuality?: number;
   image?: string;
   model3dUrl?: string;
+  accentColor?: string;
+  layoutPath?: string;
+  layoutOffset?: { x: number; y: number };
+  layout?: RoomLayout;
+  color?: string;
 }
 
 export interface Home {
@@ -76,6 +90,14 @@ export interface EnergyData {
   security: number;
 }
 
+export interface DeviceAction {
+  deviceId: string;
+  action: {
+    isActive?: boolean;
+    value?: number;
+  };
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -85,4 +107,5 @@ export interface Scene {
   devices?: number;
   description?: string;
   deviceStates?: Record<string, any>;
+  deviceActions?: DeviceAction[];
 }

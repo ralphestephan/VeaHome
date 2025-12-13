@@ -13,7 +13,7 @@ const router = Router();
 
 router.get('/:homeId/schedules', authenticateToken, listSchedules);
 router.post('/:homeId/schedules', authenticateToken, validate(scheduleSchemas.createSchedule), createSchedule);
-router.put('/:homeId/schedules/:scheduleId', authenticateToken, validate(scheduleSchemas.createSchedule), updateSchedule);
+router.put('/:homeId/schedules/:scheduleId', authenticateToken, validate(scheduleSchemas.updateSchedule), updateSchedule);
 router.delete('/:homeId/schedules/:scheduleId', authenticateToken, deleteSchedule);
 
 export default router;

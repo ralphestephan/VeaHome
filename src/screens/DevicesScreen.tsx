@@ -1,19 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ImageBackground,
   useWindowDimensions,
+  RefreshControl,
+  Dimensions,
   ActivityIndicator,
+  ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TabView, SceneMap, TabBar } from 'react-native-tab-view';
+import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { 
+  Lightbulb, 
+  Thermometer, 
+  Blinds, 
+  Tv, 
+  Shield,
+  Plus,
+  Sparkles,
+} from 'lucide-react-native';
+import { 
+  spacing, 
+  borderRadius, 
+  fontSize, 
+  fontWeight,
+  ThemeColors,
+} from '../constants/theme';
 import DeviceTileComponent from '../components/DeviceTile';
+import DeviceControlModal from '../components/DeviceControlModal';
 import Header from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -21,35 +39,62 @@ import { useHomeData } from '../hooks/useHomeData';
 import { useHubs } from '../hooks/useHubs';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useRealtime } from '../hooks/useRealtime';
-import { getApiClient, HubApi } from '../services/api';
-import type { RootStackParamList } from '../types';
+import { useTheme } from '../context/ThemeContext';
+import { useDemo } from '../context/DemoContext';
+import { 
+  NeonCard, 
+  SectionHeader, 
+  SkeletonLoader, 
+  EmptyState,
+} from '../components/ui';
+import type { RootStackParamList, Device } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-const smartHomeImage = require('../assets/4239477678dba8bff484942536b80f83ac9c74f8.png');
+// Use c.gif for hero animation
+const smartHomeImage = require('../../assets/c.gif');
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function DevicesScreen() {
   const layout = useWindowDimensions();
   const navigation = useNavigation<NavigationProp>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { user } = useAuth();
   const homeId = user?.homeId;
-  const { devices, rooms, loading, refresh } = useHomeData(homeId);
+  const { devices: homeDevices, rooms: homeRooms, loading, refresh, isDemoMode } = useHomeData(homeId);
+  const demo = useDemo();
+  
+  // Use demo data if in demo mode
+  const devices: Device[] = isDemoMode ? demo.devices : homeDevices;
+  const rooms = isDemoMode ? demo.rooms : homeRooms;
+  
   const { hubs } = useHubs(homeId);
   const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Modal state
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   // Real-time updates
   useRealtime({
-    onDeviceUpdate: (data) => {
-      refresh();
-    },
+    onDeviceUpdate: () => refresh(),
   });
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
   const [routes] = useState([
     { key: 'lights', title: 'Lights' },
     { key: 'climate', title: 'Climate' },
-    { key: 'windows', title: 'Shutters' },
-    { key: 'media', title: 'Media' },
+    { key: 'windows', title: 'Shutter' },
+    { key: 'utility', title: 'Utility' },
     { key: 'security', title: 'Security' },
   ]);
 
@@ -57,7 +102,7 @@ export default function DevicesScreen() {
   const lightsDevices = devices.filter(d => d.type === 'light');
   const climateDevices = devices.filter(d => d.type === 'thermostat' || d.type === 'ac');
   const windowDevices = devices.filter(d => d.type === 'blind' || d.type === 'shutter');
-  const mediaDevices = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
+  const utilityDevices = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
   const securityDevices = devices.filter(d => d.type === 'camera' || d.type === 'lock');
 
   // Group devices by room
@@ -70,26 +115,53 @@ export default function DevicesScreen() {
     return grouped;
   };
 
-  const handleDeviceToggle = async (device: typeof devices[0]) => {
-    await toggleDevice(device.id, device.isActive);
-    refresh();
+  const handleDeviceToggle = async (device: Device) => {
+    if (isDemoMode) {
+      demo.toggleDevice(device.id);
+    } else {
+      await toggleDevice(device.id, device.isActive);
+      refresh();
+    }
+  };
+  
+  const handleDeviceLongPress = (device: Device) => {
+    setSelectedDevice(device);
+    setModalVisible(true);
+  };
+  
+  const handleModalToggle = (deviceId: string) => {
+    if (isDemoMode) {
+      demo.toggleDevice(deviceId);
+    } else {
+      toggleDevice(deviceId, selectedDevice?.isActive ?? false);
+      refresh();
+    }
+  };
+  
+  const handleModalSetValue = (deviceId: string, value: number) => {
+    if (isDemoMode) {
+      demo.setDeviceValue(deviceId, value);
+    } else {
+      setValue(deviceId, value, selectedDevice?.unit);
+      refresh();
+    }
   };
 
   const getRoomName = (roomId: string) => {
-    return rooms.find(r => r.id === roomId)?.name || roomId;
+    return rooms.find((r: { id: string; name: string }) => r.id === roomId)?.name || roomId;
   };
 
   const getDeviceIcon = (type: string) => {
     const iconMap: Record<string, string> = {
       light: 'lightbulb',
       thermostat: 'thermometer',
-      ac: 'thermometer',
+      ac: 'ac',
       tv: 'television',
       speaker: 'speaker',
       camera: 'camera',
       lock: 'lock',
-      blind: 'fan',
-      shutter: 'fan',
+      blind: 'shutter',
+      shutter: 'shutter',
     };
     return iconMap[type] || 'lightbulb';
   };
@@ -120,15 +192,18 @@ export default function DevicesScreen() {
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
             <View style={styles.devicesGrid}>
               {roomDevices.map(device => (
-                <DeviceTileComponent
-                  key={device.id}
-                  icon={getDeviceIcon(device.type)}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTileComponent
+                    icon={getDeviceIcon(device.type)}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit || '%'}
+                    isActive={device.isActive}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -164,15 +239,18 @@ export default function DevicesScreen() {
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
             <View style={styles.devicesGrid}>
               {roomDevices.map(device => (
-                <DeviceTileComponent
-                  key={device.id}
-                  icon={getDeviceIcon(device.type)}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTileComponent
+                    icon={getDeviceIcon(device.type)}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit || '°C'}
+                    isActive={device.isActive}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -208,15 +286,18 @@ export default function DevicesScreen() {
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
             <View style={styles.devicesGrid}>
               {roomDevices.map(device => (
-                <DeviceTileComponent
-                  key={device.id}
-                  icon={getDeviceIcon(device.type)}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTileComponent
+                    icon={getDeviceIcon(device.type)}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit || '%'}
+                    isActive={device.isActive}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -225,8 +306,8 @@ export default function DevicesScreen() {
     );
   };
 
-  const MediaRoute = () => {
-    const groupedDevices = devicesByRoom(mediaDevices);
+  const UtilityRoute = () => {
+    const groupedDevices = devicesByRoom(utilityDevices);
     
     if (loading) {
       return (
@@ -237,10 +318,10 @@ export default function DevicesScreen() {
       );
     }
 
-    if (mediaDevices.length === 0) {
+    if (utilityDevices.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No media devices found</Text>
+          <Text style={styles.emptyText}>No utility devices found</Text>
         </View>
       );
     }
@@ -252,15 +333,18 @@ export default function DevicesScreen() {
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
             <View style={styles.devicesGrid}>
               {roomDevices.map(device => (
-                <DeviceTileComponent
-                  key={device.id}
-                  icon={getDeviceIcon(device.type)}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTileComponent
+                    icon={getDeviceIcon(device.type)}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit}
+                    isActive={device.isActive}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -296,15 +380,18 @@ export default function DevicesScreen() {
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
             <View style={styles.devicesGrid}>
               {roomDevices.map(device => (
-                <DeviceTileComponent
-                  key={device.id}
-                  icon={getDeviceIcon(device.type)}
-                  name={device.name}
-                  value={device.value}
-                  unit={device.unit}
-                  isActive={device.isActive}
-                  onPress={() => handleDeviceToggle(device)}
-                />
+                <View key={device.id} style={styles.deviceTileWrapper}>
+                  <DeviceTileComponent
+                    icon={getDeviceIcon(device.type)}
+                    name={device.name}
+                    value={device.value}
+                    unit={device.unit}
+                    isActive={device.isActive}
+                    type={device.type}
+                    onPress={() => handleDeviceLongPress(device)}
+                    onToggle={() => handleDeviceToggle(device)}
+                  />
+                </View>
               ))}
             </View>
           </View>
@@ -317,37 +404,34 @@ export default function DevicesScreen() {
     lights: LightsRoute,
     climate: ClimateRoute,
     windows: WindowsRoute,
-    media: MediaRoute,
+    utility: UtilityRoute,
     security: SecurityRoute,
   });
 
   const renderTabBar = (props: any) => (
-    <TabBar
-      {...props}
-      indicatorStyle={{ backgroundColor: 'transparent' }}
-      style={styles.tabBar}
-      tabStyle={styles.tab}
-      labelStyle={styles.tabLabel}
-      activeColor="white"
-      inactiveColor={colors.mutedForeground}
-      renderLabel={({ route, focused }: { route: any; focused: boolean }) => (
-        <View
-          style={[
-            styles.tabButton,
-            focused && styles.tabButtonActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              focused && styles.tabTextActive,
-            ]}
-          >
-            {route.title}
-          </Text>
-        </View>
-      )}
-    />
+    <LinearGradient colors={gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tabBarWrapper}>
+      <TabBar
+        {...props}
+        indicatorStyle={{ backgroundColor: 'transparent' }}
+        style={styles.tabBar}
+        tabStyle={styles.tab}
+        renderLabel={({ route, focused }: { route: any; focused: boolean }) => (
+          focused ? (
+            <LinearGradient colors={gradients.accent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tabButton}>
+              <Text style={styles.tabTextActive} numberOfLines={1} ellipsizeMode="clip">
+                {route.title}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={[styles.tabButton, styles.tabButtonInactive]}>
+              <Text style={styles.tabText} numberOfLines={1} ellipsizeMode="clip">
+                {route.title}
+              </Text>
+            </View>
+          )
+        )}
+      />
+    </LinearGradient>
   );
 
   return (
@@ -356,7 +440,7 @@ export default function DevicesScreen() {
       <View style={styles.subHeader}>
         <Text style={styles.subtitle}>{devices.length} devices connected</Text>
         <TouchableOpacity 
-          style={styles.addButton}
+          style={styles.addButtonWrapper}
           onPress={() => {
             // Get hubId from existing hubs or devices
             const hubId = hubs.length > 0 
@@ -366,7 +450,14 @@ export default function DevicesScreen() {
             navigation.navigate('DeviceOnboarding', { hubId });
           }}
         >
-          <Text style={styles.addButtonText}>Add Device</Text>
+          <LinearGradient
+            colors={gradients.accent}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.addButton}
+          >
+            <Text style={styles.addButtonText}>Add Device</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -395,149 +486,182 @@ export default function DevicesScreen() {
         onIndexChange={setIndex}
         initialLayout={{ width: layout.width }}
       />
+
+      {/* Device Control Modal */}
+      {selectedDevice && (
+        <DeviceControlModal
+          visible={modalVisible}
+          device={selectedDevice}
+          onClose={() => {
+            setModalVisible(false);
+            setSelectedDevice(null);
+          }}
+          onToggle={handleModalToggle}
+          onSetValue={handleModalSetValue}
+        />
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  subHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: colors.foreground,
-  },
-  subtitle: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginTop: 2,
-  },
-  addButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  addButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  heroContainer: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    height: 180,
-    borderRadius: borderRadius.xxl,
-    overflow: 'hidden',
-  },
-  heroImage: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  heroImageStyle: {
-    borderRadius: borderRadius.xxl,
-  },
-  heroGradient: {
-    padding: spacing.md,
-    justifyContent: 'flex-end',
-  },
-  heroTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-  },
-  heroSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 2,
-  },
-  tabBar: {
-    backgroundColor: colors.secondary,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  tab: {
-    padding: 0,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'none',
-  },
-  tabButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  tabButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  tabText: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  tabTextActive: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  tabContent: {
-    flex: 1,
-  },
-  tabScrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  deviceSection: {
-    marginBottom: spacing.lg,
-  },
-  deviceSectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.md,
-  },
-  devicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  loadingContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-  },
-  emptyContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  emptyText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-  },
-});
+const createStyles = (colors: any, gradients: any, shadows: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    subHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.md,
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    subtitle: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginTop: 2,
+    },
+    addButtonWrapper: {
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+      ...shadows.neonPrimary,
+    },
+    addButton: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+    },
+    addButtonText: {
+      color: 'white',
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+    },
+    heroContainer: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.md,
+      height: 180,
+      borderRadius: borderRadius.xxl,
+      overflow: 'hidden',
+      ...shadows.lg,
+    },
+    heroImage: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    heroImageStyle: {
+      borderRadius: borderRadius.xxl,
+    },
+    heroGradient: {
+      padding: spacing.md,
+      justifyContent: 'flex-end',
+    },
+    heroTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
+      color: 'white',
+    },
+    heroSubtitle: {
+      fontSize: fontSize.xs,
+      color: 'rgba(255, 255, 255, 0.7)',
+      marginTop: 2,
+    },
+    tabBarWrapper: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.md,
+      borderRadius: borderRadius.lg,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    tabBar: {
+      backgroundColor: 'transparent',
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+    tab: {
+      padding: 0,
+    },
+    tabButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.md,
+      minWidth: 110,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tabButtonInactive: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    },
+    tabText: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      flexWrap: 'nowrap',
+      flexShrink: 1,
+      textAlign: 'center',
+    },
+    tabTextActive: {
+      color: 'white',
+      fontWeight: '600',
+      flexWrap: 'nowrap',
+      textAlign: 'center',
+      fontSize: fontSize.xs,
+    },
+    tabContent: {
+      flex: 1,
+    },
+    tabScrollContent: {
+      padding: spacing.lg,
+      paddingBottom: 100,
+    },
+    deviceSection: {
+      marginBottom: spacing.lg,
+    },
+    deviceSectionTitle: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: colors.foreground,
+      marginBottom: spacing.md,
+    },
+    devicesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    deviceTileWrapper: {
+      width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+    },
+    loadingContainer: {
+      padding: spacing.xl,
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    loadingText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.sm,
+    },
+    emptyContainer: {
+      padding: spacing.xl,
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    emptyText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.sm,
+    },
+  });

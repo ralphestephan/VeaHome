@@ -11,7 +11,7 @@ export const useDeviceControl = () => {
 
   const controlDevice = async (
     deviceId: string,
-    payload: { isActive?: boolean; value?: number; unit?: string }
+    payload: Record<string, any>
   ) => {
     if (!user?.homeId) return;
     

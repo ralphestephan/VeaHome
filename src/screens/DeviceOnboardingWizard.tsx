@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,8 +23,10 @@ import {
   CheckCircle,
   Loader,
 } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
+import CreationHero from '../components/CreationHero';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
@@ -60,10 +62,20 @@ const DEVICE_ACTIONS: Record<string, string[]> = {
 };
 
 type Step = 'type' | 'config' | 'learning' | 'wifi' | 'ready';
+const STEP_ORDER: Step[] = ['type', 'config', 'learning', 'wifi', 'ready'];
+const STEP_DESCRIPTIONS: Record<Step, string> = {
+  type: 'Select what kind of device you are pairing so we can tailor the next steps.',
+  config: 'Name the device, choose its category, and drop it into the right room.',
+  learning: 'Teach the hub the commands your remote knows so actions stay in sync.',
+  wifi: 'Pass along WiFi credentials so the device can live on your network.',
+  ready: 'Review what was created and jump back to the dashboard or add another.',
+};
 
 export default function DeviceOnboardingWizard() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { token, user } = useAuth();
   const { hubId } = route.params || { hubId: '' };
   
@@ -461,9 +473,26 @@ export default function DeviceOnboardingWizard() {
     </View>
   );
 
+  const stepIndex = Math.max(0, STEP_ORDER.indexOf(step));
+  const heroTitle = step === 'ready' ? 'Device Ready' : 'Add Device';
+  const heroMeta = step === 'ready'
+    ? 'Setup complete'
+    : `Step ${stepIndex + 1} of ${STEP_ORDER.length}`;
+  const heroDescription = STEP_DESCRIPTIONS[step];
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Add Device" showBack />
+      <Header
+        title="Add Device"
+        showBack
+        showSettings={false}
+      />
+      <CreationHero
+        eyebrow="Device setup"
+        title={heroTitle}
+        description={heroDescription}
+        meta={heroMeta}
+      />
       
       <ScrollView
         style={styles.content}
@@ -480,7 +509,7 @@ export default function DeviceOnboardingWizard() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

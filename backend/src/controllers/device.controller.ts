@@ -1,8 +1,18 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getDevicesByHomeId,
+  createDevice,
+  getDeviceById,
+  updateDevice,
+  getDeviceWithHub,
+} from '../repositories/devicesRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
+import { getHubById } from '../repositories/hubsRepository';
+import { getRoomById } from '../repositories/roomsRepository';
+import { publishCommand } from '../services/mqttService';
+import { recordDeviceActivity } from '../services/telemetryService';
 
 export async function listDevices(req: Request, res: Response) {
   try {
@@ -10,24 +20,11 @@ export async function listDevices(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const devicesResult = await query(
-      `SELECT id, hub_id, home_id, room_id, name, type, category, 
-              is_active, value, unit, signal_mappings 
-       FROM devices WHERE home_id = $1 ORDER BY created_at ASC`,
-      [homeId]
-    );
-
-    return successResponse(res, { devices: devicesResult.rows });
+    const devices = await getDevicesByHomeId(home.id);
+    return successResponse(res, { devices });
   } catch (error: any) {
     console.error('List devices error:', error);
     return errorResponse(res, error.message || 'Failed to list devices', 500);
@@ -39,41 +36,43 @@ export async function addDevice(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, type, category, roomId, hubId } = req.body;
+    const { name, type, category, roomId, hubId, unit } = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!name || !type || !category || !roomId || !hubId) {
+      return errorResponse(res, 'Missing required device fields', 400);
     }
 
-    // Verify hub exists
-    const hubCheck = await query(
-      'SELECT id FROM hubs WHERE id = $1 AND home_id = $2',
-      [hubId, homeId]
-    );
-
-    if (hubCheck.rows.length === 0) {
+    const hub = await getHubById(hubId);
+    if (!hub || hub.home_id !== home.id) {
       return errorResponse(res, 'Hub not found', 404);
     }
 
-    // Create device
-    const deviceId = uuidv4();
-    await query(
-      `INSERT INTO devices (id, hub_id, home_id, room_id, name, type, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [deviceId, hubId, homeId, roomId, name, type, category]
-    );
+    const room = await getRoomById(roomId);
+    if (!room || room.home_id !== home.id) {
+      return errorResponse(res, 'Room not found', 404);
+    }
 
-    return successResponse(res, {
-      id: deviceId,
-      deviceId: deviceId,
-      message: 'Device added successfully',
-    }, 201);
+    const device = await createDevice({
+      homeId: home.id,
+      hubId: hub.id,
+      roomId: room.id,
+      name: name.trim(),
+      type,
+      category,
+      unit,
+    });
+
+    return successResponse(
+      res,
+      {
+        message: 'Device added successfully',
+        device,
+      },
+      201
+    );
   } catch (error: any) {
     console.error('Add device error:', error);
     return errorResponse(res, error.message || 'Failed to add device', 500);
@@ -86,26 +85,15 @@ export async function getDevice(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, deviceId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const deviceResult = await query(
-      'SELECT * FROM devices WHERE id = $1 AND home_id = $2',
-      [deviceId, homeId]
-    );
-
-    if (deviceResult.rows.length === 0) {
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
       return errorResponse(res, 'Device not found', 404);
     }
 
-    return successResponse(res, { device: deviceResult.rows[0] });
+    return successResponse(res, { device });
   } catch (error: any) {
     console.error('Get device error:', error);
     return errorResponse(res, error.message || 'Failed to get device', 500);
@@ -119,30 +107,19 @@ export async function controlDevice(req: Request, res: Response) {
     const { homeId, deviceId } = req.params;
     const controlPayload = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    // Get device and hub info
-    const deviceResult = await query(
-      `SELECT d.*, h.mqtt_topic 
-       FROM devices d 
-       JOIN hubs h ON d.hub_id = h.id 
-       WHERE d.id = $1 AND d.home_id = $2`,
-      [deviceId, homeId]
-    );
-
-    if (deviceResult.rows.length === 0) {
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
       return errorResponse(res, 'Device not found', 404);
     }
 
-    const device = deviceResult.rows[0];
+    const deviceWithHub = await getDeviceWithHub(deviceId);
+    const mqttTopic = deviceWithHub?.mqtt_topic || `hubs/${device.hub_id}`;
+    if (!mqttTopic) {
+      console.warn('Device has no MQTT topic configured', { deviceId });
+    }
 
     // Build MQTT command
     const command: any = {
@@ -152,45 +129,40 @@ export async function controlDevice(req: Request, res: Response) {
 
     if (controlPayload.isActive !== undefined) {
       command.action = controlPayload.isActive ? 'ON' : 'OFF';
-      command.signal = device.signal_mappings?.[command.action];
+      command.signal = (device.signal_mappings || {})[command.action];
     }
 
     if (controlPayload.value !== undefined) {
       command.value = controlPayload.value;
       if (device.type === 'thermostat' || device.type === 'ac') {
         command.action = controlPayload.value > (device.value || 0) ? 'TEMP_UP' : 'TEMP_DOWN';
-        command.signal = device.signal_mappings?.[command.action];
+        command.signal = (device.signal_mappings || {})[command.action];
       }
     }
 
-    // TODO: Publish command to hub via MQTT
-    console.log(`Publishing command to ${device.mqtt_topic}/devices/${deviceId}/control:`, command);
-
-    // Update device state in database
-    const updateFields: string[] = [];
-    const updateValues: any[] = [];
-    let paramIndex = 1;
-
-    if (controlPayload.isActive !== undefined) {
-      updateFields.push(`is_active = $${paramIndex++}`);
-      updateValues.push(controlPayload.isActive);
+    if (mqttTopic) {
+      publishCommand(`${mqttTopic}/devices/${deviceId}/control`, command);
     }
 
-    if (controlPayload.value !== undefined) {
-      updateFields.push(`value = $${paramIndex++}`);
-      updateValues.push(controlPayload.value);
+    const partialUpdate: any = {};
+    if (typeof controlPayload.isActive === 'boolean') {
+      partialUpdate.isActive = controlPayload.isActive;
+    }
+    if (typeof controlPayload.value === 'number') {
+      partialUpdate.value = controlPayload.value;
     }
 
-    if (updateFields.length > 0) {
-      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-      updateValues.push(deviceId, homeId);
-
-      await query(
-        `UPDATE devices 
-         SET ${updateFields.join(', ')} 
-         WHERE id = $${paramIndex++} AND home_id = $${paramIndex++}`,
-        updateValues
-      );
+    if (Object.keys(partialUpdate).length) {
+      await updateDevice(deviceId, partialUpdate);
+      await recordDeviceActivity({
+        homeId: home.id,
+        roomId: device.room_id,
+        deviceId,
+        category: device.category,
+        value: typeof partialUpdate.value === 'number' ? partialUpdate.value : undefined,
+        isActive: typeof partialUpdate.isActive === 'boolean' ? partialUpdate.isActive : undefined,
+        source: 'manual-control',
+      });
     }
 
     // TODO: Emit WebSocket event for real-time updates
@@ -208,26 +180,27 @@ export async function controlDevice(req: Request, res: Response) {
 
 export async function learnSignal(req: Request, res: Response) {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
     const { hubId, deviceId } = req.params;
     const { action } = req.body;
 
-    // Get hub and device
-    const deviceResult = await query(
-      `SELECT d.*, h.mqtt_topic 
-       FROM devices d 
-       JOIN hubs h ON d.hub_id = h.id 
-       WHERE d.id = $1 AND h.id = $2`,
-      [deviceId, hubId]
-    );
+    const hub = await getHubById(hubId);
+    if (!hub) {
+      return errorResponse(res, 'Hub not found', 404);
+    }
 
-    if (deviceResult.rows.length === 0) {
+    const home = await ensureHomeAccess(res, hub.home_id, userId);
+    if (!home) return;
+
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
       return errorResponse(res, 'Device not found', 404);
     }
 
-    const device = deviceResult.rows[0];
-
     // TODO: Publish learn command to hub via MQTT
-    console.log(`Publishing learn command to ${device.mqtt_topic}/devices/${deviceId}/learn:`, { action });
+    const mqttTopic = hub.mqtt_topic || `hubs/${hub.id}`;
+    publishCommand(`${mqttTopic}/devices/${deviceId}/learn`, { action });
 
     // Simulate signal learning (in real scenario, hub will report back the learned signal)
     const learnedSignal = `SIGNAL_${action}_${Date.now()}`;
@@ -236,10 +209,7 @@ export async function learnSignal(req: Request, res: Response) {
     const signalMappings = device.signal_mappings || {};
     signalMappings[action] = learnedSignal;
 
-    await query(
-      'UPDATE devices SET signal_mappings = $1 WHERE id = $2',
-      [JSON.stringify(signalMappings), deviceId]
-    );
+    await updateDevice(deviceId, { signalMappings });
 
     return successResponse(res, {
       message: 'Signal learned successfully',
@@ -259,14 +229,12 @@ export async function getDeviceHistory(req: Request, res: Response) {
     const { homeId, deviceId } = req.params;
     const { range } = req.query;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
+      return errorResponse(res, 'Device not found', 404);
     }
 
     // TODO: Query from time-series database (InfluxDB or Timestream)

@@ -1,8 +1,20 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getScenes,
+  saveScene,
+  updateScene as updateSceneRecord,
+  deleteScene as deleteSceneRecord,
+  getSceneById,
+  deactivateScenes,
+  setSceneActive,
+} from '../repositories/automationsRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
+import { updateDevice, getDeviceWithHub } from '../repositories/devicesRepository';
+import { publishCommand } from '../services/mqttService';
+import { recordDeviceActivity } from '../services/telemetryService';
+import { triggerNodeRedFlow } from '../services/nodeRedService';
 
 export async function listScenes(req: Request, res: Response) {
   try {
@@ -10,22 +22,11 @@ export async function listScenes(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const scenesResult = await query(
-      'SELECT * FROM scenes WHERE home_id = $1 ORDER BY created_at DESC',
-      [homeId]
-    );
-
-    return successResponse(res, { scenes: scenesResult.rows });
+    const scenes = await getScenes(home.id);
+    return successResponse(res, { scenes });
   } catch (error: any) {
     console.error('List scenes error:', error);
     return errorResponse(res, error.message || 'Failed to list scenes', 500);
@@ -39,27 +40,23 @@ export async function createScene(req: Request, res: Response) {
     const { homeId } = req.params;
     const { name, icon, description, deviceStates, devices } = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Scene name is required', 400);
     }
 
-    const sceneId = uuidv4();
-    await query(
-      `INSERT INTO scenes (id, home_id, name, icon, description, device_states, devices)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [sceneId, homeId, name, icon || 'sunset', description || '', JSON.stringify(deviceStates), JSON.stringify(devices || [])]
-    );
+    const scene = await saveScene({
+      home_id: home.id,
+      name: name.trim(),
+      icon: icon || 'sunset',
+      description: description || '',
+      device_states: sanitizeDeviceStates(deviceStates),
+      devices: Array.isArray(devices) ? devices : [],
+    });
 
-    return successResponse(res, {
-      id: sceneId,
-      message: 'Scene created successfully',
-    }, 201);
+    return successResponse(res, { message: 'Scene created successfully', scene }, 201);
   } catch (error: any) {
     console.error('Create scene error:', error);
     return errorResponse(res, error.message || 'Failed to create scene', 500);
@@ -73,25 +70,26 @@ export async function updateScene(req: Request, res: Response) {
     const { homeId, sceneId } = req.params;
     const { name, icon, description, deviceStates, devices } = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const scene = await getSceneById(sceneId);
+    if (!scene || scene.home_id !== home.id) {
+      return errorResponse(res, 'Scene not found', 404);
     }
 
-    await query(
-      `UPDATE scenes 
-       SET name = $1, icon = $2, description = $3, device_states = $4, devices = $5, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6 AND home_id = $7`,
-      [name, icon, description, JSON.stringify(deviceStates), JSON.stringify(devices), sceneId, homeId]
-    );
+    await updateSceneRecord(sceneId, {
+      name: name?.trim() || undefined,
+      icon,
+      description,
+      device_states: deviceStates ? sanitizeDeviceStates(deviceStates) : undefined,
+      devices: Array.isArray(devices) ? devices : undefined,
+    });
 
+    const updatedScene = await getSceneById(sceneId);
     return successResponse(res, {
       message: 'Scene updated successfully',
+      scene: updatedScene,
     });
   } catch (error: any) {
     console.error('Update scene error:', error);
@@ -105,20 +103,15 @@ export async function deleteScene(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, sceneId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const scene = await getSceneById(sceneId);
+    if (!scene || scene.home_id !== home.id) {
+      return errorResponse(res, 'Scene not found', 404);
     }
 
-    await query(
-      'DELETE FROM scenes WHERE id = $1 AND home_id = $2',
-      [sceneId, homeId]
-    );
+    await deleteSceneRecord(sceneId);
 
     return successResponse(res, {
       message: 'Scene deleted successfully',
@@ -135,71 +128,49 @@ export async function activateScene(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, sceneId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    // Get scene
-    const sceneResult = await query(
-      'SELECT * FROM scenes WHERE id = $1 AND home_id = $2',
-      [sceneId, homeId]
-    );
-
-    if (sceneResult.rows.length === 0) {
+    const scene = await getSceneById(sceneId);
+    if (!scene || scene.home_id !== home.id) {
       return errorResponse(res, 'Scene not found', 404);
     }
 
-    const scene = sceneResult.rows[0];
-    const deviceStates = scene.device_states;
+    await deactivateScenes(home.id);
+    await setSceneActive(sceneId, home.id);
 
-    // Deactivate all other scenes
-    await query(
-      'UPDATE scenes SET is_active = false WHERE home_id = $1',
-      [homeId]
+    const deviceStates = sanitizeDeviceStates(scene.device_states);
+    await Promise.all(
+      Object.entries(deviceStates).map(async ([deviceId, rawState]) => {
+        const normalized = normalizeDeviceState(rawState as Record<string, unknown>);
+        if (!normalized) return;
+
+        const device = await getDeviceWithHub(deviceId);
+        if (!device || device.home_id !== home.id) return;
+
+        await updateDevice(deviceId, normalized.update);
+
+        const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
+        if (normalized.command && mqttTopic) {
+          publishCommand(`${mqttTopic}/devices/${deviceId}/control`, {
+            ...normalized.command,
+            sceneId,
+          });
+        }
+
+        await recordDeviceActivity({
+          homeId: home.id,
+          roomId: device.room_id,
+          deviceId,
+          category: device.category,
+          value: typeof normalized.update.value === 'number' ? normalized.update.value : undefined,
+          isActive: typeof normalized.update.isActive === 'boolean' ? normalized.update.isActive : undefined,
+          source: 'scene',
+        });
+      })
     );
 
-    // Activate this scene
-    await query(
-      'UPDATE scenes SET is_active = true WHERE id = $1',
-      [sceneId]
-    );
-
-    // Apply device states
-    for (const [deviceId, state] of Object.entries(deviceStates)) {
-      const deviceState = state as any;
-      const updateFields: string[] = [];
-      const updateValues: any[] = [];
-      let paramIndex = 1;
-
-      if (deviceState.isActive !== undefined) {
-        updateFields.push(`is_active = $${paramIndex++}`);
-        updateValues.push(deviceState.isActive);
-      }
-
-      if (deviceState.value !== undefined) {
-        updateFields.push(`value = $${paramIndex++}`);
-        updateValues.push(deviceState.value);
-      }
-
-      if (updateFields.length > 0) {
-        updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-        updateValues.push(deviceId);
-
-        await query(
-          `UPDATE devices SET ${updateFields.join(', ')} WHERE id = $${paramIndex++}`,
-          updateValues
-        );
-
-        // TODO: Emit WebSocket event for device update
-        console.log(`Device ${deviceId} updated by scene activation`);
-      }
-    }
+    await notifySceneActivation(home.id, sceneId);
 
     return successResponse(res, {
       message: 'Scene activated successfully',
@@ -208,5 +179,53 @@ export async function activateScene(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Activate scene error:', error);
     return errorResponse(res, error.message || 'Failed to activate scene', 500);
+  }
+}
+
+function sanitizeDeviceStates(states: any) {
+  if (!states || typeof states !== 'object') return {};
+  return states;
+}
+
+function normalizeDeviceState(state: Record<string, unknown>) {
+  if (!state) return null;
+  const update: any = {};
+  const command: any = {
+    timestamp: new Date().toISOString(),
+    source: 'scene',
+  };
+  let hasUpdate = false;
+
+  if (typeof state.isActive === 'boolean') {
+    update.isActive = state.isActive;
+    command.action = state.isActive ? 'ON' : 'OFF';
+    hasUpdate = true;
+  }
+
+  if (typeof state.value === 'number') {
+    update.value = state.value;
+    command.value = state.value;
+    hasUpdate = true;
+  }
+
+  if (typeof state.unit === 'string') {
+    update.unit = state.unit;
+  }
+
+  if (!hasUpdate) {
+    return null;
+  }
+
+  return { update, command };
+}
+
+async function notifySceneActivation(homeId: string, sceneId: string) {
+  try {
+    await triggerNodeRedFlow({
+      flow: 'scene.activation',
+      data: { homeId, sceneId },
+    });
+  } catch (error) {
+    console.error('Scene activation webhook failed', error);
   }
 }

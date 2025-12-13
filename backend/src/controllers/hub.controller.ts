@@ -1,8 +1,20 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getHubById,
+  getHubBySerial,
+  createHub,
+  assignHubToHome,
+  getHubsByHomeId,
+  updateHubWifi,
+  assignRooms as assignRoomsRepo,
+  updateHubStatus,
+  updateHubTopic,
+} from '../repositories/hubsRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
+import { encryptSecret } from '../services/cryptoService';
+import { publishCommand } from '../services/mqttService';
 
 export async function pairHub(req: Request, res: Response) {
   try {
@@ -10,50 +22,45 @@ export async function pairHub(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { qrCode, homeId } = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!qrCode || typeof qrCode !== 'string') {
+      return errorResponse(res, 'Invalid QR code', 400);
     }
 
-    // Parse QR code (format: "VEAHUB-{serial_number}")
-    const serialNumber = qrCode.replace('VEAHUB-', '');
+    const serialNumber = qrCode.replace('VEAHUB-', '').trim();
+    if (!serialNumber) {
+      return errorResponse(res, 'Invalid hub serial number', 400);
+    }
 
-    // Check if hub already exists
-    const existingHub = await query(
-      'SELECT id, mqtt_topic FROM hubs WHERE serial_number = $1',
-      [serialNumber]
-    );
-
-    let hubId: string;
-    let mqttTopic: string;
-
-    if (existingHub.rows.length > 0) {
-      // Hub already exists, update home_id
-      hubId = existingHub.rows[0].id;
-      mqttTopic = existingHub.rows[0].mqtt_topic || `hubs/${hubId}`;
-      await query(
-        'UPDATE hubs SET home_id = $1, status = $2 WHERE id = $3',
-        [homeId, 'pairing', hubId]
-      );
+    let hub = await getHubBySerial(serialNumber);
+    if (hub) {
+      await assignHubToHome(hub.id, home.id, 'pairing');
+      hub = await getHubById(hub.id);
     } else {
-      // Create new hub
-      hubId = uuidv4();
-      mqttTopic = `hubs/${hubId}`;
-      await query(
-        `INSERT INTO hubs (id, home_id, serial_number, status, mqtt_topic, name)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [hubId, homeId, serialNumber, 'pairing', mqttTopic, `Hub ${serialNumber.slice(-4)}`]
-      );
+      hub = await createHub({
+        homeId: home.id,
+        serialNumber,
+        name: `Hub ${serialNumber.slice(-4)}`,
+        status: 'pairing',
+        ownerId: home.user_id,
+      });
+    }
+
+    if (!hub) {
+      return errorResponse(res, 'Failed to provision hub', 500);
+    }
+
+    let mqttTopic = hub.mqtt_topic || `hubs/${hub.id}`;
+    if (!hub.mqtt_topic) {
+      await updateHubTopic(hub.id, mqttTopic);
+      hub.mqtt_topic = mqttTopic;
     }
 
     return successResponse(res, {
-      hubId,
-      status: 'pairing',
+      hubId: hub.id,
+      status: hub.status,
       mqttTopic,
     });
   } catch (error: any) {
@@ -68,22 +75,11 @@ export async function listHubs(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const hubsResult = await query(
-      'SELECT id, name, serial_number, status, wifi_ssid, wifi_connected FROM hubs WHERE home_id = $1',
-      [homeId]
-    );
-
-    return successResponse(res, { hubs: hubsResult.rows });
+    const hubs = await getHubsByHomeId(home.id);
+    return successResponse(res, { hubs });
   } catch (error: any) {
     console.error('List hubs error:', error);
     return errorResponse(res, error.message || 'Failed to list hubs', 500);
@@ -92,30 +88,35 @@ export async function listHubs(req: Request, res: Response) {
 
 export async function connectWifi(req: Request, res: Response) {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
     const { hubId } = req.params;
     const { ssid, password } = req.body;
 
-    // Get hub
-    const hubResult = await query(
-      'SELECT id, mqtt_topic FROM hubs WHERE id = $1',
-      [hubId]
-    );
-
-    if (hubResult.rows.length === 0) {
+    const hub = await getHubById(hubId);
+    if (!hub) {
       return errorResponse(res, 'Hub not found', 404);
     }
 
-    const hub = hubResult.rows[0];
+    const home = await ensureHomeAccess(res, hub.home_id, userId);
+    if (!home) return;
 
-    // TODO: Publish WiFi credentials to hub via MQTT
-    // This will be implemented in the IoT service
-    console.log(`Publishing WiFi config to ${hub.mqtt_topic}/wifi/config`);
+    if (!ssid) {
+      return errorResponse(res, 'WiFi SSID is required', 400);
+    }
 
-    // Update hub in database
-    await query(
-      'UPDATE hubs SET wifi_ssid = $1, wifi_connected = false WHERE id = $2',
-      [ssid, hubId]
-    );
+    const encryptedPassword = password ? encryptSecret(password) : null;
+    await updateHubWifi(hub.id, ssid, encryptedPassword);
+
+    let mqttTopic = hub.mqtt_topic || `hubs/${hub.id}`;
+    if (!hub.mqtt_topic) {
+      await updateHubTopic(hub.id, mqttTopic);
+    }
+
+    publishCommand(`${mqttTopic}/wifi/config`, {
+      ssid,
+      password,
+    });
 
     return successResponse(res, {
       message: 'WiFi credentials sent to hub',
@@ -129,35 +130,25 @@ export async function connectWifi(req: Request, res: Response) {
 
 export async function assignRooms(req: Request, res: Response) {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
     const { hubId } = req.params;
-    const { roomIds } = req.body;
+    const roomIds = Array.isArray(req.body?.roomIds) ? req.body.roomIds : [];
 
     if (roomIds.length > 2) {
       return errorResponse(res, 'Maximum 2 rooms per hub', 400);
     }
 
-    // Delete existing room assignments
-    await query('DELETE FROM hub_rooms WHERE hub_id = $1', [hubId]);
-
-    // Insert new room assignments
-    if (roomIds.length > 0) {
-      const values = roomIds.map((roomId: string, index: number) => 
-        `($${index * 2 + 1}, $${index * 2 + 2})`
-      ).join(', ');
-      
-      const params = roomIds.flatMap((roomId: string) => [hubId, roomId]);
-      
-      await query(
-        `INSERT INTO hub_rooms (hub_id, room_id) VALUES ${values}`,
-        params
-      );
+    const hub = await getHubById(hubId);
+    if (!hub) {
+      return errorResponse(res, 'Hub not found', 404);
     }
 
-    // Update hub status
-    await query(
-      'UPDATE hubs SET status = $1 WHERE id = $2',
-      ['online', hubId]
-    );
+    const home = await ensureHomeAccess(res, hub.home_id, userId);
+    if (!home) return;
+
+    await assignRoomsRepo(hub.id, roomIds);
+    await updateHubStatus(hub.id, 'online');
 
     return successResponse(res, {
       message: 'Rooms assigned successfully',
@@ -172,18 +163,17 @@ export async function assignRooms(req: Request, res: Response) {
 
 export async function getHubStatus(req: Request, res: Response) {
   try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
     const { hubId } = req.params;
 
-    const hubResult = await query(
-      'SELECT id, status, wifi_connected FROM hubs WHERE id = $1',
-      [hubId]
-    );
-
-    if (hubResult.rows.length === 0) {
+    const hub = await getHubById(hubId);
+    if (!hub) {
       return errorResponse(res, 'Hub not found', 404);
     }
 
-    const hub = hubResult.rows[0];
+    const home = await ensureHomeAccess(res, hub.home_id, userId);
+    if (!home) return;
 
     return successResponse(res, {
       status: hub.status,

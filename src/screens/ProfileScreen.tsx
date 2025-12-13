@@ -1,20 +1,59 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, fontSize } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
+import { useNavigation } from '@react-navigation/native';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<any>();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
+
+  const handleUpdateContact = () => {
+    Alert.alert('Contact info', 'We will let you edit these details in the next update.');
+  };
+
+  const handleSeeDevices = () => {
+    navigation.navigate('Devices');
+  };
+
+  const handleViewAchievements = () => {
+    navigation.navigate('Scenes');
+  };
+
+  const handleAddress = () => {
+    navigation.navigate('HomeSelector');
+  };
+
+  const handleEditProfile = () => {
+    Alert.alert('Edit profile', 'Profile editing is coming soon.');
+  };
+
+  const handlePrivacySettings = () => {
+    navigation.navigate('Settings');
+  };
+
+  const handleSubscription = () => {
+    Alert.alert('Subscription', 'Contact support to adjust your plan.');
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Profile" showBack showProfile={false} />
+      <Header
+        title="Profile"
+        showBack
+        showSettings={false}
+      />
       
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -84,7 +123,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Contact Information</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleUpdateContact}>
               <Text style={styles.updateText}>Update</Text>
             </TouchableOpacity>
           </View>
@@ -111,7 +150,7 @@ export default function ProfileScreen() {
             <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />
           </View>
 
-          <TouchableOpacity style={styles.infoCard}>
+          <TouchableOpacity style={styles.infoCard} onPress={handleAddress}>
             <View style={styles.infoIcon}>
               <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} />
             </View>
@@ -131,7 +170,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Most Used Devices</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleSeeDevices}>
               <Text style={styles.updateText}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -174,7 +213,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Achievements</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleViewAchievements}>
               <Text style={styles.updateText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -203,14 +242,14 @@ export default function ProfileScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleEditProfile}>
             <MaterialCommunityIcons name="pencil" size={16} color="white" />
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={handlePrivacySettings}>
             <Text style={styles.secondaryButtonText}>Privacy Settings</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleSubscription}>
             <Text style={styles.secondaryButtonText}>Subscription Management</Text>
           </TouchableOpacity>
         </View>
@@ -219,245 +258,238 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  profileHeader: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xxl,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  avatarContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 4,
-  },
-  profileRole: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: spacing.md,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  statBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 9,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  statValue: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'white',
-    marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  statCard: {
-    width: '47%',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: `${colors.primary}20`,
-  },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.sm,
-    backgroundColor: `${colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  statText: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-    marginBottom: 4,
-  },
-  statChange: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-  },
-  section: {
-    marginBottom: spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  updateText: {
-    fontSize: 11,
-    color: colors.primary,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.muted,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 13,
-    color: colors.foreground,
-  },
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-  },
-  deviceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deviceInfo: {
-    flex: 1,
-  },
-  deviceName: {
-    fontSize: 13,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  deviceUsage: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-  },
-  devicePercent: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  achievementsGrid: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  achievementBadge: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  achievementIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  achievementName: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-  },
-  actions: {
-    gap: spacing.sm,
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  primaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-  },
-  secondaryButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.foreground,
-  },
-});
+const createStyles = (colors: any, gradients: any, shadows: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+      paddingBottom: 100,
+    },
+    profileHeader: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.xxl,
+      padding: spacing.xl,
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+      ...shadows.neonPrimary,
+    },
+    avatarContainer: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    profileName: {
+      fontSize: fontSize.xl,
+      fontWeight: '600',
+      color: 'white',
+      marginBottom: 4,
+    },
+    profileRole: {
+      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.7)',
+      marginBottom: spacing.md,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    statBadge: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      borderRadius: borderRadius.md,
+      padding: spacing.sm,
+      alignItems: 'center',
+    },
+    statLabel: {
+      fontSize: fontSize.xs,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    statValue: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: 'white',
+      marginTop: 2,
+    },
+    statsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    statCard: {
+      width: '47%',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: `${colors.primary}20`,
+      ...shadows.md,
+    },
+    statIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: borderRadius.sm,
+      backgroundColor: `${colors.primary}20`,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    statNumber: {
+      fontSize: fontSize.xxl,
+      fontWeight: '700',
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    statText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: 4,
+    },
+    statChange: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+    },
+    section: {
+      marginBottom: spacing.lg,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    updateText: {
+      fontSize: fontSize.sm,
+      color: colors.primary,
+    },
+    infoCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      ...shadows.sm,
+    },
+    infoIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.muted,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginBottom: 2,
+    },
+    infoValue: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    deviceCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      ...shadows.sm,
+    },
+    deviceIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    deviceInfo: {
+      flex: 1,
+    },
+    deviceName: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    deviceUsage: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    devicePercent: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    achievementsGrid: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    achievementBadge: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      alignItems: 'center',
+      ...shadows.neonPrimary,
+    },
+    achievementIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: borderRadius.md,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    achievementName: {
+      fontSize: fontSize.xs,
+      color: 'rgba(255, 255, 255, 0.9)',
+      textAlign: 'center',
+    },
+    actions: {
+      gap: spacing.sm,
+    },
+    primaryButton: {
+      flexDirection: 'row',
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      ...shadows.neonPrimary,
+    },
+    primaryButtonText: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: 'white',
+    },
+    secondaryButton: {
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      alignItems: 'center',
+      ...shadows.sm,
+    },
+    secondaryButtonText: {
+      fontSize: fontSize.md,
+      fontWeight: '500',
+      color: colors.foreground,
+    },
+  });

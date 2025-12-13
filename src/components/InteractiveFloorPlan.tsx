@@ -1,10 +1,42 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, PanResponder, GestureResponderEvent, PanResponderGestureState } from 'react-native';
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  ReactNode,
+  useImperativeHandle,
+  forwardRef,
+} from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Dimensions,
+  Alert,
+  PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
+  Modal,
+  TextInput,
+  Image,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
-import { Thermometer, Droplets, Lightbulb, Zap, Edit2, Save, X } from 'lucide-react-native';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { Thermometer, Droplets, Lightbulb, Zap, Edit2, Save, X, Plus } from 'lucide-react-native';
+import { colors as defaultColors, spacing, borderRadius, ThemeColors } from '../constants/theme';
 import { roomsData, RoomData } from '../constants/rooms';
 import { Room } from '../types';
+import { useTheme } from '../context/ThemeContext';
+
+export interface InteractiveFloorPlanHandle {
+  enterEditMode: () => void;
+  exitEditMode: () => void;
+  toggleEditMode: () => void;
+  saveLayout: () => void;
+  openAddRoomModal: () => void;
+  isEditMode: boolean;
+}
 
 interface InteractiveFloorPlanProps {
   onRoomSelect: (roomId: string) => void;
@@ -12,6 +44,11 @@ interface InteractiveFloorPlanProps {
   rooms?: Room[]; // Real rooms from API (optional - falls back to roomsData)
   onLayoutUpdate?: (layout: any) => void; // Callback to save layout changes
   homeId?: string; // For saving layout to API
+  onRoomCreate?: (room: Room) => void | Promise<void>;
+  headerExtras?: ReactNode;
+  showSelectedRoomInfo?: boolean;
+  showToolbar?: boolean;
+  onEditModeChange?: (isEditing: boolean) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -19,33 +56,96 @@ const SVG_WIDTH = 500;
 const SVG_HEIGHT = 500;
 const SCALE = (SCREEN_WIDTH - 48) / SVG_WIDTH;
 
-export default function InteractiveFloorPlan({
-  onRoomSelect,
-  selectedRoom,
-  rooms,
-  onLayoutUpdate,
-  homeId,
-}: InteractiveFloorPlanProps) {
+const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveFloorPlanProps>(function InteractiveFloorPlan(
+  {
+    onRoomSelect,
+    selectedRoom,
+    rooms,
+    onLayoutUpdate,
+    homeId,
+    onRoomCreate,
+    headerExtras,
+    showSelectedRoomInfo = true,
+    showToolbar = true,
+    onEditModeChange,
+  },
+  ref,
+) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [roomPositions, setRoomPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [localRooms, setLocalRooms] = useState<Room[]>([]);
+  const [roomVisuals, setRoomVisuals] = useState<Record<string, { path: string; color: string }>>(() => {
+    const seed: Record<string, { path: string; color: string }> = {};
+    Object.values(roomsData).forEach((room) => {
+      seed[room.id] = { path: room.path, color: room.color };
+    });
+    return seed;
+  });
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomImage, setNewRoomImage] = useState('');
+  const [newRoomTemperature, setNewRoomTemperature] = useState('22');
+  const [newRoomHumidity, setNewRoomHumidity] = useState('55');
+  const [newRoomLights, setNewRoomLights] = useState('1');
+  const [newRoomColor, setNewRoomColor] = useState(COLOR_PALETTE[0]);
   const draggingRoomId = useRef<string | null>(null);
   const dragStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  useEffect(() => {
+    if (!rooms || rooms.length === 0) {
+      return;
+    }
+    setLocalRooms((prev) => prev.filter((local) => !rooms.find((remote) => remote.id === local.id)));
+  }, [rooms]);
+
+  const combinedRooms = useMemo(() => {
+    const baseRooms = rooms || [];
+    const extras = localRooms.filter((local) => !baseRooms.find((r) => r.id === local.id));
+    return [...baseRooms, ...extras];
+  }, [rooms, localRooms]);
+
   // Use real rooms if provided, otherwise fallback to roomsData
-  const roomsToRender = rooms && rooms.length > 0
-    ? rooms.map(r => ({
-        id: r.id,
-        name: r.name,
-        color: roomsData[r.id]?.color || colors.primary,
-        path: roomsData[r.id]?.path || 'M 0 0 L 100 0 L 100 100 L 0 100 Z',
-        temperature: r.temperature,
-        humidity: r.humidity,
-        lights: r.lights,
-        power: r.power,
-        scene: r.scene,
-      }))
+  const roomsToRender = combinedRooms.length > 0
+    ? combinedRooms.map((room, index) => {
+        const visual = roomVisuals[room.id] || {
+          path: room.layoutPath || createDefaultRoomPath(index),
+          color: room.accentColor || pickAccentColor(index),
+        };
+        return {
+          id: room.id,
+          name: room.name,
+          color: visual.color,
+          path: visual.path,
+          temperature: room.temperature,
+          humidity: room.humidity,
+          lights: room.lights,
+          power: room.power,
+          scene: room.scene,
+          image: room.image,
+        } as RoomData;
+      })
     : Object.values(roomsData);
+
+  useEffect(() => {
+    if (combinedRooms.length === 0) return;
+    setRoomVisuals((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      combinedRooms.forEach((room, index) => {
+        if (!next[room.id]) {
+          next[room.id] = {
+            path: room.layoutPath || createDefaultRoomPath(index),
+            color: room.accentColor || pickAccentColor(index),
+          };
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [combinedRooms]);
 
   const panResponder = useMemo(() =>
     PanResponder.create({
@@ -128,41 +228,119 @@ export default function InteractiveFloorPlan({
     setIsEditMode(false);
   };
 
+  const handleAddRoom = () => {
+    setIsAddModalVisible(true);
+  };
+
+  const resetModalState = () => {
+    setIsAddModalVisible(false);
+    setNewRoomName('');
+    setNewRoomImage('');
+    setNewRoomTemperature('22');
+    setNewRoomHumidity('55');
+    setNewRoomLights('1');
+    setNewRoomColor(COLOR_PALETTE[0]);
+  };
+
+  const handleCreateRoom = async () => {
+    const trimmedName = newRoomName.trim() || `Room ${combinedRooms.length + 1}`;
+    const id = `room_${Date.now()}`;
+    const visualIndex = Object.keys(roomVisuals).length + 1;
+    const chosenColor = newRoomColor || pickAccentColor(visualIndex);
+    const visual = {
+      color: chosenColor,
+      path: createDefaultRoomPath(visualIndex),
+    };
+
+    const newRoom: Room = {
+      id,
+      name: trimmedName,
+      temperature: Number(newRoomTemperature) || 22,
+      humidity: Number(newRoomHumidity) || 55,
+      lights: Number(newRoomLights) || 1,
+      devices: [],
+      scene: 'Custom Scene',
+      power: '0.0kW',
+      image: (newRoomImage || '').trim() || DEFAULT_ROOM_IMAGE,
+      accentColor: visual.color,
+      layoutPath: visual.path,
+    };
+
+    setLocalRooms((prev) => [...prev, newRoom]);
+    setRoomVisuals((prev) => ({ ...prev, [id]: visual }));
+    setRoomPositions((prev) => ({ ...prev, [id]: { x: 0, y: 0 } }));
+    try {
+      await onRoomCreate?.(newRoom);
+    } catch (error) {
+      console.warn('Unable to persist new room yet:', error);
+    }
+    resetModalState();
+    Alert.alert('Room added', `${trimmedName} was added to your floor plan.`);
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      enterEditMode: () => setIsEditMode(true),
+      exitEditMode: handleCancelEdit,
+      toggleEditMode: () => setIsEditMode((prev) => !prev),
+      saveLayout: handleSaveLayout,
+      openAddRoomModal: handleAddRoom,
+      isEditMode,
+    }),
+    [handleCancelEdit, handleSaveLayout, isEditMode],
+  );
+
+  useEffect(() => {
+    onEditModeChange?.(isEditMode);
+  }, [isEditMode, onEditModeChange]);
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Interactive Floor Plan</Text>
-          <Text style={styles.subtitle}>
-            {isEditMode ? 'Drag rooms to reposition' : 'Tap any room to view details'}
-          </Text>
-        </View>
-        {!isEditMode ? (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => setIsEditMode(true)}
-          >
-            <Edit2 size={16} color={colors.primary} />
-            <Text style={styles.editButtonText}>Edit</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.editActions}>
-            <TouchableOpacity
-              style={[styles.editButton, styles.cancelButton]}
-              onPress={handleCancelEdit}
-            >
-              <X size={16} color={colors.destructive || '#ef4444'} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.editButton, styles.saveButton]}
-              onPress={handleSaveLayout}
-            >
-              <Save size={16} color="white" />
-              <Text style={[styles.editButtonText, styles.saveButtonText]}>Save</Text>
-            </TouchableOpacity>
+      {showToolbar && (
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Interactive Floor Plan</Text>
+            <Text style={styles.subtitle}>
+              {isEditMode ? 'Drag rooms to reposition' : 'Tap any room to view details'}
+            </Text>
           </View>
-        )}
-      </View>
+          <View style={styles.headerActions}>
+            {headerExtras ? (
+              <View style={styles.headerExtras}>{headerExtras}</View>
+            ) : null}
+            <TouchableOpacity style={styles.addRoomButton} onPress={handleAddRoom}>
+              <Plus size={14} color={colors.primary} />
+              <Text style={styles.addRoomButtonText}>New Room</Text>
+            </TouchableOpacity>
+            {!isEditMode ? (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => setIsEditMode(true)}
+              >
+                <Edit2 size={16} color={colors.primary} />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.editActions}>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.cancelButton]}
+                  onPress={handleCancelEdit}
+                >
+                  <X size={16} color={colors.destructive || '#ef4444'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.saveButton]}
+                  onPress={handleSaveLayout}
+                >
+                  <Save size={16} color="white" />
+                  <Text style={[styles.editButtonText, styles.saveButtonText]}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       <View style={styles.floorPlanContainer}>
         <Svg
@@ -183,19 +361,59 @@ export default function InteractiveFloorPlan({
       </View>
 
       {/* Selected Room Info */}
-      {selectedRoom && (() => {
-        const roomData = rooms?.find(r => r.id === selectedRoom) || roomsData[selectedRoom];
+      {selectedRoom && showSelectedRoomInfo && (() => {
+        const roomData = combinedRooms.find(r => r.id === selectedRoom) || roomsData[selectedRoom];
         if (!roomData) return null;
+        const roomImage = roomData.image || roomsData[selectedRoom]?.image || DEFAULT_ROOM_IMAGE;
+        const fallbackVisual = roomVisuals[selectedRoom];
+        const accentColor = (roomData as Room)?.accentColor
+          || fallbackVisual?.color
+          || roomsData[selectedRoom]?.color
+          || colors.primary;
+        const colorLabel = typeof accentColor === 'string' ? accentColor.toUpperCase() : accentColor;
+        const devicesCount = Array.isArray((roomData as Room)?.devices)
+          ? (roomData as Room).devices.length
+          : Number(roomData.devices) || 0;
+        const metrics = [
+          { id: 'temp', icon: Thermometer, label: 'Temperature', value: `${roomData.temperature ?? '--'}°C` },
+          { id: 'humidity', icon: Droplets, label: 'Humidity', value: `${roomData.humidity ?? '--'}%` },
+          { id: 'lights', icon: Lightbulb, label: 'Lighting', value: `${roomData.lights ?? 0} lights` },
+          { id: 'power', icon: Zap, label: 'Consumption', value: roomData.power || roomsData[selectedRoom]?.power || '0kW' },
+        ];
+
         return (
-            <View style={styles.roomInfo}>
-              <View style={styles.roomInfoHeader}>
+          <View style={styles.roomInfo}>
+            <View style={styles.roomHero}>
+              <Image source={{ uri: roomImage }} style={styles.roomHeroImage} resizeMode="cover" />
+              <LinearGradient
+                colors={[accentColor + 'AA', 'rgba(0,0,0,0.6)']}
+                style={styles.roomHeroOverlay}
+              />
+              <View style={styles.roomHeroContent}>
                 <View>
-                  <Text style={styles.roomName}>
-                    {roomData.name}
-                  </Text>
-                  <Text style={styles.roomScene}>
-                    {roomData.scene || 'No scene'}
-                  </Text>
+                  <Text style={styles.roomScene}>{roomData.scene || 'Custom scene'}</Text>
+                  <Text style={styles.roomName}>{roomData.name}</Text>
+                </View>
+                <View style={styles.roomColorTag}>
+                  <View style={[styles.roomColorDot, { backgroundColor: accentColor }]} />
+                  <Text style={styles.roomColorText}>{colorLabel}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.roomPreviewBody}>
+              <View style={styles.roomMetricsGrid}>
+                {metrics.map(({ id, icon: Icon, value, label }) => (
+                  <View key={id} style={styles.metricCard}>
+                    <Icon size={16} color={accentColor} />
+                    <Text style={styles.metricValue}>{value}</Text>
+                    <Text style={styles.metricLabel}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.roomFooter}>
+                <View style={styles.deviceSummary}>
+                  <Text style={styles.deviceSummaryLabel}>Devices ready</Text>
+                  <Text style={styles.deviceSummaryValue}>{devicesCount}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.detailsButton}
@@ -204,51 +422,94 @@ export default function InteractiveFloorPlan({
                   <Text style={styles.detailsButtonText}>View Details</Text>
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.roomStats}>
-                <View style={styles.statItem}>
-                  <Thermometer
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.statText}>
-                    {roomData.temperature}°C
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Droplets
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.statText}>
-                    {roomData.humidity}%
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Lightbulb
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.statText}>
-                    {roomData.lights || 0} lights
-                  </Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Zap
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.statText}>
-                    {roomData.power || '0kW'}
-                  </Text>
-                </View>
-              </View>
             </View>
+          </View>
         );
       })()}
+
+      <Modal
+        visible={isAddModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={resetModalState}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Create Room</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Room name"
+              placeholderTextColor={colors.mutedForeground}
+              value={newRoomName}
+              onChangeText={setNewRoomName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Image URL (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              value={newRoomImage}
+              onChangeText={setNewRoomImage}
+            />
+            <View style={styles.modalRow}>
+              <TextInput
+                style={[styles.modalInput, styles.modalInputSmall]}
+                placeholder="Temp °C"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                value={newRoomTemperature}
+                onChangeText={setNewRoomTemperature}
+              />
+              <TextInput
+                style={[styles.modalInput, styles.modalInputSmall]}
+                placeholder="Humidity %"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                value={newRoomHumidity}
+                onChangeText={setNewRoomHumidity}
+              />
+              <TextInput
+                style={[styles.modalInput, styles.modalInputSmall]}
+                placeholder="Lights"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+                value={newRoomLights}
+                onChangeText={setNewRoomLights}
+              />
+            </View>
+            <Text style={styles.modalLabel}>Room color</Text>
+            <View style={styles.colorOptionsRow}>
+              {COLOR_PALETTE.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: color },
+                    newRoomColor === color && styles.colorSwatchSelected,
+                  ]}
+                  onPress={() => setNewRoomColor(color)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${color} for room color`}
+                >
+                  {newRoomColor === color ? <View style={styles.colorSwatchIndicator} /> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButtonSecondary} onPress={resetModalState}>
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleCreateRoom}>
+                <Text style={styles.modalButtonPrimaryText}>Add Room</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
-}
+});
+
+export default InteractiveFloorPlan;
 
 // Helper function to get center of SVG path
 function getPathCenter(path: string): { x: number; y: number } {
@@ -261,9 +522,22 @@ function getPathCenter(path: string): { x: number; y: number } {
   return { x, y };
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors = defaultColors) => StyleSheet.create({
   container: {
     marginBottom: spacing.lg,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  headerExtras: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginRight: spacing.sm,
   },
   title: {
     fontSize: 18,
@@ -286,7 +560,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   editButton: {
@@ -299,6 +575,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.primary,
+    minWidth: 120,
+    justifyContent: 'center',
   },
   editButtonText: {
     fontSize: 12,
@@ -307,7 +585,25 @@ const styles = StyleSheet.create({
   },
   editActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
+    justifyContent: 'flex-end',
+  },
+  addRoomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.muted,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    gap: spacing.xs,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  addRoomButtonText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
   },
   cancelButton: {
     backgroundColor: colors.secondary,
@@ -316,30 +612,116 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    minWidth: 120,
+    justifyContent: 'center',
   },
   saveButtonText: {
     color: 'white',
   },
   roomInfo: {
     backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
   },
-  roomInfoHeader: {
+  roomHero: {
+    height: 200,
+    overflow: 'hidden',
+    backgroundColor: colors.muted,
+  },
+  roomHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  roomHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  roomHeroContent: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    alignItems: 'flex-end',
   },
   roomName: {
-    fontSize: 18,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  roomScene: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  roomColorTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  roomColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  roomColorText: {
+    fontSize: 11,
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  roomPreviewBody: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  roomMetricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  metricCard: {
+    flexBasis: '48%',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    padding: spacing.sm,
+    gap: 2,
+    borderWidth: 1,
+    borderColor: colors.muted,
+  },
+  metricValue: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.foreground,
   },
-  roomScene: {
-    fontSize: 12,
+  metricLabel: {
+    fontSize: 11,
     color: colors.mutedForeground,
-    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  roomFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  deviceSummary: {
+    gap: 2,
+  },
+  deviceSummaryLabel: {
+    fontSize: 11,
+    color: colors.mutedForeground,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  deviceSummaryValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.foreground,
   },
   detailsButton: {
     backgroundColor: colors.primary,
@@ -352,22 +734,124 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  roomStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
     gap: spacing.md,
   },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.muted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: borderRadius.sm,
-    gap: 4,
-  },
-  statText: {
-    fontSize: 11,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
     color: colors.foreground,
   },
+  modalInput: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.foreground,
+    borderWidth: 1,
+    borderColor: colors.muted,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.mutedForeground,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  colorOptionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  colorSwatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  colorSwatchSelected: {
+    borderColor: colors.foreground,
+    shadowColor: colors.foreground,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  colorSwatchIndicator: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'white',
+  },
+  modalInputSmall: {
+    flex: 1,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  modalButtonSecondary: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonSecondaryText: {
+    color: colors.foreground,
+    fontWeight: '600',
+  },
+  modalButtonPrimary: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonPrimaryText: {
+    color: 'white',
+    fontWeight: '600',
+  },
 });
+
+const DEFAULT_ROOM_IMAGE = 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=600';
+const COLOR_PALETTE = ['#C4B5F5', '#FFA07A', '#FFCB8F', '#FFB6A0', '#FFB6D4', '#B8A9D8', '#FFE5B4'];
+
+function pickAccentColor(index: number) {
+  return COLOR_PALETTE[index % COLOR_PALETTE.length];
+}
+
+function createDefaultRoomPath(index: number) {
+  const size = 80;
+  const padding = 40;
+  const columns = 3;
+  const maxRows = Math.max(1, Math.floor((SVG_HEIGHT - padding * 2) / (size + padding)));
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  const clampedRow = row % maxRows;
+  const stackOffset = Math.floor(row / maxRows) * 12;
+  const startX = padding + col * (size + padding);
+  const startY = padding + clampedRow * (size + padding) + stackOffset;
+  return `M ${startX} ${startY} L ${startX + size} ${startY} L ${startX + size} ${startY + size} L ${startX} ${startY + size} Z`;
+}

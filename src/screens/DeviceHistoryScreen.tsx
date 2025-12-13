@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import Header from '../components/Header';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, DeviceHistoryApi } from '../services/api';
 
@@ -13,6 +14,8 @@ type Props = {
 
 export default function DeviceHistoryScreen({ route }: Props) {
   const { token, currentHomeId } = useAuth();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { deviceId } = route.params || { deviceId: '' };
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,12 +65,12 @@ export default function DeviceHistoryScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { padding: spacing.xl, alignItems: 'center', gap: spacing.md },
   loadingText: { fontSize: 12, color: colors.mutedForeground },
   scrollContent: { padding: spacing.lg, gap: spacing.sm },
-  card: { backgroundColor: colors.secondary, borderRadius: borderRadius.lg, padding: spacing.md },
+  card: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   icon: { width: 28, height: 28, borderRadius: borderRadius.sm, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
   title: { color: colors.foreground, fontWeight: '600' },

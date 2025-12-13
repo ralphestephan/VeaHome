@@ -1,20 +1,34 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getHomesByUserId,
+  createHome as createHomeRecord,
+  getHomeById,
+  updateHomeLayout as saveHomeLayout,
+} from '../repositories/homesRepository';
+import {
+  getRoomsByHomeId,
+  getRoomById,
+  createRoom as createRoomRecord,
+  updateRoom as updateRoomRecord,
+  deleteRoom as deleteRoomRecord,
+} from '../repositories/roomsRepository';
+import { getDevicesByRoom } from '../repositories/devicesRepository';
+import { getEnergyMetrics } from '../repositories/energyRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
 
 export async function listHomes(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
 
-    const homesResult = await query(
-      'SELECT id, name, model3d_url, layout FROM homes WHERE user_id = $1',
-      [userId]
-    );
+    if (!userId) {
+      return errorResponse(res, 'Unauthorized', 401);
+    }
 
-    return successResponse(res, { homes: homesResult.rows });
+    const homes = await getHomesByUserId(userId);
+    return successResponse(res, { homes });
   } catch (error: any) {
     console.error('List homes error:', error);
     return errorResponse(res, error.message || 'Failed to list homes', 500);
@@ -27,17 +41,23 @@ export async function createHome(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { name } = req.body;
 
-    const homeId = uuidv4();
-    await query(
-      'INSERT INTO homes (id, user_id, name) VALUES ($1, $2, $3)',
-      [homeId, userId, name]
-    );
+    if (!userId) {
+      return errorResponse(res, 'Unauthorized', 401);
+    }
 
-    return successResponse(res, {
-      id: homeId,
-      name,
-      message: 'Home created successfully',
-    }, 201);
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Home name is required', 400);
+    }
+
+    const home = await createHomeRecord(userId, name.trim());
+    return successResponse(
+      res,
+      {
+        message: 'Home created successfully',
+        home,
+      },
+      201
+    );
   } catch (error: any) {
     console.error('Create home error:', error);
     return errorResponse(res, error.message || 'Failed to create home', 500);
@@ -50,16 +70,10 @@ export async function getHome(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    const homeResult = await query(
-      'SELECT * FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeResult.rows.length === 0) {
-      return errorResponse(res, 'Home not found', 404);
-    }
-
-    return successResponse(res, { home: homeResult.rows[0] });
+    return successResponse(res, { home });
   } catch (error: any) {
     console.error('Get home error:', error);
     return errorResponse(res, error.message || 'Failed to get home', 500);
@@ -72,33 +86,18 @@ export async function getRooms(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const rooms = await getRoomsByHomeId(home.id);
+    const roomsWithDevices = await Promise.all(
+      rooms.map(async (room) => ({
+        ...room,
+        devices: await getDevicesByRoom(room.id),
+      }))
     );
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const roomsResult = await query(
-      'SELECT * FROM rooms WHERE home_id = $1 ORDER BY created_at ASC',
-      [homeId]
-    );
-
-    // Get devices for each room
-    const rooms = await Promise.all(
-      roomsResult.rows.map(async (room: any) => {
-        const devicesResult = await query(
-          'SELECT id, name, type, category, is_active, value FROM devices WHERE room_id = $1',
-          [room.id]
-        );
-        return { ...room, devices: devicesResult.rows };
-      })
-    );
-
-    return successResponse(res, { rooms });
+    return successResponse(res, { rooms: roomsWithDevices });
   } catch (error: any) {
     console.error('Get rooms error:', error);
     return errorResponse(res, error.message || 'Failed to get rooms', 500);
@@ -111,39 +110,104 @@ export async function getRoom(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, roomId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const roomResult = await query(
-      'SELECT * FROM rooms WHERE id = $1 AND home_id = $2',
-      [roomId, homeId]
-    );
-
-    if (roomResult.rows.length === 0) {
+    const room = await getRoomById(roomId);
+    if (!room || room.home_id !== home.id) {
       return errorResponse(res, 'Room not found', 404);
     }
 
-    const room = roomResult.rows[0];
-
-    // Get devices in room
-    const devicesResult = await query(
-      'SELECT * FROM devices WHERE room_id = $1',
-      [roomId]
-    );
-
-    room.devices = devicesResult.rows;
-
-    return successResponse(res, { room });
+    const devices = await getDevicesByRoom(room.id);
+    return successResponse(res, { room: { ...room, devices } });
   } catch (error: any) {
     console.error('Get room error:', error);
     return errorResponse(res, error.message || 'Failed to get room', 500);
+  }
+}
+
+export async function createRoomHandler(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId } = req.params;
+    const { name, scene, image, layoutPath, accentColor, metadata } = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Room name is required', 400);
+    }
+
+    const room = await createRoomRecord({
+      homeId: home.id,
+      name: name.trim(),
+      scene,
+      image,
+      layoutPath,
+      accentColor,
+      metadata,
+    });
+
+    return successResponse(res, { room }, 201);
+  } catch (error: any) {
+    console.error('Create room error:', error);
+    return errorResponse(res, error.message || 'Failed to create room', 500);
+  }
+}
+
+export async function updateRoomHandler(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, roomId } = req.params;
+    const updates = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const existingRoom = await getRoomById(roomId);
+    if (!existingRoom || existingRoom.home_id !== home.id) {
+      return errorResponse(res, 'Room not found', 404);
+    }
+
+    await updateRoomRecord(roomId, {
+      name: updates.name,
+      scene: updates.scene,
+      image: updates.image,
+      layoutPath: updates.layoutPath,
+      accentColor: updates.accentColor,
+      metadata: updates.metadata,
+    });
+
+    const updatedRoom = await getRoomById(roomId);
+    return successResponse(res, { room: updatedRoom });
+  } catch (error: any) {
+    console.error('Update room error:', error);
+    return errorResponse(res, error.message || 'Failed to update room', 500);
+  }
+}
+
+export async function deleteRoomHandler(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, roomId } = req.params;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const existingRoom = await getRoomById(roomId);
+    if (!existingRoom || existingRoom.home_id !== home.id) {
+      return errorResponse(res, 'Room not found', 404);
+    }
+
+    await deleteRoomRecord(roomId);
+    return successResponse(res, { message: 'Room deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete room error:', error);
+    return errorResponse(res, error.message || 'Failed to delete room', 500);
   }
 }
 
@@ -154,25 +218,11 @@ export async function updateRoomLayout(req: Request, res: Response) {
     const { homeId } = req.params;
     const { layout } = req.body;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    await query(
-      'UPDATE homes SET layout = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [JSON.stringify(layout), homeId]
-    );
-
-    return successResponse(res, {
-      message: 'Layout updated successfully',
-      layout,
-    });
+    await saveHomeLayout(home.id, layout);
+    return successResponse(res, { message: 'Layout updated successfully', layout });
   } catch (error: any) {
     console.error('Update room layout error:', error);
     return errorResponse(res, error.message || 'Failed to update layout', 500);
@@ -184,23 +234,24 @@ export async function getEnergy(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { range } = req.query;
+    const range = (req.query.range as string) || 'day';
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
+    const { granularity, from, to } = resolveEnergyWindow(range);
+    const metrics = await getEnergyMetrics(home.id, granularity, from, to);
 
-    // TODO: Query from time-series database (InfluxDB or Timestream)
-    // For now, return mock data
-    const energyData = generateMockEnergyData(range as string);
+    const energyData = metrics.length
+      ? metrics.map(formatEnergyMetric)
+      : generateMockEnergyData(range);
 
-    return successResponse(res, { energyData });
+    return successResponse(res, {
+      energyData,
+      granularity,
+      range,
+      source: metrics.length ? 'timeseries' : 'mock',
+    });
   } catch (error: any) {
     console.error('Get energy error:', error);
     return errorResponse(res, error.message || 'Failed to get energy data', 500);
@@ -211,29 +262,54 @@ export async function getRoomEnergy(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
-    const { homeId, roomId } = req.params;
+    const { homeId } = req.params;
 
-    // Verify user owns the home
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    // TODO: Query room-specific energy data
+    // TODO: Persist per-room metrics. Using mock data for now.
     const energyData = generateMockEnergyData('day');
 
-    return successResponse(res, { energyData });
+    return successResponse(res, { energyData, source: 'mock' });
   } catch (error: any) {
     console.error('Get room energy error:', error);
     return errorResponse(res, error.message || 'Failed to get room energy data', 500);
   }
 }
 
-// Helper function to generate mock energy data
+function resolveEnergyWindow(range: string) {
+  const now = new Date();
+  const from = new Date(now);
+  let granularity: 'hour' | 'day' = 'hour';
+
+  switch (range) {
+    case 'week':
+      from.setDate(from.getDate() - 6);
+      granularity = 'day';
+      break;
+    case 'month':
+      from.setDate(from.getDate() - 29);
+      granularity = 'day';
+      break;
+    default:
+      from.setHours(from.getHours() - 23);
+  }
+
+  return { granularity, from, to: now };
+}
+
+function formatEnergyMetric(row: any) {
+  const totals = row.totals || {};
+  return {
+    time: row.bucket_start,
+    total: Number(totals.total ?? totals.total_kwh ?? 0),
+    lighting: Number(totals.lighting ?? 0),
+    climate: Number(totals.climate ?? 0),
+    media: Number(totals.media ?? 0),
+    security: Number(totals.security ?? 0),
+  };
+}
+
 function generateMockEnergyData(range: string = 'day') {
   const dataPoints = range === 'day' ? 24 : range === 'week' ? 7 : 30;
   const data = [];

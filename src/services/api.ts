@@ -3,7 +3,26 @@ import Constants from 'expo-constants';
 
 const { extra } = Constants.expoConfig ?? {};
 
-const API_BASE_URL: string = (extra?.apiBaseUrl as string) || 'http://localhost:3000';
+const resolveApiBaseUrl = (): string => {
+  const raw = (extra?.apiBaseUrl as string) || 'http://localhost:3000';
+  if (!raw.includes('localhost')) return raw;
+
+  const expoHostUri =
+    Constants.expoGoConfig?.hostUri ||
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any)?.manifest?.hostUri;
+
+  if (!expoHostUri) {
+    return raw;
+  }
+
+  const host = expoHostUri.split(':')[0];
+  const portMatch = raw.match(/:(\d{2,5})/);
+  const port = portMatch ? portMatch[1] : '8000';
+  return `http://${host}:${port}`;
+};
+
+const API_BASE_URL: string = resolveApiBaseUrl();
 
 let apiClient: AxiosInstance | null = null;
 

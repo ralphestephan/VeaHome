@@ -1,62 +1,102 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { query } from '../config/database';
 import { generateToken } from '../config/jwt';
 import { successResponse, errorResponse } from '../utils/response';
-import { AuthRequest } from '../types';
+import { AuthRequest, Home, User } from '../types';
+import { createUser, findUserByEmail, findUserById } from '../repositories/usersRepository';
+import { createHome as createHomeRecord, getHomesByUserId } from '../repositories/homesRepository';
+import { createRoom as createRoomRecord } from '../repositories/roomsRepository';
+
+const DEFAULT_ROOMS = [
+  {
+    name: 'Living Room',
+    scene: 'Evening Relax',
+    accentColor: '#C4B5F5',
+    layoutPath: 'M 160 240 L 360 240 L 360 420 L 160 420 Z',
+  },
+  {
+    name: 'Master Bedroom',
+    scene: 'Sleep Mode',
+    accentColor: '#FFA07A',
+    layoutPath: 'M 180 60 L 320 60 L 320 180 L 180 180 Z',
+  },
+  {
+    name: 'Kitchen',
+    scene: 'Cooking',
+    accentColor: '#FFE5B4',
+    layoutPath: 'M 60 260 L 160 260 L 160 360 L 60 360 Z',
+  },
+];
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const sanitizeName = (name: string) => name.trim();
+
+function mapHomesForResponse(homes: Home[]) {
+  return homes.map((home) => ({ id: home.id, name: home.name }));
+}
+
+function buildUserPayload(user: User, homes: Home[]) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    plan: user.plan,
+    homeId: homes[0]?.id || null,
+  };
+}
+
+async function ensureDefaultRooms(homeId: string) {
+  await Promise.all(
+    DEFAULT_ROOMS.map((room) =>
+      createRoomRecord({
+        homeId,
+        name: room.name,
+        scene: room.scene,
+        accentColor: room.accentColor,
+        layoutPath: room.layoutPath,
+      })
+    )
+  );
+}
 
 export async function register(req: Request, res: Response) {
   try {
     const { name, email, password } = req.body;
 
-    // Check if user exists
-    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
+    if (!name || !email || !password) {
+      return errorResponse(res, 'Name, email, and password are required', 400);
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    const existingUser = await findUserByEmail(normalizedEmail);
+    if (existingUser) {
       return errorResponse(res, 'User already exists', 409);
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
+    const user = await createUser({
+      name: sanitizeName(name),
+      email: normalizedEmail,
+      passwordHash,
+    });
 
-    // Create user
-    const userResult = await query(
-      'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, plan',
-      [name, email, passwordHash]
-    );
+    const defaultHome = await createHomeRecord(user.id, `${user.name.split(' ')[0] || 'My'} Home`);
+    await ensureDefaultRooms(defaultHome.id);
 
-    const user = userResult.rows[0];
-
-    // Create default home
-    const homeResult = await query(
-      'INSERT INTO homes (user_id, name) VALUES ($1, $2) RETURNING id, name',
-      [user.id, 'My Home']
-    );
-
-    const home = homeResult.rows[0];
-
-    // Create default rooms
-    await query(
-      `INSERT INTO rooms (home_id, name, temperature, humidity) VALUES 
-       ($1, 'Living Room', 22.0, 45.0),
-       ($1, 'Bedroom', 21.0, 50.0),
-       ($1, 'Kitchen', 23.0, 55.0)`,
-      [home.id]
-    );
-
-    // Generate token
+    const homes = await getHomesByUserId(user.id);
     const token = generateToken({ userId: user.id, email: user.email });
 
-    return successResponse(res, {
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan: user.plan,
-        homeId: home.id,
+    return successResponse(
+      res,
+      {
+        token,
+        user: buildUserPayload(user, homes),
+        homes: mapHomesForResponse(homes),
       },
-      homes: [{ id: home.id, name: home.name }],
-    }, 201);
+      201
+    );
   } catch (error: any) {
     console.error('Register error:', error);
     return errorResponse(res, error.message || 'Registration failed', 500);
@@ -67,45 +107,27 @@ export async function login(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    // Find user
-    const userResult = await query(
-      'SELECT id, name, email, password_hash, plan FROM users WHERE email = $1',
-      [email]
-    );
+    if (!email || !password) {
+      return errorResponse(res, 'Email and password are required', 400);
+    }
 
-    if (userResult.rows.length === 0) {
+    const user = await findUserByEmail(normalizeEmail(email));
+    if (!user || !user.password_hash) {
       return errorResponse(res, 'Invalid credentials', 401);
     }
 
-    const user = userResult.rows[0];
-
-    // Verify password
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
       return errorResponse(res, 'Invalid credentials', 401);
     }
 
-    // Get user's homes
-    const homesResult = await query(
-      'SELECT id, name FROM homes WHERE user_id = $1',
-      [user.id]
-    );
-
-    const homes = homesResult.rows;
-
-    // Generate token
+    const homes = await getHomesByUserId(user.id);
     const token = generateToken({ userId: user.id, email: user.email });
 
     return successResponse(res, {
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan: user.plan,
-        homeId: homes[0]?.id || null,
-      },
-      homes: homes.map((h: any) => ({ id: h.id, name: h.name })),
+      user: buildUserPayload(user, homes),
+      homes: mapHomesForResponse(homes),
     });
   } catch (error: any) {
     console.error('Login error:', error);
@@ -122,33 +144,16 @@ export async function me(req: Request, res: Response) {
       return errorResponse(res, 'Unauthorized', 401);
     }
 
-    // Get user
-    const userResult = await query(
-      'SELECT id, name, email, plan FROM users WHERE id = $1',
-      [userId]
-    );
-
-    if (userResult.rows.length === 0) {
+    const user = await findUserById(userId);
+    if (!user) {
       return errorResponse(res, 'User not found', 404);
     }
 
-    const user = userResult.rows[0];
-
-    // Get user's homes
-    const homesResult = await query(
-      'SELECT id, name FROM homes WHERE user_id = $1',
-      [user.id]
-    );
+    const homes = await getHomesByUserId(user.id);
 
     return successResponse(res, {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan: user.plan,
-        homeId: homesResult.rows[0]?.id || null,
-      },
-      homes: homesResult.rows.map((h: any) => ({ id: h.id, name: h.name })),
+      user: buildUserPayload(user, homes),
+      homes: mapHomesForResponse(homes),
     });
   } catch (error: any) {
     console.error('Me error:', error);

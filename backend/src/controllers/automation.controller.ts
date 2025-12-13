@@ -1,8 +1,15 @@
 import { Request, Response } from 'express';
-import { query } from '../config/database';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import {
+  getAutomations,
+  saveAutomation,
+  updateAutomation as updateAutomationRecord,
+  deleteAutomation as deleteAutomationRecord,
+  getAutomationById,
+} from '../repositories/automationsRepository';
+import { ensureHomeAccess } from './helpers/homeAccess';
+import { triggerNodeRedFlow } from '../services/nodeRedService';
 
 export async function listAutomations(req: Request, res: Response) {
   try {
@@ -10,21 +17,11 @@ export async function listAutomations(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
-    }
-
-    const automationsResult = await query(
-      'SELECT * FROM automations WHERE home_id = $1 ORDER BY created_at DESC',
-      [homeId]
-    );
-
-    return successResponse(res, { automations: automationsResult.rows });
+    const automations = await getAutomations(home.id);
+    return successResponse(res, { automations });
   } catch (error: any) {
     console.error('List automations error:', error);
     return errorResponse(res, error.message || 'Failed to list automations', 500);
@@ -36,27 +33,28 @@ export async function createAutomation(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, trigger, actions } = req.body;
+    const { name, trigger, actions, enabled } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    if (!name || !name.trim()) {
+      return errorResponse(res, 'Automation name is required', 400);
     }
 
-    const automationId = uuidv4();
-    await query(
-      `INSERT INTO automations (id, home_id, name, trigger, actions)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [automationId, homeId, name, JSON.stringify(trigger), JSON.stringify(actions)]
-    );
+    const automation = await saveAutomation({
+      home_id: home.id,
+      name: name.trim(),
+      trigger: normalizeTrigger(trigger),
+      actions: normalizeActions(actions),
+      enabled: typeof enabled === 'boolean' ? enabled : true,
+    });
+
+    await notifyAutomationFlow('create', { homeId: home.id, automation });
 
     return successResponse(res, {
-      id: automationId,
       message: 'Automation created successfully',
+      automation,
     }, 201);
   } catch (error: any) {
     console.error('Create automation error:', error);
@@ -69,26 +67,28 @@ export async function updateAutomation(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId, automationId } = req.params;
-    const { name, trigger, actions } = req.body;
+    const { name, trigger, actions, enabled } = req.body;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const automation = await getAutomationById(automationId);
+    if (!automation || automation.home_id !== home.id) {
+      return errorResponse(res, 'Automation not found', 404);
     }
 
-    await query(
-      `UPDATE automations 
-       SET name = $1, trigger = $2, actions = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $4 AND home_id = $5`,
-      [name, JSON.stringify(trigger), JSON.stringify(actions), automationId, homeId]
-    );
+    await updateAutomationRecord(automationId, {
+      name: name?.trim() || undefined,
+      trigger: trigger ? normalizeTrigger(trigger) : undefined,
+      actions: actions ? normalizeActions(actions) : undefined,
+      enabled: typeof enabled === 'boolean' ? enabled : undefined,
+    });
 
+    const updatedAutomation = await getAutomationById(automationId);
+    await notifyAutomationFlow('update', { homeId: home.id, automation: updatedAutomation });
     return successResponse(res, {
       message: 'Automation updated successfully',
+      automation: updatedAutomation,
     });
   } catch (error: any) {
     console.error('Update automation error:', error);
@@ -102,19 +102,17 @@ export async function deleteAutomation(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, automationId } = req.params;
 
-    const homeCheck = await query(
-      'SELECT id FROM homes WHERE id = $1 AND user_id = $2',
-      [homeId, userId]
-    );
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
 
-    if (homeCheck.rows.length === 0) {
-      return errorResponse(res, 'Access denied', 403);
+    const automation = await getAutomationById(automationId);
+    if (!automation || automation.home_id !== home.id) {
+      return errorResponse(res, 'Automation not found', 404);
     }
 
-    await query(
-      'DELETE FROM automations WHERE id = $1 AND home_id = $2',
-      [automationId, homeId]
-    );
+    await deleteAutomationRecord(automationId);
+
+    await notifyAutomationFlow('delete', { homeId: home.id, automationId });
 
     return successResponse(res, {
       message: 'Automation deleted successfully',
@@ -122,5 +120,26 @@ export async function deleteAutomation(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Delete automation error:', error);
     return errorResponse(res, error.message || 'Failed to delete automation', 500);
+  }
+}
+
+function normalizeTrigger(trigger: unknown) {
+  if (!trigger || typeof trigger !== 'object') return {};
+  return trigger;
+}
+
+function normalizeActions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value;
+}
+
+async function notifyAutomationFlow(action: string, payload: Record<string, unknown>) {
+  try {
+    await triggerNodeRedFlow({
+      flow: 'automations.sync',
+      data: { action, ...payload },
+    });
+  } catch (error) {
+    console.error('Automation flow notification failed', error);
   }
 }

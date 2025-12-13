@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Home, Plus } from 'lucide-react-native';
 import Header from '../components/Header';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, HomesApi } from '../services/api';
 
 export default function HomeSelectorScreen() {
   const { user, token, homes, currentHomeId, setCurrentHomeId } = useAuth();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [loading, setLoading] = useState(false);
   const [homeList, setHomeList] = useState(homes || []);
   const client = getApiClient(async () => token);
@@ -45,7 +48,11 @@ export default function HomeSelectorScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Select Home" showBack />
+      <Header
+        title="Select Home"
+        showBack
+        showSettings={false}
+      />
       <View style={styles.subHeader}>
         <Text style={styles.subtitle}>Choose a home to manage</Text>
         <TouchableOpacity style={styles.addButton} onPress={handleCreateHome}>
@@ -82,15 +89,22 @@ export default function HomeSelectorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  subHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    paddingTop: spacing.md,
+  },
   subtitle: { fontSize: 11, color: colors.mutedForeground },
   addButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
   addButtonText: { color: 'white', fontWeight: '600' },
   scrollContent: { padding: spacing.lg, gap: spacing.sm },
-  homeCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.secondary, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
-  homeCardActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
+  homeCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  homeCardActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}15` },
   homeIcon: { width: 32, height: 32, borderRadius: borderRadius.md, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
   homeName: { color: colors.foreground, fontWeight: '600' },
   empty: { textAlign: 'center', color: colors.mutedForeground, padding: spacing.xl },

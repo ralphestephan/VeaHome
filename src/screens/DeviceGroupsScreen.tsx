@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Layers, Plus, Trash2 } from 'lucide-react-native';
 import Header from '../components/Header';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, DeviceGroupsApi } from '../services/api';
 
 export default function DeviceGroupsScreen() {
   const { token, currentHomeId } = useAuth();
+  const { colors, gradients, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const client = getApiClient(async () => token);
@@ -94,16 +97,16 @@ export default function DeviceGroupsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   subtitle: { fontSize: 11, color: colors.mutedForeground },
-  addButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
+  addButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.lg, ...shadows.glow },
   addButtonText: { color: 'white', fontWeight: '600' },
   loadingContainer: { padding: spacing.xl, alignItems: 'center', gap: spacing.md },
   loadingText: { fontSize: 12, color: colors.mutedForeground },
   scrollContent: { padding: spacing.lg, gap: spacing.sm },
-  card: { backgroundColor: colors.secondary, borderRadius: borderRadius.lg, padding: spacing.md },
+  card: { backgroundColor: colors.card, borderRadius: borderRadius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: { width: 32, height: 32, borderRadius: borderRadius.md, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
   titleWrap: { flex: 1 },
