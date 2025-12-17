@@ -13,7 +13,9 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 
-const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+// When compiled to dist/, __dirname becomes dist/database.
+// We want to run migrations from the repo folder: backend/database/migrations.
+const MIGRATIONS_DIR = path.resolve(process.cwd(), 'database', 'migrations');
 
 async function ensureMigrationsTable() {
   await pool.query(`
