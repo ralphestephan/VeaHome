@@ -63,12 +63,21 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
   }, []);
 
   const onSubmit = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Email is required');
+      return;
+    }
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await login(email.trim(), password);
+      await login(trimmedEmail, password);
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Login failed');
+      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Login failed');
     } finally {
       setSubmitting(false);
     }

@@ -44,7 +44,7 @@ interface InteractiveFloorPlanProps {
   rooms?: Room[]; // Real rooms from API (optional - falls back to roomsData)
   onLayoutUpdate?: (layout: any) => void; // Callback to save layout changes
   homeId?: string; // For saving layout to API
-  onRoomCreate?: (room: Room) => void | Promise<void>;
+  onRoomCreate?: (room: Room) => void | Room | Promise<void | Room>;
   headerExtras?: ReactNode;
   showSelectedRoomInfo?: boolean;
   showToolbar?: boolean;
@@ -244,7 +244,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
 
   const handleCreateRoom = async () => {
     const trimmedName = newRoomName.trim() || `Room ${combinedRooms.length + 1}`;
-    const id = `room_${Date.now()}`;
+    const tempId = `room_${Date.now()}`;
     const visualIndex = Object.keys(roomVisuals).length + 1;
     const chosenColor = newRoomColor || pickAccentColor(visualIndex);
     const visual = {
@@ -253,7 +253,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
     };
 
     const newRoom: Room = {
-      id,
+      id: tempId,
       name: trimmedName,
       temperature: Number(newRoomTemperature) || 22,
       humidity: Number(newRoomHumidity) || 55,
@@ -266,14 +266,19 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       layoutPath: visual.path,
     };
 
-    setLocalRooms((prev) => [...prev, newRoom]);
-    setRoomVisuals((prev) => ({ ...prev, [id]: visual }));
-    setRoomPositions((prev) => ({ ...prev, [id]: { x: 0, y: 0 } }));
+    let roomToAdd: Room = newRoom;
     try {
-      await onRoomCreate?.(newRoom);
+      const maybeCreated = await onRoomCreate?.(newRoom);
+      if (maybeCreated && typeof (maybeCreated as any).id === 'string') {
+        roomToAdd = maybeCreated as Room;
+      }
     } catch (error) {
       console.warn('Unable to persist new room yet:', error);
     }
+
+    setLocalRooms((prev) => [...prev, roomToAdd]);
+    setRoomVisuals((prev) => ({ ...prev, [roomToAdd.id]: visual }));
+    setRoomPositions((prev) => ({ ...prev, [roomToAdd.id]: { x: 0, y: 0 } }));
     resetModalState();
     Alert.alert('Room added', `${trimmedName} was added to your floor plan.`);
   };

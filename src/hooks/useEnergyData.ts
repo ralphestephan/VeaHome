@@ -35,7 +35,8 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
         const net = await NetInfo.fetch();
         if (net.isConnected) {
           const response = await homeApi.getEnergy(homeId, range);
-          const data = response.data || [];
+          const payload = (response.data as any)?.data ?? response.data;
+          const data: EnergyData[] = Array.isArray(payload) ? payload : [];
           setEnergyData(data);
           await AsyncStorage.setItem(
             `energy_cache_${homeId}_${range}`,
@@ -45,7 +46,8 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
           const cache = await AsyncStorage.getItem(
             `energy_cache_${homeId}_${range}`
           );
-          setEnergyData(cache ? JSON.parse(cache) : []);
+          const parsed = cache ? JSON.parse(cache) : [];
+          setEnergyData(Array.isArray(parsed) ? parsed : []);
           setError('Offline mode');
         }
       } catch (e: any) {
@@ -54,7 +56,12 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
         const cache = await AsyncStorage.getItem(
           `energy_cache_${homeId}_${range}`
         );
-        if (cache) setEnergyData(JSON.parse(cache));
+        if (cache) {
+          const parsed = JSON.parse(cache);
+          setEnergyData(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setEnergyData([]);
+        }
       } finally {
         setLoading(false);
       }
@@ -71,7 +78,8 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
     }
     try {
       const response = await homeApi.getEnergy(homeId, range);
-      const data = response.data || [];
+      const payload = (response.data as any)?.data ?? response.data;
+      const data: EnergyData[] = Array.isArray(payload) ? payload : [];
       setEnergyData(data);
       await AsyncStorage.setItem(
         `energy_cache_${homeId}_${range}`,

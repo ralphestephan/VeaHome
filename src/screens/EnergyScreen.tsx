@@ -56,8 +56,10 @@ export default function EnergyScreen() {
     if (homeId) refresh();
   }, [timeRange, homeId]);
 
+  const safeEnergyData = Array.isArray(energyData) ? energyData : [];
+
   const handleExport = async () => {
-    if (!energyData.length) {
+    if (!safeEnergyData.length) {
       Alert.alert('No Data', 'There is no energy data to export for the selected range yet.');
       return;
     }
@@ -65,7 +67,7 @@ export default function EnergyScreen() {
     try {
       setExporting(true);
       const headers = 'time,total,lighting,climate,media,security';
-      const rows = energyData
+      const rows = safeEnergyData
         .map((entry) =>
           [
             entry.time,
@@ -91,11 +93,11 @@ export default function EnergyScreen() {
   };
 
   // Calculate totals from real data
-  const totalEnergy = energyData.reduce((sum, e) => sum + (e.total || 0), 0);
-  const totalLighting = energyData.reduce((sum, e) => sum + (e.lighting || 0), 0);
-  const totalClimate = energyData.reduce((sum, e) => sum + (e.climate || 0), 0);
-  const totalMedia = energyData.reduce((sum, e) => sum + (e.media || 0), 0);
-  const totalSecurity = energyData.reduce((sum, e) => sum + (e.security || 0), 0);
+  const totalEnergy = safeEnergyData.reduce((sum, e) => sum + (e.total || 0), 0);
+  const totalLighting = safeEnergyData.reduce((sum, e) => sum + (e.lighting || 0), 0);
+  const totalClimate = safeEnergyData.reduce((sum, e) => sum + (e.climate || 0), 0);
+  const totalMedia = safeEnergyData.reduce((sum, e) => sum + (e.media || 0), 0);
+  const totalSecurity = safeEnergyData.reduce((sum, e) => sum + (e.security || 0), 0);
 
   const lightingPercent = totalEnergy > 0 ? Math.round((totalLighting / totalEnergy) * 100) : 0;
   const climatePercent = totalEnergy > 0 ? Math.round((totalClimate / totalEnergy) * 100) : 0;
@@ -110,10 +112,10 @@ export default function EnergyScreen() {
         <TouchableOpacity
           style={[
             styles.iconButton,
-            (exporting || !energyData.length) && styles.iconButtonDisabled,
+            (exporting || !safeEnergyData.length) && styles.iconButtonDisabled,
           ]}
           onPress={handleExport}
-          disabled={exporting || !energyData.length}
+          disabled={exporting || !safeEnergyData.length}
         >
           <Download size={20} color={colors.foreground} />
         </TouchableOpacity>
@@ -181,17 +183,17 @@ export default function EnergyScreen() {
         {/* Chart */}
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Energy Usage {timeRange === 'day' ? 'Today' : timeRange === 'week' ? 'This Week' : 'This Month'}</Text>
-          {energyData.length > 0 ? (
+          {safeEnergyData.length > 0 ? (
             <LineChart
               data={{
-                labels: energyData.slice(-7).map((_, i) => {
+                labels: safeEnergyData.slice(-7).map((_, i) => {
                   if (timeRange === 'day') return `${i * 4}h`;
                   if (timeRange === 'week') return `Day ${i + 1}`;
                   return `Week ${i + 1}`;
                 }),
                 datasets: [
                   {
-                    data: energyData.slice(-7).map(e => e.total || 0),
+                    data: safeEnergyData.slice(-7).map(e => e.total || 0),
                     color: (opacity = 1) => colors.primary,
                     strokeWidth: 2,
                   },

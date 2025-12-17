@@ -103,6 +103,7 @@ export default function DeviceOnboardingWizard() {
   const [deviceWifiPassword, setDeviceWifiPassword] = useState('');
   
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
+  const safeAvailableRooms = Array.isArray(availableRooms) ? availableRooms : [];
 
   const client = getApiClient(async () => token);
   const hubApi = HubApi(client);
@@ -127,9 +128,16 @@ export default function DeviceOnboardingWizard() {
     if (!user?.homeId) return;
     try {
       const response = await homeApi.getRooms(user.homeId);
-      setAvailableRooms(response.data || []);
-      if (response.data && response.data.length > 0) {
-        setSelectedRoom(response.data[0].id);
+      const payload = (response.data as any)?.data ?? response.data;
+      const list =
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray((payload as any)?.rooms)
+            ? (payload as any).rooms
+            : [];
+      setAvailableRooms(list);
+      if (list.length > 0) {
+        setSelectedRoom(list[0].id);
       }
     } catch (e) {
       console.error('Error loading rooms:', e);
@@ -153,6 +161,13 @@ export default function DeviceOnboardingWizard() {
     const homeId = user?.homeId;
     if (!isDemoMode && !homeId) {
       Alert.alert('Error', 'Missing home context. Please sign in again.');
+      return;
+    }
+
+    const normalizedHubId = typeof hubId === 'string' ? hubId.trim() : '';
+    const isAirguard = deviceType === 'airguard';
+    if (!isDemoMode && !isAirguard && (!normalizedHubId || normalizedHubId.length === 0)) {
+      Alert.alert('Missing Hub', 'Please pair a hub first, then add the device from that hub setup flow.');
       return;
     }
     
@@ -184,7 +199,7 @@ export default function DeviceOnboardingWizard() {
         type: deviceType,
         category: deviceType === 'airguard' ? 'Sensor' : deviceCategory,
         roomId: selectedRoom,
-        hubId,
+        hubId: normalizedHubId || undefined,
         signalMappings: deviceType === 'airguard' ? { smartMonitorId: 1 } : undefined,
       });
 
@@ -201,7 +216,12 @@ export default function DeviceOnboardingWizard() {
         setStep('ready');
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to create device');
+      const data = e?.response?.data;
+      const base = data?.error || data?.message || e?.message || 'Failed to create device';
+      const details = Array.isArray(data?.errors)
+        ? data.errors.map((x: any) => x?.message).filter(Boolean).join('\n')
+        : '';
+      Alert.alert('Error', details ? `${base}\n${details}` : base);
     } finally {
       setLoading(false);
     }
@@ -311,7 +331,7 @@ export default function DeviceOnboardingWizard() {
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Room</Text>
         <ScrollView style={styles.roomsList}>
-          {availableRooms.map((room) => (
+          {safeAvailableRooms.map((room) => (
             <TouchableOpacity
               key={room.id}
               style={[

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiClient, AuthApi } from '../services/api';
 import Constants from 'expo-constants';
@@ -33,9 +33,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [homes, setHomes] = useState<{ id: string; name: string }[]>([]);
   const [currentHomeId, _setCurrentHomeId] = useState<string | null>(null);
 
-  const getToken = async () => token;
+  const tokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  const getToken = async () => tokenRef.current;
   const client = useMemo(() => getApiClient(getToken), [token]);
   const auth = useMemo(() => AuthApi(client), [client]);
+
+  const unwrap = <T,>(envelope: any): T => {
+    if (envelope?.success === false) {
+      throw new Error(envelope?.error || envelope?.message || 'Request failed');
+    }
+    return (envelope?.data ?? envelope) as T;
+  };
 
   useEffect(() => {
     (async () => {
@@ -45,11 +58,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Only restore token if it's not a demo token
         if (stored && stored !== 'DEMO_TOKEN') {
           setToken(stored);
+          if (storedHome) _setCurrentHomeId(storedHome);
         } else if (stored === 'DEMO_TOKEN') {
           // Clear demo token - user must explicitly login
           await AsyncStorage.removeItem('auth_token');
+          await AsyncStorage.removeItem('current_home_id');
+          _setCurrentHomeId(null);
+        } else {
+          // No token -> don't keep stale home selection around
+          await AsyncStorage.removeItem('current_home_id');
+          _setCurrentHomeId(null);
         }
-        if (storedHome) _setCurrentHomeId(storedHome);
       } finally {
         setLoading(false);
       }
@@ -58,35 +77,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshMe = async () => {
     if (!token) return;
-    const { data } = await auth.me();
-    setUser(data.user as AuthUser);
+    const res = await auth.me();
+    const payload = unwrap<{ user: AuthUser; homes?: { id: string; name: string }[] }>(res.data);
+    setUser(payload.user);
+    if (payload.homes) setHomes(payload.homes);
+    if (payload.user?.homeId) {
+      _setCurrentHomeId(payload.user.homeId);
+      await AsyncStorage.setItem('current_home_id', payload.user.homeId);
+    }
   };
 
   const login = async (email: string, password: string) => {
-    const { data } = await auth.login(email, password);
-    const t = data.token as string;
+    const res = await auth.login(email, password);
+    const payload = unwrap<{ token: string; user?: AuthUser; homes?: { id: string; name: string }[] }>(res.data);
+    const t = payload.token;
+    if (!t) throw new Error('Login failed: missing token');
     setToken(t);
     await AsyncStorage.setItem('auth_token', t);
-    await refreshMe();
-    // Optionally load homes from backend when /auth/me returns homes list
-    if (data.homes) setHomes(data.homes);
-    if (data.user?.homeId) {
-      _setCurrentHomeId(data.user.homeId);
-      await AsyncStorage.setItem('current_home_id', data.user.homeId);
+    if (payload.user) setUser(payload.user);
+    if (payload.homes) setHomes(payload.homes);
+    if (payload.user?.homeId) {
+      _setCurrentHomeId(payload.user.homeId);
+      await AsyncStorage.setItem('current_home_id', payload.user.homeId);
     }
+    if (!payload.user) await refreshMe();
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const { data } = await auth.register(name, email, password);
-    const t = data.token as string;
+    const res = await auth.register(name, email, password);
+    const payload = unwrap<{ token: string; user?: AuthUser; homes?: { id: string; name: string }[] }>(res.data);
+    const t = payload.token;
+    if (!t) throw new Error('Sign up failed: missing token');
     setToken(t);
     await AsyncStorage.setItem('auth_token', t);
-    await refreshMe();
-    if (data.homes) setHomes(data.homes);
-    if (data.user?.homeId) {
-      _setCurrentHomeId(data.user.homeId);
-      await AsyncStorage.setItem('current_home_id', data.user.homeId);
+    if (payload.user) setUser(payload.user);
+    if (payload.homes) setHomes(payload.homes);
+    if (payload.user?.homeId) {
+      _setCurrentHomeId(payload.user.homeId);
+      await AsyncStorage.setItem('current_home_id', payload.user.homeId);
     }
+    if (!payload.user) await refreshMe();
   };
 
   const logout = async () => {

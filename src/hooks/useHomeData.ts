@@ -1,10 +1,90 @@
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, HomeApi, HubApi, PublicAirguardApi } from '../services/api';
 import { Room, Device } from '../types';
 import { initialDemoDevices, initialDemoRooms } from '../context/DemoContext';
+
+const unwrap = <T,>(payload: any, key?: string): T => {
+  // Supports backend shapes:
+  // 1) { success:true, data:{ ... } }
+  // 2) raw arrays/objects
+  if (!payload) return (key ? ([] as any) : (undefined as any));
+  const root = payload?.data?.data ?? payload?.data ?? payload;
+  if (key) return (root?.[key] ?? root ?? []) as T;
+  return root as T;
+};
+
+const mapDevice = (raw: any): Device => {
+  if (!raw) {
+    return {
+      id: '',
+      name: '',
+      type: 'sensor',
+      category: 'Sensor',
+      isActive: false,
+      roomId: '',
+    };
+  }
+
+  const signalMappings = raw.signalMappings ?? raw.signal_mappings;
+
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    type: raw.type,
+    category: raw.category,
+    isActive: raw.isActive ?? raw.is_active ?? false,
+    value: raw.value ?? undefined,
+    unit: raw.unit ?? undefined,
+    roomId: raw.roomId ?? raw.room_id,
+    hubId: raw.hubId ?? raw.hub_id,
+    signalMappings: signalMappings && typeof signalMappings === 'object' ? signalMappings : undefined,
+    airQualityData: raw.airQualityData,
+    alarmMuted: raw.alarmMuted,
+  } as Device;
+};
+
+const mapRoom = (raw: any): Room => {
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    temperature: raw.temperature ?? 0,
+    humidity: raw.humidity ?? 0,
+    lights: raw.lights ?? 0,
+    devices: [],
+    scene: raw.scene ?? '',
+    power: raw.power ?? '0W',
+    airQuality: raw.airQuality ?? raw.air_quality,
+    pm25: raw.pm25,
+    mq2: raw.mq2,
+    image: raw.image,
+    model3dUrl: raw.model3dUrl ?? raw.model3d_url,
+    accentColor: raw.accentColor ?? raw.accent_color,
+    layoutPath: raw.layoutPath ?? raw.layout_path,
+    layoutOffset: raw.layoutOffset,
+    layout: raw.layout,
+    color: raw.color,
+  };
+};
+
+const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] => {
+  return baseRooms.map((room) => {
+    const roomDevices = baseDevices.filter((d) => d.roomId === room.id);
+    const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
+    return {
+      ...room,
+      devices: roomDevices,
+      temperature: airguard?.airQualityData?.temperature ?? room.temperature,
+      humidity: airguard?.airQualityData?.humidity ?? room.humidity,
+      airQuality: airguard?.airQualityData?.aqi ?? room.airQuality,
+      pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
+      mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
+      lights: roomDevices.filter((d) => d.type === 'light').length,
+    };
+  });
+};
 
 export const useHomeData = (homeId: string | null | undefined) => {
   const { token, currentHomeId } = useAuth();
@@ -15,10 +95,10 @@ export const useHomeData = (homeId: string | null | undefined) => {
 
   const isDemoMode = !token || token === 'DEMO_TOKEN';
 
-  const client = getApiClient(async () => token);
-  const homeApi = HomeApi(client);
-  const hubApi = HubApi(client);
-  const publicAirguardApi = PublicAirguardApi(client);
+  const client = useMemo(() => getApiClient(async () => token), [token]);
+  const homeApi = useMemo(() => HomeApi(client), [client]);
+  const hubApi = useMemo(() => HubApi(client), [client]);
+  const publicAirguardApi = useMemo(() => PublicAirguardApi(client), [client]);
 
   const devicesRef = useRef<Device[]>([]);
   const roomsRef = useRef<Room[]>([]);
@@ -31,72 +111,15 @@ export const useHomeData = (homeId: string | null | undefined) => {
     roomsRef.current = rooms;
   }, [rooms]);
 
-  const unwrap = <T,>(payload: any, key?: string): T => {
-    // Supports both backend shapes:
-    // 1) { success:true, data:{ rooms/devices/... } }
-    // 2) raw arrays/objects
-    if (!payload) return (key ? ([] as any) : (undefined as any));
-    const root = payload?.data?.data ?? payload?.data ?? payload;
-    if (key) return (root?.[key] ?? root ?? []) as T;
-    return root as T;
-  };
-
-  const mapDevice = (raw: any): Device => {
-    if (!raw) {
-      return {
-        id: '',
-        name: '',
-        type: 'sensor',
-        category: 'Sensor',
-        isActive: false,
-        roomId: '',
-      };
-    }
-
-    const signalMappings = raw.signalMappings ?? raw.signal_mappings;
-
-    return {
-      id: String(raw.id),
-      name: raw.name,
-      type: raw.type,
-      category: raw.category,
-      isActive: raw.isActive ?? raw.is_active ?? false,
-      value: raw.value ?? undefined,
-      unit: raw.unit ?? undefined,
-      roomId: raw.roomId ?? raw.room_id,
-      hubId: raw.hubId ?? raw.hub_id,
-      signalMappings: signalMappings && typeof signalMappings === 'object' ? signalMappings : undefined,
-      airQualityData: raw.airQualityData,
-      alarmMuted: raw.alarmMuted,
-    } as Device;
-  };
-
-  const mapRoom = (raw: any): Room => {
-    return {
-      id: String(raw.id),
-      name: raw.name,
-      temperature: raw.temperature ?? 0,
-      humidity: raw.humidity ?? 0,
-      lights: raw.lights ?? 0,
-      devices: [],
-      scene: raw.scene ?? '',
-      power: raw.power ?? '0W',
-      airQuality: raw.airQuality ?? raw.air_quality,
-      pm25: raw.pm25,
-      mq2: raw.mq2,
-      image: raw.image,
-      model3dUrl: raw.model3dUrl ?? raw.model3d_url,
-      accentColor: raw.accentColor ?? raw.accent_color,
-      layoutPath: raw.layoutPath ?? raw.layout_path,
-      layoutOffset: raw.layoutOffset,
-      layout: raw.layout,
-      color: raw.color,
-    };
-  };
-
-  const enrichAirguards = async (baseDevices: Device[]): Promise<Device[]> => {
+  const enrichAirguards = useCallback(async (baseDevices: Device[]): Promise<Device[]> => {
     const airguards = baseDevices.filter((d) => d.type === 'airguard');
     if (!airguards.length) return baseDevices;
+
+    const fetchLatest = async (smartMonitorId: number | string) => {
+      // Use a shorter timeout so a slow Influx/Node-RED path doesn't stall the whole home refresh.
+      const res = await client.get(`/public/airguard/${smartMonitorId}/latest`, { timeout: 4000 });
+      return unwrap<any>(res, 'data');
+    };
 
     const enriched = await Promise.all(
       baseDevices.map(async (d) => {
@@ -108,8 +131,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
           1;
 
         try {
-          const res = await publicAirguardApi.getLatest(smartMonitorId);
-          const latest = unwrap<any>(res, 'data');
+          const latest = await fetchLatest(smartMonitorId);
           if (!latest) return d;
 
           const buzzerEnabled = !!latest.buzzerEnabled;
@@ -141,24 +163,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
     );
 
     return enriched;
-  };
-
-  const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] => {
-    return baseRooms.map((room) => {
-      const roomDevices = baseDevices.filter((d) => d.roomId === room.id);
-      const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
-      return {
-        ...room,
-        devices: roomDevices,
-        temperature: airguard?.airQualityData?.temperature ?? room.temperature,
-        humidity: airguard?.airQualityData?.humidity ?? room.humidity,
-        airQuality: airguard?.airQualityData?.aqi ?? room.airQuality,
-        pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
-        mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
-        lights: roomDevices.filter((d) => d.type === 'light').length,
-      };
-    });
-  };
+  }, [client]);
 
   useEffect(() => {
     const effectiveHomeId = homeId || currentHomeId;
@@ -248,7 +253,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
     return () => clearInterval(interval);
   }, [homeId, currentHomeId, token, isDemoMode]);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const effectiveHomeId = homeId || currentHomeId;
     if (isDemoMode) {
       setRooms(initialDemoRooms);
@@ -276,19 +281,47 @@ export const useHomeData = (homeId: string | null | undefined) => {
     } catch (e) {
       console.error('Error refreshing data:', e);
     }
-  };
+  }, [currentHomeId, enrichAirguards, homeApi, hubApi, homeId, isDemoMode, token]);
 
-  const createRoom = async (room: Room) => {
+  const createRoom = useCallback(async (room: Room): Promise<Room> => {
     if (isDemoMode) {
       // Room creation in demo is handled via DemoContext (DashboardScreen)
       setRooms((prev) => [...prev, room]);
-      return;
+      return room;
     }
 
-    // TODO: POST to backend when rooms endpoint is available
-    setRooms((prev) => [...prev, room]);
-    console.warn('Room creation API not yet available. Showing temporary room locally.');
-  };
+    const effectiveHomeId = homeId || currentHomeId;
+    if (!effectiveHomeId) {
+      setRooms((prev) => [...prev, room]);
+      return room;
+    }
+
+    try {
+      const payload = {
+        name: room.name,
+        scene: room.scene,
+        image: room.image,
+        layoutPath: room.layoutPath,
+        accentColor: room.accentColor,
+        metadata: {
+          temperature: room.temperature,
+          humidity: room.humidity,
+          lights: room.lights,
+        },
+      };
+
+      const res = await homeApi.createRoom(effectiveHomeId, payload);
+      const createdRaw = unwrap<any>(res, 'room');
+      const created = createdRaw ? mapRoom(createdRaw) : room;
+
+      setRooms((prev) => [...prev, created]);
+      return created;
+    } catch (e) {
+      setRooms((prev) => [...prev, room]);
+      console.warn('Room creation API failed. Showing temporary room locally.');
+      return room;
+    }
+  }, [currentHomeId, homeApi, homeId, isDemoMode]);
 
   return { rooms, devices, loading, error, refresh, createRoom, isDemoMode };
 };

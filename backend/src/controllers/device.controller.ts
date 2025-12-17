@@ -9,10 +9,11 @@ import {
   getDeviceWithHub,
 } from '../repositories/devicesRepository';
 import { ensureHomeAccess } from './helpers/homeAccess';
-import { getHubById } from '../repositories/hubsRepository';
+import { createHub, getHubById } from '../repositories/hubsRepository';
 import { getRoomById } from '../repositories/roomsRepository';
 import { publishCommand } from '../services/mqttService';
 import { recordDeviceActivity } from '../services/telemetryService';
+import { randomUUID } from 'crypto';
 
 export async function listDevices(req: Request, res: Response) {
   try {
@@ -41,13 +42,29 @@ export async function addDevice(req: Request, res: Response) {
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
 
-    if (!name || !type || !category || !roomId || !hubId) {
+    const normalizedHubId = typeof hubId === 'string' ? hubId.trim() : hubId;
+    const isStandaloneProduct = type === 'airguard';
+    const requiresHub = !isStandaloneProduct;
+
+    if (!name || !type || !category || !roomId || (requiresHub && !normalizedHubId)) {
       return errorResponse(res, 'Missing required device fields', 400);
     }
 
-    const hub = await getHubById(hubId);
-    if (!hub || hub.home_id !== home.id) {
-      return errorResponse(res, 'Hub not found', 404);
+    let hub = null as any;
+    if (normalizedHubId) {
+      hub = await getHubById(normalizedHubId);
+      if (!hub || hub.home_id !== home.id) {
+        return errorResponse(res, 'Hub not found', 404);
+      }
+    } else {
+      // Airguard (VeaAir) is a standalone product (ESP32 inside) so we auto-provision it as a hub.
+      hub = await createHub({
+        homeId: home.id,
+        serialNumber: `veaair-${randomUUID()}`,
+        name: `${String(name).trim()} (VeaAir)`,
+        status: 'paired',
+        ownerId: userId,
+      });
     }
 
     const room = await getRoomById(roomId);

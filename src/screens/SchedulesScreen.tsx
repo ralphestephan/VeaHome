@@ -21,11 +21,13 @@ export default function SchedulesScreen() {
   const { user, token, currentHomeId } = useAuth();
   const { colors, gradients, shadows } = useTheme();
   const demo = useDemo();
-  const isDemoMode = !currentHomeId;
+  const isDemoMode = !token || token === 'DEMO_TOKEN';
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const homeId = currentHomeId || user?.homeId;
   const client = getApiClient(async () => token);
   const schedulesApi = SchedulesApi(client);
+
+  const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
 
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,8 @@ export default function SchedulesScreen() {
     try {
       setLoading(true);
       const res = await schedulesApi.listSchedules(homeId).catch(() => ({ data: [] }));
-      setSchedules(res.data || []);
+      const payload = unwrap(res.data);
+      setSchedules(Array.isArray(payload) ? payload : []);
     } catch (e) {
       Alert.alert('Error', 'Failed to load schedules');
     } finally {

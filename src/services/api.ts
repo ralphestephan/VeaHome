@@ -25,8 +25,10 @@ const resolveApiBaseUrl = (): string => {
 const API_BASE_URL: string = resolveApiBaseUrl();
 
 let apiClient: AxiosInstance | null = null;
+let tokenProvider: (() => Promise<string | null>) | undefined;
 
 export const getApiClient = (getToken?: () => Promise<string | null>): AxiosInstance => {
+  if (getToken) tokenProvider = getToken;
   if (!apiClient) {
     apiClient = axios.create({
       baseURL: API_BASE_URL,
@@ -34,8 +36,8 @@ export const getApiClient = (getToken?: () => Promise<string | null>): AxiosInst
     });
 
     apiClient.interceptors.request.use(async (config) => {
-      if (getToken) {
-        const token = await getToken();
+      if (tokenProvider) {
+        const token = await tokenProvider();
         if (token) {
           config.headers = config.headers ?? {};
           config.headers.Authorization = `Bearer ${token}`;
@@ -74,6 +76,7 @@ export const HubApi = (client: AxiosInstance) => ({
 export const HomeApi = (client: AxiosInstance) => ({
   getHome: (homeId: string) => client.get(`/homes/${homeId}`),
   getRooms: (homeId: string) => client.get(`/homes/${homeId}/rooms`),
+  createRoom: (homeId: string, payload: any) => client.post(`/homes/${homeId}/rooms`, payload),
   getRoom: (homeId: string, roomId: string) => client.get(`/homes/${homeId}/rooms/${roomId}`),
   updateRoomLayout: (homeId: string, layout: any) => client.put(`/homes/${homeId}/layout`, { layout }),
   getEnergy: (homeId: string, range?: 'day' | 'week' | 'month') => {

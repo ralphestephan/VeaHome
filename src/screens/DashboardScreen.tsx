@@ -217,11 +217,12 @@ export default function DashboardScreen() {
     try {
       if (isDemoMode) {
         demoAddRoom(room);
-        return;
+        return room;
       }
-      await createRoom(room);
+      return await createRoom(room);
     } catch (error) {
       console.error('Room creation error:', error);
+      return room;
     }
   };
 
@@ -344,7 +345,7 @@ export default function DashboardScreen() {
   const avgTemperature = rooms.length
     ? rooms.reduce((sum: number, room: Room) => sum + (room.temperature || 0), 0) / rooms.length
     : 0;
-  const todayEnergy = energyData.reduce((sum, point) => sum + (point.total || 0), 0);
+  const todayEnergy = (Array.isArray(energyData) ? energyData : []).reduce((sum, point) => sum + (point.total || 0), 0);
 
   // Get favorite/active devices for quick access
   const favoriteDevices = devices

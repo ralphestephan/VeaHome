@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function DeviceHistoryScreen({ route }: Props) {
-  const { token, currentHomeId } = useAuth();
+  const { token, currentHomeId, user } = useAuth();
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { deviceId } = route.params || { deviceId: '' };
@@ -22,12 +22,16 @@ export default function DeviceHistoryScreen({ route }: Props) {
   const client = getApiClient(async () => token);
   const historyApi = DeviceHistoryApi(client);
 
+  const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
+  const homeId = currentHomeId || user?.homeId;
+
   const loadHistory = async () => {
-    if (!currentHomeId || !deviceId) return;
+    if (!homeId || !deviceId) return;
     try {
       setLoading(true);
-      const res = await historyApi.getDeviceHistory(currentHomeId, deviceId).catch(() => ({ data: [] }));
-      setHistory(res.data || []);
+      const res = await historyApi.getDeviceHistory(homeId, deviceId).catch(() => ({ data: [] }));
+      const payload = unwrap(res.data);
+      setHistory(Array.isArray(payload) ? payload : []);
     } catch (e) {
       Alert.alert('Error', 'Failed to load device history');
     } finally {
@@ -35,7 +39,7 @@ export default function DeviceHistoryScreen({ route }: Props) {
     }
   };
 
-  useEffect(() => { loadHistory(); }, [currentHomeId, deviceId]);
+  useEffect(() => { loadHistory(); }, [homeId, deviceId]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

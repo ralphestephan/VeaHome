@@ -44,17 +44,31 @@ export default function HubPairScreen() {
 
   const pairHubWithCode = async (code: string) => {
     try {
-      const homeId = user?.homeId ?? 'default';
+      const homeId = user?.homeId;
+      if (!homeId) {
+        Alert.alert('Missing Home', 'Please create/select a home first, then try pairing again.');
+        throw new Error('Missing homeId');
+      }
       const response = await hub.pairHub(code, homeId);
       await refreshMe();
-      const hubId = response.data?.hubId || response.data?.id || code;
+
+      const payload = (response.data as any)?.data ?? response.data;
+      const hubId = payload?.hubId || payload?.id;
+      if (!hubId) {
+        throw new Error('Hub pairing succeeded but returned no hubId');
+      }
       navigation.replace('HubSetup', {
         hubId,
         qrCode: code,
       });
     } catch (e: any) {
       console.error('Pairing error:', e);
-      Alert.alert('Pairing Failed', e?.response?.data?.message || 'Failed to pair hub');
+      const data = e?.response?.data;
+      const base = data?.error || data?.message || e?.message || 'Failed to pair hub';
+      const details = Array.isArray(data?.errors)
+        ? data.errors.map((x: any) => x?.message).filter(Boolean).join('\n')
+        : '';
+      Alert.alert('Pairing Failed', details ? `${base}\n${details}` : base);
       throw e;
     }
   };

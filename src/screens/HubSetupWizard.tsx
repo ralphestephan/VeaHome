@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -54,35 +54,52 @@ export default function HubSetupWizard() {
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
 
+  const safeAvailableRooms = useMemo(
+    () => (Array.isArray(availableRooms) ? availableRooms : []),
+    [availableRooms],
+  );
+
   const client = getApiClient(async () => token);
   const hubApi = HubApi(client);
   const homeApi = HomeApi(client);
+
+  const checkHubStatus = useCallback(async () => {
+    try {
+      const response = await hubApi.getHubStatus(hubId);
+      const payload = (response.data as any)?.data ?? response.data;
+      setHubStatus(payload);
+    } catch (e) {
+      console.error('Error checking hub status:', e);
+    }
+  }, [hubApi, hubId]);
+
+  const loadRooms = useCallback(async () => {
+    if (!user?.homeId) {
+      setAvailableRooms([]);
+      return;
+    }
+    try {
+      const response = await homeApi.getRooms(user.homeId);
+      const payload = (response.data as any)?.data ?? response.data;
+      const list =
+        Array.isArray(payload)
+          ? payload
+          : Array.isArray((payload as any)?.rooms)
+            ? (payload as any).rooms
+            : [];
+      setAvailableRooms(list);
+    } catch (e) {
+      console.error('Error loading rooms:', e);
+      setAvailableRooms([]);
+    }
+  }, [homeApi, user?.homeId]);
 
   React.useEffect(() => {
     if (hubId) {
       checkHubStatus();
     }
     loadRooms();
-  }, [hubId]);
-
-  const checkHubStatus = async () => {
-    try {
-      const response = await hubApi.getHubStatus(hubId);
-      setHubStatus(response.data);
-    } catch (e) {
-      console.error('Error checking hub status:', e);
-    }
-  };
-
-  const loadRooms = async () => {
-    if (!user?.homeId) return;
-    try {
-      const response = await homeApi.getRooms(user.homeId);
-      setAvailableRooms(response.data || []);
-    } catch (e) {
-      console.error('Error loading rooms:', e);
-    }
-  };
+  }, [hubId, checkHubStatus, loadRooms]);
 
   const handleConnectWifi = async () => {
     if (!wifiSSID.trim()) {
@@ -235,7 +252,7 @@ export default function HubSetupWizard() {
       </Text>
       
       <ScrollView style={styles.roomsList}>
-        {availableRooms.map(room => {
+        {safeAvailableRooms.map(room => {
           const isSelected = selectedRooms.includes(room.id);
           return (
             <TouchableOpacity
@@ -255,7 +272,7 @@ export default function HubSetupWizard() {
           );
         })}
         
-        {availableRooms.length === 0 && (
+        {safeAvailableRooms.length === 0 && (
           <Text style={styles.emptyText}>No rooms available. Please create rooms first.</Text>
         )}
       </ScrollView>
@@ -302,7 +319,7 @@ export default function HubSetupWizard() {
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Assigned Rooms</Text>
         <Text style={styles.infoValue}>
-          {selectedRooms.map(id => availableRooms.find(r => r.id === id)?.name).join(', ')}
+          {selectedRooms.map(id => safeAvailableRooms.find(r => r.id === id)?.name).join(', ')}
         </Text>
       </View>
       

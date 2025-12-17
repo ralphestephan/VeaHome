@@ -60,12 +60,28 @@ export default function SignupScreen({ onSwitchToLogin }: Props) {
   }, []);
 
   const onSubmit = async () => {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName) {
+      setError('Name is required');
+      return;
+    }
+    if (!trimmedEmail) {
+      setError('Email is required');
+      return;
+    }
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      await register(name.trim(), email.trim(), password);
+      await register(trimmedName, trimmedEmail, password);
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Sign up failed');
+      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Sign up failed');
     } finally {
       setSubmitting(false);
     }

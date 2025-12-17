@@ -17,11 +17,15 @@ export default function HomeSelectorScreen() {
   const client = getApiClient(async () => token);
   const homesApi = HomesApi(client);
 
+  const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
+
   const loadHomes = async () => {
     try {
       setLoading(true);
       const res = await homesApi.listHomes().catch(() => ({ data: homes }));
-      setHomeList(res.data || []);
+      const payload = unwrap(res.data);
+      const list = Array.isArray(payload) ? payload : Array.isArray(homes) ? homes : [];
+      setHomeList(list);
     } catch (e) {
       Alert.alert('Error', 'Failed to load homes');
     } finally {
@@ -38,7 +42,8 @@ export default function HomeSelectorScreen() {
       setLoading(true);
       const res = await homesApi.createHome('My Home');
       await loadHomes();
-      if (res.data?.id) setCurrentHomeId(res.data.id);
+      const created = unwrap(res.data);
+      if (created?.id) setCurrentHomeId(created.id);
     } catch (e) {
       Alert.alert('Error', 'Failed to create home');
     } finally {
@@ -68,7 +73,7 @@ export default function HomeSelectorScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {homeList.map(h => (
+          {(Array.isArray(homeList) ? homeList : []).map(h => (
             <TouchableOpacity
               key={h.id}
               style={[styles.homeCard, currentHomeId === h.id && styles.homeCardActive]}
@@ -80,7 +85,7 @@ export default function HomeSelectorScreen() {
               <Text style={styles.homeName}>{h.name}</Text>
             </TouchableOpacity>
           ))}
-          {homeList.length === 0 && (
+          {(Array.isArray(homeList) ? homeList : []).length === 0 && (
             <Text style={styles.empty}>No homes yet</Text>
           )}
         </ScrollView>

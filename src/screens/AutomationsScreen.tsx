@@ -10,15 +10,17 @@ import { useAuth } from '../context/AuthContext';
 import { getApiClient, AutomationsApi } from '../services/api';
 
 export default function AutomationsScreen() {
-  const { token, currentHomeId } = useAuth();
+  const { token, currentHomeId, user } = useAuth();
   const { colors, gradients, shadows } = useTheme();
-  const isDemoMode = !currentHomeId;
+  const isDemoMode = !token || token === 'DEMO_TOKEN';
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [automations, setAutomations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const client = getApiClient(async () => token);
   const automationsApi = AutomationsApi(client);
-  const homeId = currentHomeId;
+  const homeId = currentHomeId || user?.homeId;
+
+  const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
 
   const automationIcons: Record<string, any> = {
     'clock': Clock,
@@ -39,7 +41,8 @@ export default function AutomationsScreen() {
     try {
       setLoading(true);
       const res = await automationsApi.listAutomations(homeId).catch(() => ({ data: [] }));
-      setAutomations(res.data || []);
+      const payload = unwrap(res.data);
+      setAutomations(Array.isArray(payload) ? payload : []);
     } catch (e) {
       Alert.alert('Error', 'Failed to load automations');
     } finally {

@@ -1,10 +1,6 @@
 {
   "expo": {
     "name": "VeaHome",
-    "slug": "veahome-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "main": "index.ts",
     "assetBundlePatterns": [
@@ -14,10 +10,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.vealive.veahome",
       "infoPlist": {
-        "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing."
+        "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#13152a"
@@ -29,10 +29,7 @@
     },
     "extra": {
       "apiBaseUrl": "http://63.34.243.171:8000",
-      "region": "us-east-1",
-      "appsyncEndpoint": "https://YOUR_GRAPHQL_ENDPOINT",
-      "cognitoUserPoolId": "YOUR_USER_POOL_ID",
-      "cognitoClientId": "YOUR_CLIENT_ID",
+      "region": "eu-west-1",
       "demoUserEnabled": true
     }
   }
