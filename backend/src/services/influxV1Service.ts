@@ -55,9 +55,25 @@ function extractSingleRow(result: any): Record<string, any> | null {
 
 export async function getSmartMonitorLatest(deviceNumericId: string) {
   // NOTE: measurement name must match your Node-RED write.
-  const q = `SELECT LAST(temp) AS temp, LAST(hum) AS hum, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(alert) AS alert, LAST(buzzer) AS buzzer, LAST(rssi) AS rssi, LAST(uptime) AS uptime FROM smartmonitor_telemetry WHERE deviceId='${deviceNumericId}'`;
-  const result = await queryInfluxV1(q);
-  const row = extractSingleRow(result);
+  const baseSelect =
+    'SELECT LAST(temp) AS temp, LAST(hum) AS hum, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(alert) AS alert, LAST(buzzer) AS buzzer, LAST(rssi) AS rssi, LAST(uptime) AS uptime FROM smartmonitor_telemetry';
+
+  const tryQueries = async (queries: string[]) => {
+    for (const q of queries) {
+      const result = await queryInfluxV1(q);
+      const row = extractSingleRow(result);
+      if (row) return row;
+    }
+    return null;
+  };
+
+  const row = await tryQueries([
+    `${baseSelect} WHERE deviceId='${deviceNumericId}'`,
+    `${baseSelect} WHERE "deviceId"='${deviceNumericId}'`,
+    // Fallback when tags aren't matching (common in single-device demos)
+    baseSelect,
+  ]);
+
   if (!row) return null;
 
   return {
@@ -74,9 +90,22 @@ export async function getSmartMonitorLatest(deviceNumericId: string) {
 }
 
 export async function getSmartMonitorStatus(deviceNumericId: string) {
-  const q = `SELECT LAST(online) AS online FROM smartmonitor_status WHERE deviceId='${deviceNumericId}'`;
-  const result = await queryInfluxV1(q);
-  const row = extractSingleRow(result);
+  const baseSelect = 'SELECT LAST(online) AS online FROM smartmonitor_status';
+  const tryQueries = async (queries: string[]) => {
+    for (const q of queries) {
+      const result = await queryInfluxV1(q);
+      const row = extractSingleRow(result);
+      if (row) return row;
+    }
+    return null;
+  };
+
+  const row = await tryQueries([
+    `${baseSelect} WHERE deviceId='${deviceNumericId}'`,
+    `${baseSelect} WHERE "deviceId"='${deviceNumericId}'`,
+    baseSelect,
+  ]);
+
   if (!row) return null;
 
   return {
