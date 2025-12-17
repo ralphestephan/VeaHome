@@ -29,6 +29,9 @@ import {
   Moon,
   Clock,
   RotateCcw,
+  Droplets,
+  Volume2,
+  VolumeX,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
@@ -45,6 +48,7 @@ interface DeviceControlModalProps {
   onToggle: (deviceId: string) => void;
   onSetValue: (deviceId: string, value: number) => void;
   onSetMode?: (deviceId: string, mode: string) => void;
+  onToggleMute?: (deviceId: string, muted: boolean) => void;
 }
 
 const iconMap: Record<string, any> = {
@@ -59,6 +63,7 @@ const iconMap: Record<string, any> = {
   'shutter': Blinds,
   'lock': Lock,
   'camera': Camera,
+  'airguard': Wind,
 };
 
 export default function DeviceControlModal({
@@ -68,6 +73,7 @@ export default function DeviceControlModal({
   onToggle,
   onSetValue,
   onSetMode,
+  onToggleMute,
 }: DeviceControlModalProps) {
   const { colors, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
@@ -112,6 +118,7 @@ export default function DeviceControlModal({
 
   const IconComponent = iconMap[device.type] || Lightbulb;
   const isClimateDevice = device.type === 'thermostat' || device.type === 'ac';
+  const isAirguard = device.type === 'airguard';
   const isDimmable = device.type === 'light';
   const isFan = device.type === 'fan';
   const isBlinds = device.type === 'blind' || device.type === 'shutter';
@@ -183,7 +190,55 @@ export default function DeviceControlModal({
             </View>
 
             {/* Main Control Area */}
-            {isClimateDevice ? (
+            {isAirguard ? (
+              <View style={styles.airguardControl}>
+                <View style={styles.airguardMetrics}>
+                  <View style={styles.airguardMetricCard}>
+                    <Thermometer size={24} color={colors.primary} />
+                    <Text style={styles.airguardMetricValue}>
+                      {device.airQualityData?.temperature ?? '--'}°C
+                    </Text>
+                    <Text style={styles.airguardMetricLabel}>Temperature</Text>
+                  </View>
+
+                  <View style={styles.airguardMetricCard}>
+                    <Droplets size={24} color={colors.primary} />
+                    <Text style={styles.airguardMetricValue}>
+                      {device.airQualityData?.humidity ?? '--'}%
+                    </Text>
+                    <Text style={styles.airguardMetricLabel}>Humidity</Text>
+                  </View>
+
+                  <View style={styles.airguardMetricCard}>
+                    <Wind size={24} color={colors.primary} />
+                    <Text style={styles.airguardMetricValue}>
+                      {device.airQualityData?.aqi ?? '--'}
+                    </Text>
+                    <Text style={styles.airguardMetricLabel}>AQI</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.muteButton, device.alarmMuted && styles.muteButtonActive]}
+                  onPress={() => onToggleMute?.(device.id, !device.alarmMuted)}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={device.alarmMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
+                    style={styles.muteButtonGradient}
+                  >
+                    {device.alarmMuted ? (
+                      <VolumeX size={22} color="#fff" />
+                    ) : (
+                      <Volume2 size={22} color={colors.mutedForeground} />
+                    )}
+                    <Text style={[styles.muteLabel, device.alarmMuted && styles.muteLabelActive]}>
+                      {device.alarmMuted ? 'Alarm Muted' : 'Mute Alarm'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : isClimateDevice ? (
               <View style={styles.climateControl}>
                 {/* Circular Dial */}
                 <View style={styles.dialContainer}>
@@ -694,6 +749,61 @@ const createStyles = (colors: any, shadows: any) =>
       color: colors.mutedForeground,
     },
     powerLabelActive: {
+      color: '#fff',
+    },
+
+    airguardControl: {
+      gap: spacing.xl,
+    },
+    airguardMetrics: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    airguardMetricCard: {
+      flex: 1,
+      alignItems: 'center',
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    airguardMetricValue: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    airguardMetricLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: 'center',
+    },
+    muteButton: {
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    muteButtonActive: {
+      shadowColor: '#FF6B6B',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 10,
+      elevation: 8,
+    },
+    muteButtonGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+    muteLabel: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.mutedForeground,
+    },
+    muteLabelActive: {
       color: '#fff',
     },
   });

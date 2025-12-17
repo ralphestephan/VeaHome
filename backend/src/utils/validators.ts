@@ -33,6 +33,8 @@ export const deviceSchemas = {
     category: Joi.string().required(),
     roomId: Joi.string().uuid().required(),
     hubId: Joi.string().uuid().required(),
+    unit: Joi.string().optional(),
+    signalMappings: Joi.object().optional(),
   }),
   controlDevice: Joi.object({
     isActive: Joi.boolean().optional(),

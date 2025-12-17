@@ -19,6 +19,7 @@ import {
   Lock, 
   Camera, 
   Radio,
+  Wind,
   ArrowRight,
   CheckCircle,
   Loader,
@@ -28,6 +29,7 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import CreationHero from '../components/CreationHero';
 import { useAuth } from '../context/AuthContext';
+import { useDemo } from '../context/DemoContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
 import type { RootStackParamList } from '../types';
@@ -42,7 +44,7 @@ type RouteProp = {
   };
 };
 
-type DeviceType = 'light' | 'ac' | 'tv' | 'blind' | 'lock' | 'camera' | 'sensor';
+type DeviceType = 'light' | 'ac' | 'tv' | 'blind' | 'lock' | 'camera' | 'sensor' | 'airguard';
 type DeviceCategory = 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
 
 const DEVICE_TYPES: { type: DeviceType; icon: any; name: string }[] = [
@@ -53,6 +55,7 @@ const DEVICE_TYPES: { type: DeviceType; icon: any; name: string }[] = [
   { type: 'lock', icon: Lock, name: 'Lock' },
   { type: 'camera', icon: Camera, name: 'Camera' },
   { type: 'sensor', icon: Radio, name: 'Sensor' },
+  { type: 'airguard', icon: Wind, name: 'Airguard' },
 ];
 
 const DEVICE_ACTIONS: Record<string, string[]> = {
@@ -77,6 +80,8 @@ export default function DeviceOnboardingWizard() {
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { token, user } = useAuth();
+  const demo = useDemo();
+  const isDemoMode = !token || token === 'DEMO_TOKEN';
   const { hubId } = route.params || { hubId: '' };
   
   const [step, setStep] = useState<Step>('type');
@@ -108,6 +113,17 @@ export default function DeviceOnboardingWizard() {
   }, []);
 
   const loadRooms = async () => {
+    if (isDemoMode) {
+      const demoRooms = demo.rooms || [];
+      setAvailableRooms(demoRooms);
+      if (demoRooms.length > 0) {
+        setSelectedRoom(demoRooms[0].id);
+      } else {
+        setSelectedRoom('');
+      }
+      return;
+    }
+
     if (!user?.homeId) return;
     try {
       const response = await homeApi.getRooms(user.homeId);
@@ -134,19 +150,46 @@ export default function DeviceOnboardingWizard() {
       Alert.alert('Error', 'Please select a room');
       return;
     }
-    if (!user?.homeId) return;
+    const homeId = user?.homeId;
+    if (!isDemoMode && !homeId) {
+      Alert.alert('Error', 'Missing home context. Please sign in again.');
+      return;
+    }
     
     setLoading(true);
     try {
-      const response = await hubApi.addDevice(user.homeId, {
+      if (isDemoMode) {
+        const createdId = demo.addDevice({
+          name: deviceName,
+          type: (deviceType || 'sensor') as any,
+          category: (deviceType === 'airguard' ? 'Sensor' : deviceCategory) as any,
+          roomId: selectedRoom,
+          hubId: hubId || 'demo-hub',
+          isActive: true,
+          unit: deviceType === 'ac' ? '°C' : undefined,
+        });
+
+        setDeviceId(createdId);
+        setStep('ready');
+        return;
+      }
+
+      if (!homeId) {
+        Alert.alert('Error', 'Missing home context. Please sign in again.');
+        return;
+      }
+
+      const response = await hubApi.addDevice(homeId, {
         name: deviceName,
         type: deviceType,
-        category: deviceCategory,
+        category: deviceType === 'airguard' ? 'Sensor' : deviceCategory,
         roomId: selectedRoom,
         hubId,
+        signalMappings: deviceType === 'airguard' ? { smartMonitorId: 1 } : undefined,
       });
-      
-      const newDeviceId = response.data?.id || response.data?.deviceId;
+
+      const created = response.data?.data?.device ?? response.data?.device ?? response.data;
+      const newDeviceId = created?.id || created?.deviceId;
       setDeviceId(newDeviceId);
       
       // If IR/RF device, go to learning step

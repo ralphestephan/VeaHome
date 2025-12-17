@@ -38,7 +38,6 @@ function MainTabs() {
   const { colors } = useTheme();
   return (
     <Tab.Navigator
-      lazy={false}
       detachInactiveScreens={false}
       initialRouteName="DashboardTab"
       screenOptions={{

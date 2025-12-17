@@ -106,6 +106,14 @@ export const HomesApi = (client: AxiosInstance) => ({
   createHome: (name: string) => client.post(`/homes`, { name }),
 });
 
+// Public/demo Airguard endpoints (Influx v1 + MQTT buzzer command)
+export const PublicAirguardApi = (client: AxiosInstance) => ({
+  getLatest: (smartMonitorId: number | string) => client.get(`/public/airguard/${smartMonitorId}/latest`),
+  getStatus: (smartMonitorId: number | string) => client.get(`/public/airguard/${smartMonitorId}/status`),
+  setBuzzer: (smartMonitorId: number | string, state: 'ON' | 'OFF') =>
+    client.post(`/public/airguard/${smartMonitorId}/buzzer`, { state }),
+});
+
 // Device Groups
 export const DeviceGroupsApi = (client: AxiosInstance) => ({
   listGroups: (homeId: string) => client.get(`/homes/${homeId}/device-groups`),

@@ -46,9 +46,9 @@ import { useHomeData } from '../hooks/useHomeData';
 import { useEnergyData } from '../hooks/useEnergyData';
 import { useRealtime } from '../hooks/useRealtime';
 import { useDeviceControl } from '../hooks/useDeviceControl';
-import { useDemo } from '../context/DemoContext';
-import { Room, Device, Home } from '../types';
-import { getApiClient, HomeApi } from '../services/api';
+import { useDemo } from '@/context/DemoContext';
+import type { Room, Device, Home } from '../types';
+import { getApiClient, HomeApi, PublicAirguardApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -82,11 +82,11 @@ export default function DashboardScreen() {
   const { user, token } = useAuth();
   const homeId = user?.homeId;
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
-  const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene } = useDemo();
+  const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene, addRoom: demoAddRoom, setDeviceMuted } = useDemo();
   
   // Use demo data if in demo mode
-  const rooms = isDemoMode ? demoRooms : homeRooms;
-  const devices = isDemoMode ? demoDevices : homeDevices;
+  const rooms: Room[] = isDemoMode ? demoRooms : homeRooms;
+  const devices: Device[] = isDemoMode ? demoDevices : homeDevices;
   
   const { energyData } = useEnergyData(homeId, 'day');
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
@@ -215,6 +215,10 @@ export default function DashboardScreen() {
 
   const handleRoomCreated = async (room: Room) => {
     try {
+      if (isDemoMode) {
+        demoAddRoom(room);
+        return;
+      }
       await createRoom(room);
     } catch (error) {
       console.error('Room creation error:', error);
@@ -254,8 +258,8 @@ export default function DashboardScreen() {
   };
 
   const handleToggleAllLights = async () => {
-    const lights = devices.filter((device) => device.type === 'light');
-    const shouldTurnOn = lights.some((device) => !device.isActive);
+    const lights = devices.filter((device: Device) => device.type === 'light');
+    const shouldTurnOn = lights.some((device: Device) => !device.isActive);
     await runBulkDeviceCommand(
       lights,
       shouldTurnOn,
@@ -265,7 +269,7 @@ export default function DashboardScreen() {
   };
 
   const handleLockAllDoors = async () => {
-    const locks = devices.filter((device) => device.type === 'lock');
+    const locks = devices.filter((device: Device) => device.type === 'lock');
     await runBulkDeviceCommand(locks, true, 'locks', 'All doors secured');
   };
 
@@ -297,7 +301,7 @@ export default function DashboardScreen() {
 
   const handleModalSetValue = (deviceId: string, value: number) => {
     if (isDemoMode) {
-      const demo = demoDevices.find((d) => d.id === deviceId);
+      const demo = demoDevices.find((d: Device) => d.id === deviceId);
       if (demo) {
         demoToggleDevice(deviceId); // Toggle to update state in demo
       }
@@ -307,20 +311,44 @@ export default function DashboardScreen() {
     }
   };
 
+  const handleMuteToggle = (deviceId: string, muted: boolean) => {
+    if (isDemoMode) {
+      setDeviceMuted(deviceId, muted);
+      return;
+    }
+
+    const device = devices.find((d: Device) => d.id === deviceId) || selectedDevice;
+    if (!device || device.type !== 'airguard') return;
+
+    const smartMonitorId = (device.signalMappings as any)?.smartMonitorId ?? 1;
+    const client = getApiClient(async () => token);
+    const airguardApi = PublicAirguardApi(client);
+
+    airguardApi
+      .setBuzzer(smartMonitorId, muted ? 'OFF' : 'ON')
+      .then(() => {
+        setSelectedDevice((prev) => (prev && prev.id === deviceId ? { ...prev, alarmMuted: muted } : prev));
+        refresh();
+      })
+      .catch((e) => {
+        console.error('Failed to set Airguard buzzer state:', e);
+      });
+  };
+
   // Computed values
   const firstName = user?.name?.split(' ')[0] || 'Guest';
-  const selectedRoomData = selectedRoom ? rooms.find((room) => room.id === selectedRoom) : null;
-  const activeDevicesCount = devices.filter((device) => device.isActive).length;
-  const lightsOnCount = devices.filter((d) => d.type === 'light' && d.isActive).length;
-  const totalLights = devices.filter((d) => d.type === 'light').length;
+  const selectedRoomData = selectedRoom ? rooms.find((room: Room) => room.id === selectedRoom) : null;
+  const activeDevicesCount = devices.filter((device: Device) => device.isActive).length;
+  const lightsOnCount = devices.filter((d: Device) => d.type === 'light' && d.isActive).length;
+  const totalLights = devices.filter((d: Device) => d.type === 'light').length;
   const avgTemperature = rooms.length
-    ? rooms.reduce((sum, room) => sum + (room.temperature || 0), 0) / rooms.length
+    ? rooms.reduce((sum: number, room: Room) => sum + (room.temperature || 0), 0) / rooms.length
     : 0;
   const todayEnergy = energyData.reduce((sum, point) => sum + (point.total || 0), 0);
 
   // Get favorite/active devices for quick access
   const favoriteDevices = devices
-    .filter((d) => d.isActive || d.type === 'thermostat')
+    .filter((d: Device) => d.isActive || d.type === 'thermostat')
     .slice(0, 4);
 
   const getGreeting = () => {
@@ -714,6 +742,7 @@ export default function DashboardScreen() {
           }}
           onToggle={handleModalToggle}
           onSetValue={handleModalSetValue}
+          onToggleMute={handleMuteToggle}
         />
       )}
     </View>

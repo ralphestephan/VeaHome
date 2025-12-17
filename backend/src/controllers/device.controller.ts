@@ -36,7 +36,7 @@ export async function addDevice(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, type, category, roomId, hubId, unit } = req.body;
+    const { name, type, category, roomId, hubId, unit, signalMappings } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
@@ -63,6 +63,7 @@ export async function addDevice(req: Request, res: Response) {
       type,
       category,
       unit,
+      signalMappings: signalMappings && typeof signalMappings === 'object' ? signalMappings : undefined,
     });
 
     return successResponse(

@@ -119,22 +119,18 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const loadRoomData = async () => {
     // Demo mode - use demo context devices
     if (isDemoMode) {
-      const mockRoom = roomsData[roomId];
-      if (mockRoom) {
-        setRoom(mockRoom);
-        // Get devices for this room from demo context
-        const roomDevices = demo.demoDevices
-          .filter(d => d.roomId === roomId)
-          .map(d => ({
-            ...d,
-            isActive: demo.deviceStates[d.id]?.isActive ?? d.isActive,
-            value: demo.deviceStates[d.id]?.value ?? d.value,
-          }));
-        setDevices(roomDevices.length > 0 ? roomDevices : (Array.isArray(mockRoom.devices) ? mockRoom.devices : []));
-        if (typeof mockRoom.temperature === 'number') {
-          setTargetTemp(mockRoom.temperature);
-        }
+      const demoRoom = demo.rooms.find((r) => r.id === roomId) || null;
+      const roomDevices = demo.devices.filter((d) => d.roomId === roomId);
+      setRoom(demoRoom);
+      setDevices(roomDevices);
+      if (demoRoom && typeof demoRoom.temperature === 'number') {
+        setTargetTemp(demoRoom.temperature);
       }
+      setLoading(false);
+      return;
+    }
+
+    if (!homeId) {
       setLoading(false);
       return;
     }
@@ -144,7 +140,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       const [roomRes, devicesRes] = await Promise.all([
         homeApi.getRoom(homeId, roomId).catch(() => ({ data: roomsData[roomId] })),
         homeApi.getRooms(homeId).then(roomsRes => {
-          const foundRoom = (roomsRes.data || []).find((r: any) => r.id === roomId);
+          const roomsPayload = (roomsRes as any)?.data?.data?.rooms ?? (roomsRes as any)?.data?.rooms ?? (roomsRes as any)?.data ?? [];
+          const foundRoom = (roomsPayload || []).find((r: any) => r.id === roomId);
           return { data: foundRoom?.devices || [] };
         }).catch(() => ({ data: [] })),
       ]);
@@ -246,7 +243,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     try {
       if (isDemoMode) {
         // Use demo context for value setting
-        demo.setValue(thermostat.id, nextTemp);
+        demo.setDeviceValue(thermostat.id, nextTemp);
         setDevices(prev => prev.map(d => 
           d.id === thermostat.id ? { ...d, value: nextTemp } : d
         ));
@@ -473,10 +470,12 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         <View style={styles.section}>
           <SectionHeader 
             title="Active Scene" 
-            actionLabel="Change"
-            onAction={() => navigation.navigate('Dashboard', { screen: 'Scenes' })}
+            action={{
+              label: 'Change',
+              onPress: () => navigation.navigate('Dashboard', { screen: 'Scenes' }),
+            }}
           />
-          <NeonCard glowColor={colors.primary} style={styles.sceneCard}>
+          <NeonCard glow="primary" style={styles.sceneCard}>
             <View style={styles.sceneInfo}>
               <View style={styles.sceneIcon}>
                 <Play size={20} color={colors.primary} />
@@ -525,8 +524,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         <View style={styles.section}>
           <SectionHeader 
             title="Devices" 
-            actionLabel="Manage"
-            onAction={() => navigation.navigate('Dashboard', { screen: 'Devices' })}
+            action={{
+              label: 'Manage',
+              onPress: () => navigation.navigate('Dashboard', { screen: 'Devices' }),
+            }}
           />
           <View style={styles.devicesGrid}>
             {devices.length > 0 ? (

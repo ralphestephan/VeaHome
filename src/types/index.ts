@@ -28,13 +28,22 @@ export type BottomTabParamList = {
 export interface Device {
   id: string;
   name: string;
-  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan';
+  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan' | 'airguard';
   category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
   isActive: boolean;
   value?: number;
   unit?: string;
   roomId: string;
   hubId?: string;
+  signalMappings?: Record<string, unknown>;
+  airQualityData?: {
+    temperature: number;
+    humidity: number;
+    aqi: number;
+    pm25?: number;
+    mq2?: number;
+  };
+  alarmMuted?: boolean;
 }
 
 export interface RoomLayout {
@@ -54,6 +63,8 @@ export interface Room {
   scene: string;
   power: string;
   airQuality?: number;
+  pm25?: number;
+  mq2?: number;
   image?: string;
   model3dUrl?: string;
   accentColor?: string;

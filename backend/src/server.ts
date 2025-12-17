@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { initializeWebSocket } from './services/websocket.service';
 import { initializeIoT } from './services/iot.service';
 import { initializeScheduler } from './services/scheduler.service';
+import { initMqttClient } from './services/mqttService';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -17,6 +18,7 @@ import sceneRoutes from './routes/scene.routes';
 import scheduleRoutes from './routes/schedule.routes';
 import deviceGroupRoutes from './routes/deviceGroup.routes';
 import automationRoutes from './routes/automation.routes';
+import publicAirguardRoutes from './routes/publicAirguard.routes';
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +44,7 @@ app.get('/health', (req: Request, res: Response) => {
 
 // API Routes
 app.use('/auth', authRoutes);
+app.use('/public/airguard', publicAirguardRoutes);
 app.use('/hub', hubRoutes);
 app.use('/homes', deviceRoutes);
 app.use('/homes', homeRoutes);
@@ -78,6 +81,7 @@ const server = createServer(app);
 
 // Initialize services
 initializeWebSocket(server);
+initMqttClient();
 initializeIoT();
 initializeScheduler();
 

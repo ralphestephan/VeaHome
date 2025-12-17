@@ -38,9 +38,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useHomeData } from '../hooks/useHomeData';
 import { useHubs } from '../hooks/useHubs';
 import { useDeviceControl } from '../hooks/useDeviceControl';
+import { getApiClient, PublicAirguardApi } from '../services/api';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTheme } from '../context/ThemeContext';
-import { useDemo } from '../context/DemoContext';
+import { useDemo } from '@/context/DemoContext';
 import { 
   NeonCard, 
   SectionHeader, 
@@ -62,7 +63,7 @@ export default function DevicesScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const homeId = user?.homeId;
   const { devices: homeDevices, rooms: homeRooms, loading, refresh, isDemoMode } = useHomeData(homeId);
   const demo = useDemo();
@@ -145,6 +146,30 @@ export default function DevicesScreen() {
       setValue(deviceId, value, selectedDevice?.unit);
       refresh();
     }
+  };
+
+  const handleMuteToggle = (deviceId: string, muted: boolean) => {
+    if (isDemoMode) {
+      demo.setDeviceMuted(deviceId, muted);
+      return;
+    }
+
+    const device = devices.find((d) => d.id === deviceId) || selectedDevice;
+    if (!device || device.type !== 'airguard') return;
+
+    const smartMonitorId = (device.signalMappings as any)?.smartMonitorId ?? 1;
+    const client = getApiClient(async () => token);
+    const airguardApi = PublicAirguardApi(client);
+
+    airguardApi
+      .setBuzzer(smartMonitorId, muted ? 'OFF' : 'ON')
+      .then(() => {
+        setSelectedDevice((prev) => (prev && prev.id === deviceId ? { ...prev, alarmMuted: muted } : prev));
+        refresh();
+      })
+      .catch((e) => {
+        console.error('Failed to set Airguard buzzer state:', e);
+      });
   };
 
   const getRoomName = (roomId: string) => {
@@ -498,6 +523,7 @@ export default function DevicesScreen() {
           }}
           onToggle={handleModalToggle}
           onSetValue={handleModalSetValue}
+          onToggleMute={handleMuteToggle}
         />
       )}
     </View>

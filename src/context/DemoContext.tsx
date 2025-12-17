@@ -1,282 +1,243 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
-import { Device, Scene, Room } from '../types';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react';
+import type { Device, Room, Scene } from '../types';
 
-// Demo devices with full data
-const initialDemoDevices: Device[] = [
-  // Living Room / Salon
-  { id: 'd1', name: 'Main Light', type: 'light', category: 'Relay', isActive: true, value: 70, unit: '%', roomId: 'salon', hubId: 'hub1' },
-  { id: 'd2', name: 'Floor Lamp', type: 'light', category: 'Relay', isActive: false, value: 50, unit: '%', roomId: 'salon', hubId: 'hub1' },
-  { id: 'd3', name: 'Desk Lamp', type: 'light', category: 'Relay', isActive: true, value: 80, unit: '%', roomId: 'salon', hubId: 'hub1' },
-  { id: 'd4', name: 'Thermostat', type: 'thermostat', category: 'IR', isActive: true, value: 24, unit: '°C', roomId: 'salon', hubId: 'hub1' },
-  { id: 'd5', name: 'Smart TV', type: 'tv', category: 'IR', isActive: false, roomId: 'salon', hubId: 'hub1' },
-  { id: 'd6', name: 'Shutters', type: 'blind', category: 'RF', isActive: true, value: 100, unit: '%', roomId: 'salon', hubId: 'hub1' },
-  
-  // Master Bedroom
-  { id: 'd7', name: 'Ceiling Light', type: 'light', category: 'Relay', isActive: false, value: 60, unit: '%', roomId: 'master', hubId: 'hub1' },
-  { id: 'd8', name: 'Bedside Lamp', type: 'light', category: 'Relay', isActive: true, value: 30, unit: '%', roomId: 'master', hubId: 'hub1' },
-  { id: 'd9', name: 'AC Unit', type: 'ac', category: 'IR', isActive: true, value: 22, unit: '°C', roomId: 'master', hubId: 'hub1' },
-  { id: 'd10', name: 'Window Blinds', type: 'blind', category: 'RF', isActive: true, value: 50, unit: '%', roomId: 'master', hubId: 'hub1' },
-  
-  // Office
-  { id: 'd11', name: 'Desk Light', type: 'light', category: 'Relay', isActive: true, value: 100, unit: '%', roomId: 'office', hubId: 'hub1' },
-  { id: 'd12', name: 'Monitor Backlight', type: 'light', category: 'Relay', isActive: true, value: 40, unit: '%', roomId: 'office', hubId: 'hub1' },
-  { id: 'd13', name: 'Office AC', type: 'ac', category: 'IR', isActive: false, value: 23, unit: '°C', roomId: 'office', hubId: 'hub1' },
-  
-  // Kitchen
-  { id: 'd14', name: 'Kitchen Light', type: 'light', category: 'Relay', isActive: true, value: 100, unit: '%', roomId: 'kitchen', hubId: 'hub1' },
-  { id: 'd15', name: 'Under Cabinet', type: 'light', category: 'Relay', isActive: false, value: 70, unit: '%', roomId: 'kitchen', hubId: 'hub1' },
-  { id: 'd16', name: 'Smart Fridge', type: 'sensor', category: 'Sensor', isActive: true, value: 4, unit: '°C', roomId: 'kitchen', hubId: 'hub1' },
-  
-  // Entrance
-  { id: 'd17', name: 'Front Door Lock', type: 'lock', category: 'Relay', isActive: true, roomId: 'entrance', hubId: 'hub1' },
-  { id: 'd18', name: 'Security Cam', type: 'camera', category: 'Sensor', isActive: true, roomId: 'entrance', hubId: 'hub1' },
-  { id: 'd19', name: 'Entrance Light', type: 'light', category: 'Relay', isActive: false, value: 100, unit: '%', roomId: 'entrance', hubId: 'hub1' },
-  { id: 'd20', name: 'Motion Sensor', type: 'sensor', category: 'Sensor', isActive: true, roomId: 'entrance', hubId: 'hub1' },
-  
-  // Bathroom
-  { id: 'd21', name: 'Bathroom Light', type: 'light', category: 'Relay', isActive: false, value: 100, unit: '%', roomId: 'bathroom', hubId: 'hub1' },
-  { id: 'd22', name: 'Exhaust Fan', type: 'fan', category: 'Relay', isActive: false, roomId: 'bathroom', hubId: 'hub1' },
-];
+// Saturday demo requirement: start with an empty home
+export const initialDemoDevices: Device[] = [];
+export const initialDemoRooms: Room[] = [];
+export const initialDemoScenes: Scene[] = [];
 
-// Demo rooms with layout positions
-const initialDemoRooms: Room[] = [
-  {
-    id: 'salon',
-    name: 'Living Room',
-    temperature: 24,
-    humidity: 62,
-    lights: 3,
-    devices: [],
-    scene: 'Evening Relax',
-    power: '2.3kW',
-    airQuality: 95,
-    image: 'https://images.unsplash.com/photo-1668816143164-a439b3e687cd?w=400',
-    layout: { x: 0, y: 0, w: 2, h: 2 },
-    color: '#4F6EF7',
-  },
-  {
-    id: 'master',
-    name: 'Master Bedroom',
-    temperature: 22,
-    humidity: 58,
-    lights: 2,
-    devices: [],
-    scene: 'Sleep Mode',
-    power: '0.8kW',
-    airQuality: 92,
-    image: 'https://images.unsplash.com/photo-1666841411771-5c115e702410?w=400',
-    layout: { x: 2, y: 0, w: 2, h: 1 },
-    color: '#B366FF',
-  },
-  {
-    id: 'office',
-    name: 'Office',
-    temperature: 23,
-    humidity: 55,
-    lights: 2,
-    devices: [],
-    scene: 'Work Focus',
-    power: '1.5kW',
-    airQuality: 90,
-    image: 'https://images.unsplash.com/photo-1616594004753-5d4cc030088c?w=400',
-    layout: { x: 2, y: 1, w: 2, h: 1 },
-    color: '#00C2FF',
-  },
-  {
-    id: 'kitchen',
-    name: 'Kitchen',
-    temperature: 23,
-    humidity: 65,
-    lights: 2,
-    devices: [],
-    scene: 'Cooking',
-    power: '3.2kW',
-    airQuality: 88,
-    image: 'https://images.unsplash.com/photo-1652961222237-9e2bbca79504?w=400',
-    layout: { x: 0, y: 2, w: 2, h: 1 },
-    color: '#FFB547',
-  },
-  {
-    id: 'entrance',
-    name: 'Entrance',
-    temperature: 21,
-    humidity: 50,
-    lights: 1,
-    devices: [],
-    scene: 'Welcome',
-    power: '0.3kW',
-    airQuality: 94,
-    layout: { x: 2, y: 2, w: 1, h: 1 },
-    color: '#00E5A0',
-  },
-  {
-    id: 'bathroom',
-    name: 'Bathroom',
-    temperature: 25,
-    humidity: 70,
-    lights: 1,
-    devices: [],
-    scene: 'Relaxation',
-    power: '0.5kW',
-    airQuality: 85,
-    layout: { x: 3, y: 2, w: 1, h: 1 },
-    color: '#00FFF0',
-  },
-];
+const DEFAULT_ROOM_IMAGE = 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=600';
 
-// Demo scenes
-const initialDemoScenes: Scene[] = [
-  { id: 's1', name: 'Morning', icon: 'sunrise', schedule: '6:00 AM', isActive: false, deviceActions: [
-    { deviceId: 'd1', action: { isActive: true, value: 100 } },
-    { deviceId: 'd14', action: { isActive: true, value: 100 } },
-    { deviceId: 'd6', action: { isActive: true, value: 100 } },
-  ]},
-  { id: 's2', name: 'Evening Relax', icon: 'sunset', schedule: '6:00 PM', isActive: true, deviceActions: [
-    { deviceId: 'd1', action: { isActive: true, value: 50 } },
-    { deviceId: 'd2', action: { isActive: true, value: 30 } },
-    { deviceId: 'd5', action: { isActive: true } },
-  ]},
-  { id: 's3', name: 'Night Mode', icon: 'moon', schedule: '10:00 PM', isActive: false, deviceActions: [
-    { deviceId: 'd1', action: { isActive: false } },
-    { deviceId: 'd7', action: { isActive: false } },
-    { deviceId: 'd8', action: { isActive: true, value: 20 } },
-    { deviceId: 'd17', action: { isActive: true } },
-  ]},
-  { id: 's4', name: 'Movie Time', icon: 'film', schedule: undefined, isActive: false, deviceActions: [
-    { deviceId: 'd1', action: { isActive: true, value: 10 } },
-    { deviceId: 'd5', action: { isActive: true } },
-    { deviceId: 'd6', action: { isActive: true, value: 0 } },
-  ]},
-  { id: 's5', name: 'Work Mode', icon: 'briefcase', schedule: '9:00 AM', isActive: false, deviceActions: [
-    { deviceId: 'd11', action: { isActive: true, value: 100 } },
-    { deviceId: 'd12', action: { isActive: true, value: 60 } },
-    { deviceId: 'd13', action: { isActive: true, value: 23 } },
-  ]},
-  { id: 's6', name: 'Away', icon: 'home', schedule: undefined, isActive: false, deviceActions: [
-    { deviceId: 'd1', action: { isActive: false } },
-    { deviceId: 'd7', action: { isActive: false } },
-    { deviceId: 'd17', action: { isActive: true } },
-    { deviceId: 'd18', action: { isActive: true } },
-  ]},
-  { id: 's7', name: 'Party', icon: 'music', schedule: undefined, isActive: false, deviceActions: [
-    { deviceId: 'd1', action: { isActive: true, value: 100 } },
-    { deviceId: 'd2', action: { isActive: true, value: 100 } },
-    { deviceId: 'd3', action: { isActive: true, value: 100 } },
-  ]},
-  { id: 's8', name: 'All Off', icon: 'power', schedule: undefined, isActive: false, deviceActions: 
-    initialDemoDevices.filter(d => d.type === 'light').map(d => ({ deviceId: d.id, action: { isActive: false } }))
-  },
-];
+type AddRoomInput = Room | Omit<Room, 'id'>;
+type AddDeviceInput = Device | Omit<Device, 'id'>;
 
 interface DemoContextValue {
   devices: Device[];
   rooms: Room[];
   scenes: Scene[];
+
   toggleDevice: (deviceId: string) => void;
   setDeviceValue: (deviceId: string, value: number) => void;
+  setDeviceMuted: (deviceId: string, muted: boolean) => void;
   activateScene: (sceneId: string) => void;
-  addDevice: (device: Omit<Device, 'id'>) => void;
+
+  addRoom: (room: AddRoomInput) => string;
+  addDevice: (device: AddDeviceInput) => string;
   updateDevice: (deviceId: string, updates: Partial<Device>) => void;
   getDevicesByRoom: (roomId: string) => Device[];
-  getRoomStats: (roomId: string) => { activeDevices: number; totalDevices: number; temperature?: number };
+  getRoomStats: (roomId: string) => {
+    activeDevices: number;
+    totalDevices: number;
+    temperature?: number;
+    humidity?: number;
+    aqi?: number;
+  };
 }
 
 const DemoContext = createContext<DemoContextValue | undefined>(undefined);
 
 export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [devices, setDevices] = useState<Device[]>(initialDemoDevices);
-  const [rooms] = useState<Room[]>(initialDemoRooms);
+  const [rooms, setRooms] = useState<Room[]>(initialDemoRooms);
   const [scenes, setScenes] = useState<Scene[]>(initialDemoScenes);
 
   const toggleDevice = useCallback((deviceId: string) => {
-    setDevices(prev => prev.map(d => 
-      d.id === deviceId ? { ...d, isActive: !d.isActive } : d
-    ));
+    setDevices((prev) =>
+      prev.map((device) =>
+        device.id === deviceId ? { ...device, isActive: !device.isActive } : device,
+      ),
+    );
   }, []);
 
   const setDeviceValue = useCallback((deviceId: string, value: number) => {
-    setDevices(prev => prev.map(d => 
-      d.id === deviceId ? { ...d, value, isActive: value > 0 } : d
-    ));
+    setDevices((prev) =>
+      prev.map((device) =>
+        device.id === deviceId
+          ? {
+              ...device,
+              value,
+              isActive: true,
+            }
+          : device,
+      ),
+    );
   }, []);
 
-  const activateScene = useCallback((sceneId: string) => {
-    const scene = scenes.find(s => s.id === sceneId);
-    if (!scene?.deviceActions) return;
+  const setDeviceMuted = useCallback((deviceId: string, muted: boolean) => {
+    setDevices((prev) =>
+      prev.map((device) =>
+        device.id === deviceId
+          ? {
+              ...device,
+              alarmMuted: muted,
+            }
+          : device,
+      ),
+    );
+  }, []);
 
-    // Apply all device actions from the scene
-    setDevices(prev => {
-      const updated = [...prev];
-      scene.deviceActions?.forEach(action => {
-        const idx = updated.findIndex(d => d.id === action.deviceId);
-        if (idx !== -1) {
-          updated[idx] = {
-            ...updated[idx],
-            isActive: action.action.isActive ?? updated[idx].isActive,
-            value: action.action.value ?? updated[idx].value,
-          };
-        }
-      });
-      return updated;
-    });
+  const activateScene = useCallback(
+    (sceneId: string) => {
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (!scene) {
+        setScenes((prev) => prev.map((s) => ({ ...s, isActive: false })));
+        return;
+      }
 
-    // Update scene active states
-    setScenes(prev => prev.map(s => ({
-      ...s,
-      isActive: s.id === sceneId,
-    })));
-  }, [scenes]);
+      // apply device actions (if any)
+      if (scene.deviceActions?.length) {
+        setDevices((prev) => {
+          const next = [...prev];
+          for (const action of scene.deviceActions || []) {
+            const index = next.findIndex((d) => d.id === action.deviceId);
+            if (index === -1) continue;
+            next[index] = {
+              ...next[index],
+              isActive: action.action.isActive ?? next[index].isActive,
+              value: action.action.value ?? next[index].value,
+            };
+          }
+          return next;
+        });
+      }
 
-  const addDevice = useCallback((device: Omit<Device, 'id'>) => {
-    const newDevice: Device = {
-      ...device,
-      id: `d${Date.now()}`,
+      setScenes((prev) => prev.map((s) => ({ ...s, isActive: s.id === sceneId })));
+    },
+    [scenes],
+  );
+
+  const addRoom = useCallback((room: AddRoomInput) => {
+    const nextId = 'id' in room ? room.id : `room_${Date.now()}`;
+    const safeRoom: Room = {
+      id: nextId,
+      name: 'name' in room ? room.name : 'Room',
+      temperature: 'temperature' in room ? room.temperature : 22,
+      humidity: 'humidity' in room ? room.humidity : 50,
+      lights: 'lights' in room ? room.lights : 0,
+      devices: [],
+      scene: 'scene' in room ? room.scene : '',
+      power: 'power' in room ? room.power : '0.0kW',
+      airQuality: 'airQuality' in room ? room.airQuality : undefined,
+      image: ('image' in room ? room.image : undefined) || DEFAULT_ROOM_IMAGE,
+      accentColor: 'accentColor' in room ? room.accentColor : undefined,
+      layoutPath: 'layoutPath' in room ? room.layoutPath : undefined,
+      layoutOffset: 'layoutOffset' in room ? room.layoutOffset : undefined,
+      layout: 'layout' in room ? room.layout : undefined,
+      color: 'color' in room ? room.color : undefined,
+      model3dUrl: 'model3dUrl' in room ? room.model3dUrl : undefined,
     };
-    setDevices(prev => [...prev, newDevice]);
+
+    setRooms((prev) => [...prev, safeRoom]);
+    return nextId;
+  }, []);
+
+  const addDevice = useCallback((device: AddDeviceInput) => {
+    const nextId = 'id' in device ? device.id : `d${Date.now()}`;
+
+    const isAirguard = ('type' in device ? device.type : undefined) === 'airguard';
+
+    const safeDevice: Device = {
+      id: nextId,
+      name: 'name' in device ? device.name : 'Device',
+      type: (device as any).type,
+      category: (device as any).category,
+      isActive: 'isActive' in device ? device.isActive : true,
+      value: 'value' in device ? device.value : undefined,
+      unit: 'unit' in device ? device.unit : undefined,
+      roomId: (device as any).roomId,
+      hubId: 'hubId' in device ? device.hubId : undefined,
+      airQualityData:
+        'airQualityData' in device
+          ? device.airQualityData
+          : isAirguard
+            ? { temperature: 23.5, humidity: 50, aqi: 42, pm25: 42, mq2: 35 }
+            : undefined,
+      alarmMuted: 'alarmMuted' in device ? device.alarmMuted : false,
+    };
+
+    setDevices((prev) => [...prev, safeDevice]);
+    return nextId;
   }, []);
 
   const updateDevice = useCallback((deviceId: string, updates: Partial<Device>) => {
-    setDevices(prev => prev.map(d => 
-      d.id === deviceId ? { ...d, ...updates } : d
-    ));
+    setDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, ...updates } : d)));
   }, []);
 
-  const getDevicesByRoom = useCallback((roomId: string) => {
-    return devices.filter(d => d.roomId === roomId);
-  }, [devices]);
+  const getDevicesByRoom = useCallback(
+    (roomId: string) => devices.filter((device) => device.roomId === roomId),
+    [devices],
+  );
 
-  const getRoomStats = useCallback((roomId: string) => {
-    const roomDevices = devices.filter(d => d.roomId === roomId);
-    const activeDevices = roomDevices.filter(d => d.isActive).length;
-    const thermostat = roomDevices.find(d => d.type === 'thermostat' || d.type === 'ac');
-    return {
-      activeDevices,
-      totalDevices: roomDevices.length,
-      temperature: thermostat?.value,
-    };
-  }, [devices]);
+  const roomsWithDevices = useMemo<Room[]>(() => {
+    return rooms.map((room) => {
+      const roomDevices = devices.filter((d) => d.roomId === room.id);
+      const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
 
-  // Populate rooms with their devices
-  const roomsWithDevices = useMemo(() => {
-    return rooms.map(room => ({
-      ...room,
-      devices: devices.filter(d => d.roomId === room.id),
-      lights: devices.filter(d => d.roomId === room.id && d.type === 'light').length,
-    }));
+      return {
+        ...room,
+        devices: roomDevices,
+        lights: roomDevices.filter((d) => d.type === 'light').length,
+        temperature: airguard?.airQualityData?.temperature ?? room.temperature,
+        humidity: airguard?.airQualityData?.humidity ?? room.humidity,
+        airQuality: airguard?.airQualityData?.aqi ?? room.airQuality,
+        pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
+        mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
+      };
+    });
   }, [rooms, devices]);
 
-  const value: DemoContextValue = {
-    devices,
-    rooms: roomsWithDevices,
-    scenes,
-    toggleDevice,
-    setDeviceValue,
-    activateScene,
-    addDevice,
-    updateDevice,
-    getDevicesByRoom,
-    getRoomStats,
-  };
+  const getRoomStats = useCallback(
+    (roomId: string) => {
+      const room = roomsWithDevices.find((r) => r.id === roomId);
+      const roomDevices = devices.filter((d) => d.roomId === roomId);
+      return {
+        activeDevices: roomDevices.filter((d) => d.isActive).length,
+        totalDevices: roomDevices.length,
+        temperature: room?.temperature,
+        humidity: room?.humidity,
+        aqi: room?.airQuality,
+      };
+    },
+    [devices, roomsWithDevices],
+  );
+
+  const value = useMemo<DemoContextValue>(
+    () => ({
+      devices,
+      rooms: roomsWithDevices,
+      scenes,
+      toggleDevice,
+      setDeviceValue,
+      setDeviceMuted,
+      activateScene,
+      addRoom,
+      addDevice,
+      updateDevice,
+      getDevicesByRoom,
+      getRoomStats,
+    }),
+    [
+      devices,
+      roomsWithDevices,
+      scenes,
+      toggleDevice,
+      setDeviceValue,
+      setDeviceMuted,
+      activateScene,
+      addRoom,
+      addDevice,
+      updateDevice,
+      getDevicesByRoom,
+      getRoomStats,
+    ],
+  );
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 };
@@ -286,5 +247,3 @@ export const useDemo = () => {
   if (!ctx) throw new Error('useDemo must be used within DemoProvider');
   return ctx;
 };
-
-export { initialDemoDevices, initialDemoRooms, initialDemoScenes };

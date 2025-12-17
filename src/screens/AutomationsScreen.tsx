@@ -7,13 +7,11 @@ import CreationHero from '../components/CreationHero';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { useDemo } from '../context/DemoContext';
 import { getApiClient, AutomationsApi } from '../services/api';
 
 export default function AutomationsScreen() {
   const { token, currentHomeId } = useAuth();
   const { colors, gradients, shadows } = useTheme();
-  const demo = useDemo();
   const isDemoMode = !currentHomeId;
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [automations, setAutomations] = useState<any[]>([]);
@@ -33,8 +31,7 @@ export default function AutomationsScreen() {
 
   const loadAutomations = async () => {
     if (isDemoMode) {
-      // Use demo automations
-      setAutomations(demo.demoAutomations);
+      setAutomations([]);
       setLoading(false);
       return;
     }
@@ -50,7 +47,7 @@ export default function AutomationsScreen() {
     }
   };
 
-  useEffect(() => { loadAutomations(); }, [homeId, demo.demoAutomations]);
+  useEffect(() => { loadAutomations(); }, [homeId, isDemoMode]);
 
   const handleCreate = async () => {
     if (!homeId) return;
