@@ -32,7 +32,13 @@ export const deviceSchemas = {
     type: Joi.string().required(),
     category: Joi.string().required(),
     roomId: Joi.string().uuid().required(),
-    hubId: Joi.string().uuid().required(),
+    hubId: Joi.string()
+      .uuid()
+      .when('type', {
+        is: 'airguard',
+        then: Joi.optional(),
+        otherwise: Joi.required(),
+      }),
     unit: Joi.string().optional(),
     signalMappings: Joi.object().optional(),
   }),
