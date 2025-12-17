@@ -39,10 +39,11 @@ import {
 import { roomsData } from '../constants/rooms';
 import Header from '../components/Header';
 import DeviceTile from '../components/DeviceTile';
+import DeviceControlModal from '../components/DeviceControlModal';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
-import { getApiClient, HomeApi } from '../services/api';
+import { getApiClient, HomeApi, HubApi, PublicAirguardApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -72,7 +73,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const heroScale = useRef(new Animated.Value(0.95)).current;
   const { user, token } = useAuth();
   const demo = useDemo();
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
   const homeId = user?.homeId;
   const [room, setRoom] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
@@ -84,8 +85,13 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const { controlDevice, toggleDevice, setValue } = useDeviceControl();
   const { showToast } = useToast();
 
+  const [selectedDevice, setSelectedDevice] = useState<any | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   const client = getApiClient(async () => token);
   const homeApi = HomeApi(client);
+  const hubApi = HubApi(client);
+  const airguardApi = PublicAirguardApi(client);
 
   // Hero animation on mount
   useEffect(() => {
@@ -137,18 +143,100 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
     try {
       setLoading(true);
-      const [roomRes, devicesRes] = await Promise.all([
-        homeApi.getRoom(homeId, roomId).catch(() => ({ data: roomsData[roomId] })),
-        homeApi.getRooms(homeId).then(roomsRes => {
-          const roomsPayload = (roomsRes as any)?.data?.data?.rooms ?? (roomsRes as any)?.data?.rooms ?? (roomsRes as any)?.data ?? [];
-          const foundRoom = (roomsPayload || []).find((r: any) => r.id === roomId);
-          return { data: foundRoom?.devices || [] };
-        }).catch(() => ({ data: [] })),
+
+      const [roomsRes, devicesRes] = await Promise.all([
+        homeApi.getRooms(homeId).catch(() => ({ data: [] })),
+        hubApi.listDevices(homeId).catch(() => ({ data: [] })),
       ]);
-      setRoom(roomRes.data || roomsData[roomId]);
-      const nextDevices = devicesRes.data || [];
-      setDevices(nextDevices);
-      const thermostat = nextDevices.find(
+
+      const roomsPayload =
+        (roomsRes as any)?.data?.data?.rooms ?? (roomsRes as any)?.data?.rooms ?? (roomsRes as any)?.data ?? [];
+      const roomsList = Array.isArray(roomsPayload) ? roomsPayload : [];
+      const baseRoom = roomsList.find((r: any) => String(r.id) === String(roomId)) || roomsData[roomId];
+
+      const devicesPayload =
+        (devicesRes as any)?.data?.data?.devices ?? (devicesRes as any)?.data?.devices ?? (devicesRes as any)?.data ?? [];
+      const devicesList = Array.isArray(devicesPayload) ? devicesPayload : [];
+
+      const mapDevice = (raw: any) => {
+        const signalMappings = raw?.signalMappings ?? raw?.signal_mappings;
+        return {
+          id: String(raw.id),
+          name: raw.name,
+          type: raw.type,
+          category: raw.category,
+          isActive: raw.isActive ?? raw.is_active ?? false,
+          value: raw.value ?? undefined,
+          unit: raw.unit ?? undefined,
+          roomId: raw.roomId ?? raw.room_id,
+          hubId: raw.hubId ?? raw.hub_id,
+          signalMappings: signalMappings && typeof signalMappings === 'object' ? signalMappings : undefined,
+          airQualityData: raw.airQualityData,
+          alarmMuted: raw.alarmMuted,
+        };
+      };
+
+      const baseDevices = devicesList
+        .map(mapDevice)
+        .filter((d: any) => String(d.roomId) === String(roomId));
+
+      const toNum = (v: any): number | undefined => {
+        if (typeof v === 'number' && Number.isFinite(v)) return v;
+        if (typeof v === 'string') {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : undefined;
+        }
+        return undefined;
+      };
+
+      const enrichedDevices = await Promise.all(
+        baseDevices.map(async (d: any) => {
+          if (d.type !== 'airguard') return d;
+          const smartMonitorId =
+            (d.signalMappings as any)?.smartMonitorId ??
+            (d.signalMappings as any)?.smartmonitorId ??
+            1;
+          try {
+            const latestRes = await airguardApi.getLatest(smartMonitorId);
+            const latest =
+              (latestRes as any)?.data?.data?.data ??
+              (latestRes as any)?.data?.data ??
+              (latestRes as any)?.data;
+            if (!latest) return d;
+
+            const temperature = toNum(latest.temperature);
+            const humidity = toNum(latest.humidity);
+            const aqi = toNum(latest.aqi);
+            const pm25 = toNum(latest.pm25 ?? latest.dust);
+            const mq2 = toNum(latest.mq2);
+
+            return {
+              ...d,
+              airQualityData:
+                typeof temperature === 'number' && typeof humidity === 'number' && typeof aqi === 'number'
+                  ? { temperature, humidity, aqi, pm25, mq2 }
+                  : d.airQualityData,
+              alarmMuted: !latest.buzzerEnabled,
+            };
+          } catch {
+            return d;
+          }
+        }),
+      );
+
+      const airguard = enrichedDevices.find((d: any) => d.type === 'airguard' && d.airQualityData);
+      const nextRoom = {
+        ...baseRoom,
+        temperature: airguard?.airQualityData?.temperature ?? baseRoom?.temperature,
+        humidity: airguard?.airQualityData?.humidity ?? baseRoom?.humidity,
+        airQuality: airguard?.airQualityData?.aqi ?? baseRoom?.airQuality,
+        pm25: airguard?.airQualityData?.pm25 ?? baseRoom?.pm25,
+        mq2: airguard?.airQualityData?.mq2 ?? baseRoom?.mq2,
+      };
+
+      setRoom(nextRoom);
+      setDevices(enrichedDevices);
+      const thermostat = enrichedDevices.find(
         (device: any) => device.type === 'thermostat' || device.type === 'ac'
       );
       if (thermostat) {
@@ -188,6 +276,11 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
   const handleDeviceToggle = async (device: any, options?: { skipReload?: boolean }) => {
     try {
+      if (device?.type === 'airguard') {
+        setSelectedDevice(device);
+        setModalVisible(true);
+        return;
+      }
       if (isDemoMode) {
         // Use demo context for device control
         demo.toggleDevice(device.id);
@@ -205,6 +298,29 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     } catch (e) {
       showToast('Unable to toggle the selected device.', { type: 'error' });
     }
+  };
+
+  const handleMuteToggle = (deviceId: string, muted: boolean) => {
+    if (isDemoMode) {
+      demo.setDeviceMuted(deviceId, muted);
+      setDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, alarmMuted: muted } : d)));
+      return;
+    }
+
+    const device = devices.find((d) => d.id === deviceId) || selectedDevice;
+    if (!device || device.type !== 'airguard') return;
+
+    const smartMonitorId = (device.signalMappings as any)?.smartMonitorId ?? 1;
+    airguardApi
+      .setBuzzer(smartMonitorId, muted ? 'OFF' : 'ON')
+      .then(() => {
+        setDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, alarmMuted: muted } : d)));
+        setSelectedDevice((prev: any) => (prev && prev.id === deviceId ? { ...prev, alarmMuted: muted } : prev));
+        loadRoomData();
+      })
+      .catch((e) => {
+        console.error('Failed to set Airguard buzzer state:', e);
+      });
   };
 
   const toggleDevicesByType = async (types: string[], actionKey: string) => {
@@ -653,6 +769,33 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         {/* Bottom spacing */}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {selectedDevice && (
+        <DeviceControlModal
+          visible={modalVisible}
+          device={selectedDevice}
+          onClose={() => {
+            setModalVisible(false);
+            setSelectedDevice(null);
+          }}
+          onToggle={(deviceId) => {
+            const d = devices.find((x) => x.id === deviceId) || selectedDevice;
+            if (!d || d.type === 'airguard') return;
+            handleDeviceToggle(d);
+          }}
+          onSetValue={(deviceId, value) => {
+            const d = devices.find((x) => x.id === deviceId) || selectedDevice;
+            if (!d) return;
+            if (isDemoMode) {
+              demo.setDeviceValue(deviceId, value);
+              return;
+            }
+            setValue(deviceId, value, d.unit);
+            loadRoomData();
+          }}
+          onToggleMute={handleMuteToggle}
+        />
+      )}
     </SafeAreaView>
   );
 }

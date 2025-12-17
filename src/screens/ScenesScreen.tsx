@@ -192,7 +192,7 @@ export default function ScenesScreen() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { scenes: demoScenes, activateScene: demoActivateScene } = useDemo();
   const homeId = user?.homeId;
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [loading, setLoading] = useState(true);
   const [automations, setAutomations] = useState<AutomationPreview[]>([]);

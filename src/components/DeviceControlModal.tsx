@@ -49,6 +49,7 @@ interface DeviceControlModalProps {
   onSetValue: (deviceId: string, value: number) => void;
   onSetMode?: (deviceId: string, mode: string) => void;
   onToggleMute?: (deviceId: string, muted: boolean) => void;
+  onDelete?: (deviceId: string) => void;
 }
 
 const iconMap: Record<string, any> = {
@@ -74,6 +75,7 @@ export default function DeviceControlModal({
   onSetValue,
   onSetMode,
   onToggleMute,
+  onDelete,
 }: DeviceControlModalProps) {
   const { colors, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
@@ -237,6 +239,21 @@ export default function DeviceControlModal({
                     </Text>
                   </LinearGradient>
                 </TouchableOpacity>
+
+                {onDelete && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => onDelete(device.id)}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={['#FF6B6B', '#FF8E53']}
+                      style={styles.deleteButtonGradient}
+                    >
+                      <Text style={styles.deleteButtonText}>Remove Device</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
@@ -804,6 +821,21 @@ const createStyles = (colors: any, shadows: any) =>
       color: colors.mutedForeground,
     },
     muteLabelActive: {
+      color: '#fff',
+    },
+
+    deleteButton: {
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    deleteButtonGradient: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
+    },
+    deleteButtonText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
       color: '#fff',
     },
   });

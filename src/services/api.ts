@@ -64,6 +64,7 @@ export const HubApi = (client: AxiosInstance) => ({
   learnSignal: (hubId: string, deviceId: string, action: string) => client.post(`/hubs/${hubId}/devices/${deviceId}/learn`, { action }),
   controlDevice: (homeId: string, deviceId: string, payload: any) => client.put(`/homes/${homeId}/devices/${deviceId}/control`, payload),
   getDevice: (homeId: string, deviceId: string) => client.get(`/homes/${homeId}/devices/${deviceId}`),
+  deleteDevice: (homeId: string, deviceId: string) => client.delete(`/homes/${homeId}/devices/${deviceId}`),
   // Hub setup
   connectWifi: (hubId: string, ssid: string, password: string) => client.post(`/hubs/${hubId}/wifi`, { ssid, password }),
   assignRooms: (hubId: string, roomIds: string[]) => client.post(`/hubs/${hubId}/rooms`, { roomIds }),

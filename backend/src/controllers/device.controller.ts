@@ -7,6 +7,7 @@ import {
   getDeviceById,
   updateDevice,
   getDeviceWithHub,
+  deleteDevice,
 } from '../repositories/devicesRepository';
 import { ensureHomeAccess } from './helpers/homeAccess';
 import { createHub, getHubById } from '../repositories/hubsRepository';
@@ -274,5 +275,27 @@ export async function getDeviceHistory(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Get device history error:', error);
     return errorResponse(res, error.message || 'Failed to get device history', 500);
+  }
+}
+
+export async function removeDevice(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, deviceId } = req.params;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
+      return errorResponse(res, 'Device not found', 404);
+    }
+
+    await deleteDevice(deviceId);
+    return successResponse(res, { message: 'Device deleted' });
+  } catch (error: any) {
+    console.error('Delete device error:', error);
+    return errorResponse(res, error.message || 'Failed to delete device', 500);
   }
 }

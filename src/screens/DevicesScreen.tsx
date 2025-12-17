@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   ImageBackground,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
@@ -38,7 +39,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useHomeData } from '../hooks/useHomeData';
 import { useHubs } from '../hooks/useHubs';
 import { useDeviceControl } from '../hooks/useDeviceControl';
-import { getApiClient, PublicAirguardApi } from '../services/api';
+import { getApiClient, HubApi, PublicAirguardApi } from '../services/api';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTheme } from '../context/ThemeContext';
 import { useDemo } from '@/context/DemoContext';
@@ -101,7 +102,7 @@ export default function DevicesScreen() {
 
   // Filter devices by category
   const lightsDevices = devices.filter(d => d.type === 'light');
-  const climateDevices = devices.filter(d => d.type === 'thermostat' || d.type === 'ac');
+  const climateDevices = devices.filter(d => d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard');
   const windowDevices = devices.filter(d => d.type === 'blind' || d.type === 'shutter');
   const utilityDevices = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
   const securityDevices = devices.filter(d => d.type === 'camera' || d.type === 'lock');
@@ -187,6 +188,7 @@ export default function DevicesScreen() {
       lock: 'lock',
       blind: 'shutter',
       shutter: 'shutter',
+      airguard: 'airguard',
     };
     return iconMap[type] || 'lightbulb';
   };
@@ -524,6 +526,32 @@ export default function DevicesScreen() {
           onToggle={handleModalToggle}
           onSetValue={handleModalSetValue}
           onToggleMute={handleMuteToggle}
+          onDelete={(deviceId) => {
+            if (isDemoMode) {
+              setModalVisible(false);
+              setSelectedDevice(null);
+              return;
+            }
+            if (!homeId) return;
+            Alert.alert('Remove Device', 'Are you sure you want to remove this device?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    const api = HubApi(getApiClient(async () => token));
+                    await api.deleteDevice(homeId, deviceId);
+                    setModalVisible(false);
+                    setSelectedDevice(null);
+                    refresh();
+                  } catch (e) {
+                    console.error('Failed to delete device:', e);
+                  }
+                },
+              },
+            ]);
+          }}
         />
       )}
     </View>

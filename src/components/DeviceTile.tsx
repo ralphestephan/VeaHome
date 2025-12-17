@@ -42,6 +42,7 @@ const iconMap: Record<string, LucideIcon> = {
   'shutter': Blinds,
   'blind': Blinds,
   'sensor': Wifi,
+  'airguard': Wind,
 };
 
 interface DeviceTileProps {

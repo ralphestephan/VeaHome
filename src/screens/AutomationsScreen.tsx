@@ -12,7 +12,7 @@ import { getApiClient, AutomationsApi } from '../services/api';
 export default function AutomationsScreen() {
   const { token, currentHomeId, user } = useAuth();
   const { colors, gradients, shadows } = useTheme();
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [automations, setAutomations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

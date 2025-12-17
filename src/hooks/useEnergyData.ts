@@ -11,7 +11,7 @@ export const useEnergyData = (homeId: string | null | undefined, range: 'day' | 
   const [energyData, setEnergyData] = useState<EnergyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
 
   const client = getApiClient(async () => token);
   const homeApi = HomeApi(client);

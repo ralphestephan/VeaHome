@@ -93,7 +93,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
 
   const client = useMemo(() => getApiClient(async () => token), [token]);
   const homeApi = useMemo(() => HomeApi(client), [client]);
@@ -134,24 +134,34 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const latest = await fetchLatest(smartMonitorId);
           if (!latest) return d;
 
+          const toNum = (v: any): number | undefined => {
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            if (typeof v === 'string') {
+              const n = Number(v);
+              return Number.isFinite(n) ? n : undefined;
+            }
+            return undefined;
+          };
+
+          const temperature = toNum(latest.temperature);
+          const humidity = toNum(latest.humidity);
+          const aqi = toNum(latest.aqi);
+          const pm25 = toNum(latest.pm25 ?? latest.dust);
+          const mq2 = toNum(latest.mq2);
+
           const buzzerEnabled = !!latest.buzzerEnabled;
           return {
             ...d,
             airQualityData:
-              typeof latest.temperature === 'number' &&
-              typeof latest.humidity === 'number' &&
-              typeof latest.aqi === 'number'
+              typeof temperature === 'number' &&
+              typeof humidity === 'number' &&
+              typeof aqi === 'number'
                 ? {
-                    temperature: latest.temperature,
-                    humidity: latest.humidity,
-                    aqi: latest.aqi,
-                    pm25:
-                      typeof latest.pm25 === 'number'
-                        ? latest.pm25
-                        : typeof latest.dust === 'number'
-                          ? latest.dust
-                          : undefined,
-                    mq2: typeof latest.mq2 === 'number' ? latest.mq2 : undefined,
+                    temperature,
+                    humidity,
+                    aqi,
+                    pm25,
+                    mq2,
                   }
                 : d.airQualityData,
             alarmMuted: !buzzerEnabled,

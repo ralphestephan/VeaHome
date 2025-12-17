@@ -81,7 +81,7 @@ export default function DeviceOnboardingWizard() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { token, user } = useAuth();
   const demo = useDemo();
-  const isDemoMode = !token || token === 'DEMO_TOKEN';
+  const isDemoMode = token === 'DEMO_TOKEN';
   const { hubId } = route.params || { hubId: '' };
   
   const [step, setStep] = useState<Step>('type');
@@ -92,6 +92,9 @@ export default function DeviceOnboardingWizard() {
   const [deviceName, setDeviceName] = useState('');
   const [deviceCategory, setDeviceCategory] = useState<DeviceCategory>('IR');
   const [selectedRoom, setSelectedRoom] = useState<string>('');
+
+  // Airguard config
+  const [airguardSmartMonitorId, setAirguardSmartMonitorId] = useState('1');
   
   // Signal learning
   const [deviceId, setDeviceId] = useState<string>('');
@@ -146,6 +149,9 @@ export default function DeviceOnboardingWizard() {
 
   const handleSelectType = (type: DeviceType) => {
     setDeviceType(type);
+    if (type === 'airguard') {
+      setDeviceCategory('Sensor');
+    }
     setStep('config');
   };
 
@@ -168,6 +174,12 @@ export default function DeviceOnboardingWizard() {
     const isAirguard = deviceType === 'airguard';
     if (!isDemoMode && !isAirguard && (!normalizedHubId || normalizedHubId.length === 0)) {
       Alert.alert('Missing Hub', 'Please pair a hub first, then add the device from that hub setup flow.');
+      return;
+    }
+
+    const smartMonitorId = Number(String(airguardSmartMonitorId || '').trim());
+    if (isAirguard && (!Number.isFinite(smartMonitorId) || smartMonitorId <= 0)) {
+      Alert.alert('Error', 'Please enter a valid SmartMonitor ID (e.g., 1).');
       return;
     }
     
@@ -194,21 +206,48 @@ export default function DeviceOnboardingWizard() {
         return;
       }
 
+      if (isAirguard) {
+        try {
+          const existingRes = await hubApi.listDevices(homeId);
+          const existingList =
+            (existingRes as any)?.data?.data?.devices ?? (existingRes as any)?.data?.devices ?? [];
+          const existingDevices = Array.isArray(existingList) ? existingList : [];
+          const dup = existingDevices.find((d: any) => {
+            if (d?.type !== 'airguard') return false;
+            const sm =
+              (d?.signalMappings as any)?.smartMonitorId ??
+              (d?.signal_mappings as any)?.smartMonitorId ??
+              (d?.signal_mappings as any)?.smartmonitorId;
+            return Number(sm) === smartMonitorId;
+          });
+          if (dup) {
+            Alert.alert('Already Added', `An Airguard with SmartMonitor ID ${smartMonitorId} already exists.`);
+            return;
+          }
+        } catch {
+          // ignore preflight errors; backend will still accept the request
+        }
+      }
+
       const response = await hubApi.addDevice(homeId, {
         name: deviceName,
         type: deviceType,
         category: deviceType === 'airguard' ? 'Sensor' : deviceCategory,
         roomId: selectedRoom,
         hubId: normalizedHubId || undefined,
-        signalMappings: deviceType === 'airguard' ? { smartMonitorId: 1 } : undefined,
+        signalMappings: deviceType === 'airguard' ? { smartMonitorId } : undefined,
       });
 
       const created = response.data?.data?.device ?? response.data?.device ?? response.data;
       const newDeviceId = created?.id || created?.deviceId;
       setDeviceId(newDeviceId);
       
+      // Airguard is standalone; skip learning/wifi steps.
+      if (deviceType === 'airguard') {
+        setStep('ready');
+      }
       // If IR/RF device, go to learning step
-      if (deviceCategory === 'IR' || deviceCategory === 'RF') {
+      else if (deviceCategory === 'IR' || deviceCategory === 'RF') {
         setStep('learning');
       } else if (deviceCategory === 'WiFi') {
         setStep('wifi');
@@ -305,28 +344,50 @@ export default function DeviceOnboardingWizard() {
       
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Category</Text>
-        <View style={styles.categoryGrid}>
-          {['IR', 'RF', 'Relay', 'Sensor', 'Zigbee', 'Matter', 'WiFi'].map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[
-                styles.categoryButton,
-                deviceCategory === cat && styles.categoryButtonSelected,
-              ]}
-              onPress={() => setDeviceCategory(cat as DeviceCategory)}
-            >
-              <Text
+        {deviceType === 'airguard' ? (
+          <View style={styles.categoryGrid}>
+            <View style={[styles.categoryButton, styles.categoryButtonSelected]}>
+              <Text style={[styles.categoryButtonText, styles.categoryButtonTextSelected]}>Sensor</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.categoryGrid}>
+            {['IR', 'RF', 'Relay', 'Sensor', 'Zigbee', 'Matter', 'WiFi'].map((cat) => (
+              <TouchableOpacity
+                key={cat}
                 style={[
-                  styles.categoryButtonText,
-                  deviceCategory === cat && styles.categoryButtonTextSelected,
+                  styles.categoryButton,
+                  deviceCategory === cat && styles.categoryButtonSelected,
                 ]}
+                onPress={() => setDeviceCategory(cat as DeviceCategory)}
               >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Text
+                  style={[
+                    styles.categoryButtonText,
+                    deviceCategory === cat && styles.categoryButtonTextSelected,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
+
+      {deviceType === 'airguard' && (
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>SmartMonitor ID</Text>
+          <TextInput
+            style={styles.input}
+            value={airguardSmartMonitorId}
+            onChangeText={setAirguardSmartMonitorId}
+            keyboardType="number-pad"
+            placeholder="e.g., 1"
+            placeholderTextColor={colors.mutedForeground}
+          />
+        </View>
+      )}
       
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Room</Text>
