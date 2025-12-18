@@ -1,0 +1,408 @@
+[
+    {
+        "id": "8183e42b5aceb605",
+        "type": "tab",
+        "label": "SmartMonitor (ID 1) FINAL → Influx v1 + Command Log",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "2d1641f3324e2ab7",
+        "type": "mqtt in",
+        "z": "8183e42b5aceb605",
+        "name": "Telemetry IN",
+        "topic": "vealive/smartmonitor/1/telemetry",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "a8d6b7b0f1a2a001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 120,
+        "wires": [
+            [
+                "395a878f82bc3c9b"
+            ]
+        ]
+    },
+    {
+        "id": "395a878f82bc3c9b",
+        "type": "json",
+        "z": "8183e42b5aceb605",
+        "name": "Parse telemetry JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 360,
+        "y": 120,
+        "wires": [
+            [
+                "329a416c1be26294"
+            ]
+        ]
+    },
+    {
+        "id": "329a416c1be26294",
+        "type": "function",
+        "z": "8183e42b5aceb605",
+        "name": "Map → Influx fields/tags",
+        "func": "const p = msg.payload || {};\n\n// ESP32 publishes: id,temp,hum,dust,mq2,alert,alertFlags,buzzer,rssi,uptime\nconst deviceId = String(p.id ?? 1);\n\nmsg.tags = { deviceId };\nmsg.payload = {\n  temp: Number(p.temp),\n  hum: Number(p.hum),\n  dust: Number(p.dust),\n  mq2: Number(p.mq2),\n  alert: p.alert ? 1 : 0,\n  alertFlags: Number(p.alertFlags ?? 0),\n  buzzer: p.buzzer ? 1 : 0,\n  rssi: Number(p.rssi ?? 0),\n  uptime: Number(p.uptime ?? 0)\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 600,
+        "y": 120,
+        "wires": [
+            [
+                "748381b3e61cdb8e"
+            ]
+        ]
+    },
+    {
+        "id": "748381b3e61cdb8e",
+        "type": "influxdb out",
+        "z": "8183e42b5aceb605",
+        "influxdb": "e0e1e2e3e4e5a001",
+        "name": "Write telemetry → smartmonitor_telemetry",
+        "measurement": "smartmonitor_telemetry",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "vealive",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "",
+        "bucket": "",
+        "x": 900,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "3598b7ab8400069c",
+        "type": "mqtt in",
+        "z": "8183e42b5aceb605",
+        "name": "Status IN (LWT retained)",
+        "topic": "vealive/smartmonitor/1/status",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "a8d6b7b0f1a2a001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 220,
+        "wires": [
+            [
+                "eca49085143e2bc4"
+            ]
+        ]
+    },
+    {
+        "id": "eca49085143e2bc4",
+        "type": "function",
+        "z": "8183e42b5aceb605",
+        "name": "Map status → online(1/0)",
+        "func": "const s = String(msg.payload || '').trim().toLowerCase();\nconst online = (s === 'online') ? 1 : 0;\n\nmsg.tags = { deviceId: '1' };\nmsg.payload = { online };\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 220,
+        "wires": [
+            [
+                "97ee5206e44ac8dc"
+            ]
+        ]
+    },
+    {
+        "id": "97ee5206e44ac8dc",
+        "type": "influxdb out",
+        "z": "8183e42b5aceb605",
+        "influxdb": "e0e1e2e3e4e5a001",
+        "name": "Write status → smartmonitor_status",
+        "measurement": "smartmonitor_status",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "vealive",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "",
+        "bucket": "",
+        "x": 710,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "0ecd85285e8d0164",
+        "type": "mqtt in",
+        "z": "8183e42b5aceb605",
+        "name": "Buzzer Command IN",
+        "topic": "vealive/smartmonitor/1/command/buzzer",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "a8d6b7b0f1a2a001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 340,
+        "wires": [
+            [
+                "84f4ecc22619b2a3"
+            ]
+        ]
+    },
+    {
+        "id": "84f4ecc22619b2a3",
+        "type": "json",
+        "z": "8183e42b5aceb605",
+        "name": "Parse command JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 380,
+        "y": 340,
+        "wires": [
+            [
+                "39f5b51e6be931ec"
+            ]
+        ]
+    },
+    {
+        "id": "39f5b51e6be931ec",
+        "type": "function",
+        "z": "8183e42b5aceb605",
+        "name": "Map command → Influx log",
+        "func": "const state = String(msg.payload?.state || '').trim().toUpperCase();\n\nmsg.tags = { deviceId: '1' };\nmsg.payload = {\n  state: state === 'ON' ? 1 : 0\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 340,
+        "wires": [
+            [
+                "f82be90988f32a36"
+            ]
+        ]
+    },
+    {
+        "id": "f82be90988f32a36",
+        "type": "influxdb out",
+        "z": "8183e42b5aceb605",
+        "influxdb": "e0e1e2e3e4e5a001",
+        "name": "Write → smartmonitor_buzzer_command",
+        "measurement": "smartmonitor_buzzer_command",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "vealive",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "",
+        "bucket": "",
+        "x": 890,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "ea459a2fe5f36bb1",
+        "type": "mqtt in",
+        "z": "8183e42b5aceb605",
+        "name": "Thresholds IN (from device)",
+        "topic": "vealive/smartmonitor/1/thresholds",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "a8d6b7b0f1a2a001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 440,
+        "wires": [
+            [
+                "bb1e35f4e3f3da74"
+            ]
+        ]
+    },
+    {
+        "id": "bb1e35f4e3f3da74",
+        "type": "json",
+        "z": "8183e42b5aceb605",
+        "name": "Parse thresholds JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 400,
+        "y": 440,
+        "wires": [
+            [
+                "6bae0c14ebe96afc"
+            ]
+        ]
+    },
+    {
+        "id": "6bae0c14ebe96afc",
+        "type": "function",
+        "z": "8183e42b5aceb605",
+        "name": "Map thresholds → Influx",
+        "func": "const p = msg.payload || {};\n\n// Support both old field names and new min/max field names\nmsg.tags = { deviceId: '1' };\nmsg.payload = {\n  tempMin: Number(p.tempMin ?? 18),\n  tempMax: Number(p.tempMax ?? p.tempHigh ?? 30),\n  humMin: Number(p.humMin ?? 30),\n  humMax: Number(p.humMax ?? p.humidityHigh ?? 70),\n  dustHigh: Number(p.dustHigh ?? p.dust ?? 400),\n  mq2High: Number(p.mq2High ?? p.mq2 ?? 60)\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 440,
+        "wires": [
+            [
+                "dc9345c30404f336"
+            ]
+        ]
+    },
+    {
+        "id": "dc9345c30404f336",
+        "type": "influxdb out",
+        "z": "8183e42b5aceb605",
+        "influxdb": "e0e1e2e3e4e5a001",
+        "name": "Write → smartmonitor_thresholds",
+        "measurement": "smartmonitor_thresholds",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "vealive",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "",
+        "bucket": "",
+        "x": 870,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "f15877cd5131e775",
+        "type": "mqtt in",
+        "z": "8183e42b5aceb605",
+        "name": "Thresholds Command IN (from app)",
+        "topic": "vealive/smartmonitor/1/command/thresholds",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "a8d6b7b0f1a2a001",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 520,
+        "wires": [
+            [
+                "8bfadb7e9c571062"
+            ]
+        ]
+    },
+    {
+        "id": "8bfadb7e9c571062",
+        "type": "json",
+        "z": "8183e42b5aceb605",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 430,
+        "y": 520,
+        "wires": [
+            [
+                "9d0b3f800d67853b"
+            ]
+        ]
+    },
+    {
+        "id": "9d0b3f800d67853b",
+        "type": "function",
+        "z": "8183e42b5aceb605",
+        "name": "Map threshold command → Influx log",
+        "func": "const p = msg.payload || {};\n\n// Support both old field names and new min/max field names\nmsg.tags = { deviceId: '1', source: 'app' };\nmsg.payload = {\n  tempMin: Number(p.tempMin ?? 18),\n  tempMax: Number(p.tempMax ?? p.tempHigh ?? 30),\n  humMin: Number(p.humMin ?? 30),\n  humMax: Number(p.humMax ?? p.humidityHigh ?? 70),\n  dustHigh: Number(p.dustHigh ?? p.dust ?? 400),\n  mq2High: Number(p.mq2High ?? p.mq2 ?? 60)\n};\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 670,
+        "y": 520,
+        "wires": [
+            [
+                "05705e2cd07ce998"
+            ]
+        ]
+    },
+    {
+        "id": "05705e2cd07ce998",
+        "type": "influxdb out",
+        "z": "8183e42b5aceb605",
+        "influxdb": "e0e1e2e3e4e5a001",
+        "name": "Write → smartmonitor_threshold_commands",
+        "measurement": "smartmonitor_threshold_commands",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "vealive",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "",
+        "bucket": "",
+        "x": 970,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "a8d6b7b0f1a2a001",
+        "type": "mqtt-broker",
+        "name": "Vealive MQTT",
+        "broker": "63.34.243.171",
+        "port": "1883",
+        "clientid": "nodered-smartmonitor-bridge",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    },
+    {
+        "id": "e0e1e2e3e4e5a001",
+        "type": "influxdb",
+        "hostname": "localhost",
+        "port": "8086",
+        "protocol": "http",
+        "database": "vealive",
+        "name": "InfluxDB v1 (vealive@localhost)",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "1.x",
+        "url": "http://localhost:8086",
+        "rejectUnauthorized": true
+    },
+    {
+        "id": "0a4da79c73ab8199",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-influxdb": "0.7.0"
+        }
+    }
+]

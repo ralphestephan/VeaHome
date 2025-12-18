@@ -63,6 +63,7 @@ import EnergyCard from '../components/EnergyCard';
 import QuickAction from '../components/QuickAction';
 import DeviceTile from '../components/DeviceTile';
 import DeviceControlModal from '../components/DeviceControlModal';
+import RoomPopupCard from '../components/RoomPopupCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIEW_MODE_ORDER = ['2d', '3d'] as const;
@@ -90,6 +91,7 @@ export default function DashboardScreen() {
   
   const { energyData } = useEnergyData(homeId, 'day');
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
+  const [showRoomPopup, setShowRoomPopup] = useState(false);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [home, setHome] = useState<Home | null>(null);
   const [isFloorPlanEditing, setIsFloorPlanEditing] = useState(false);
@@ -183,7 +185,16 @@ export default function DashboardScreen() {
   const handleRoomSelect = (roomId: string) => {
     userSelectedRoomRef.current = roomId;
     setSelectedRoom(roomId);
-    requestAnimationFrame(scrollToRoomPreview);
+    setShowRoomPopup(true); // Show popup overlay instead of scrolling
+  };
+
+  const handleRoomPopupClose = () => {
+    setShowRoomPopup(false);
+  };
+
+  const handleRoomViewDetails = (roomId: string) => {
+    setShowRoomPopup(false);
+    navigation.navigate('RoomDetail', { roomId });
   };
 
   const handleEditRoomsPress = () => {
@@ -759,6 +770,14 @@ export default function DashboardScreen() {
           onToggleMute={handleMuteToggle}
         />
       )}
+
+      {/* Room Popup Card - shows when clicking on a room in floor plan */}
+      <RoomPopupCard
+        room={selectedRoomData || null}
+        visible={showRoomPopup}
+        onClose={handleRoomPopupClose}
+        onViewDetails={handleRoomViewDetails}
+      />
     </View>
   );
 }

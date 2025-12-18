@@ -1,0 +1,460 @@
+[
+    {
+        "id": "842c6d22ccf8aa51",
+        "type": "tab",
+        "label": "Vealive360 • Dashboard 1 (SM1)",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "1058a8f72b10fad0",
+        "type": "mqtt in",
+        "z": "842c6d22ccf8aa51",
+        "name": "Telemetry IN",
+        "topic": "vealive/smartmonitor/1/telemetry",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "mqttBrokerSM1_v360",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 120,
+        "wires": [
+            [
+                "9d3a4346a043372b",
+                "e19451015e8c9136"
+            ]
+        ]
+    },
+    {
+        "id": "9d3a4346a043372b",
+        "type": "json",
+        "z": "842c6d22ccf8aa51",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 320,
+        "y": 120,
+        "wires": [
+            [
+                "ee31428aef508598"
+            ]
+        ]
+    },
+    {
+        "id": "ee31428aef508598",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Update state from telemetry",
+        "func": "const p = msg.payload || {};\nconst s = flow.get('sm1') || {};\n\ns.telemetryOnline = true;\ns.lastSeenMs = Date.now();\n\ns.alert = !!p.alert;\ns.alertFlags = Number(p.alertFlags ?? 0);\ns.buzzer = !!p.buzzer;\n\ns.rssi = (p.rssi !== undefined) ? `${p.rssi} dBm` : '--';\n\nconst up = Number(p.uptime ?? 0);\nconst hh = String(Math.floor(up/3600)).padStart(2,'0');\nconst mm = String(Math.floor((up%3600)/60)).padStart(2,'0');\nconst ss = String(Math.floor(up%60)).padStart(2,'0');\ns.uptime = `${hh}:${mm}:${ss}`;\n\ns.temp = Number(p.temp ?? 0);\ns.hum  = Number(p.hum  ?? 0);\ns.dust = Number(p.dust ?? 0);\ns.mq2  = Number(p.mq2  ?? 0);\n\n// Decode alertFlags bitfield\n// bit0=temp, bit1=humidity, bit2=dust, bit3=mq2\nconst flags = s.alertFlags;\nconst alertReasons = [];\nif (flags & 1) alertReasons.push('Temp');\nif (flags & 2) alertReasons.push('Humidity');\nif (flags & 4) alertReasons.push('Dust');\nif (flags & 8) alertReasons.push('Gas');\ns.alertReasons = alertReasons.length ? alertReasons.join(', ') : 'None';\n\nif (!s.lastCommand) s.lastCommand = '--';\nif (!s.mqttLwt) s.mqttLwt = '--';\nif (!s.thresholds) s.thresholds = { tempMin: 18, tempMax: 30, humMin: 30, humMax: 70, dustHigh: 400, mq2High: 60 };\n\nflow.set('sm1', s);\n\n// UI state\nconst ui = { payload: { ...s } };\n\n// Gauges\nconst t1 = { payload: s.temp };\nconst t2 = { payload: s.hum };\nconst t3 = { payload: s.dust };\nconst t4 = { payload: s.mq2 };\n\nreturn [ui, t1, t2, t3, t4];",
+        "outputs": 5,
+        "x": 560,
+        "y": 120,
+        "wires": [
+            [
+                "3f283f1076d99985"
+            ],
+            [
+                "4da3fb437ea8c3f1"
+            ],
+            [
+                "668f70249c0ad48c"
+            ],
+            [
+                "6b5dd7e231980ca0"
+            ],
+            [
+                "4bbc808eef98803c"
+            ]
+        ]
+    },
+    {
+        "id": "e19451015e8c9136",
+        "type": "trigger",
+        "z": "842c6d22ccf8aa51",
+        "name": "Telemetry watchdog (10s)",
+        "op1": "ONLINE",
+        "op2": "OFFLINE",
+        "op1type": "str",
+        "op2type": "str",
+        "duration": "10",
+        "extend": true,
+        "units": "s",
+        "reset": "",
+        "bytopic": "all",
+        "topic": "topic",
+        "outputs": 1,
+        "x": 310,
+        "y": 180,
+        "wires": [
+            [
+                "67070cf6c57fd158"
+            ]
+        ]
+    },
+    {
+        "id": "67070cf6c57fd158",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Update state from watchdog",
+        "func": "const s = flow.get('sm1') || {};\nconst v = (msg.payload || '').toString().trim().toUpperCase();\n\ns.telemetryOnline = (v === 'ONLINE');\nif (!s.lastSeenMs) s.lastSeenMs = Date.now();\n\nflow.set('sm1', s);\nmsg.payload = { ...s };\nreturn msg;",
+        "outputs": 1,
+        "x": 590,
+        "y": 180,
+        "wires": [
+            [
+                "3f283f1076d99985"
+            ]
+        ]
+    },
+    {
+        "id": "e697e740878b5ce5",
+        "type": "mqtt in",
+        "z": "842c6d22ccf8aa51",
+        "name": "MQTT LWT IN",
+        "topic": "vealive/smartmonitor/1/status",
+        "qos": "0",
+        "datatype": "utf8",
+        "broker": "mqttBrokerSM1_v360",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 240,
+        "wires": [
+            [
+                "752b97efa44a63e1"
+            ]
+        ]
+    },
+    {
+        "id": "752b97efa44a63e1",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Update state from LWT",
+        "func": "const s = flow.get('sm1') || {};\nconst v = (msg.payload || '').toString().trim().toUpperCase();\n\ns.mqttLwt = (v === 'ONLINE') ? 'ONLINE' : 'OFFLINE';\nflow.set('sm1', s);\n\nmsg.payload = { ...s };\nreturn msg;",
+        "outputs": 1,
+        "x": 560,
+        "y": 240,
+        "wires": [
+            [
+                "3f283f1076d99985"
+            ]
+        ]
+    },
+    {
+        "id": "3b891805706b5b1b",
+        "type": "mqtt in",
+        "z": "842c6d22ccf8aa51",
+        "name": "Thresholds IN",
+        "topic": "vealive/smartmonitor/1/thresholds",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "mqttBrokerSM1_v360",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 140,
+        "y": 360,
+        "wires": [
+            [
+                "1e717e5ec46303e0"
+            ]
+        ]
+    },
+    {
+        "id": "1e717e5ec46303e0",
+        "type": "json",
+        "z": "842c6d22ccf8aa51",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 320,
+        "y": 360,
+        "wires": [
+            [
+                "6d624ceea0499e5b"
+            ]
+        ]
+    },
+    {
+        "id": "6d624ceea0499e5b",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Update state with thresholds",
+        "func": "const p = msg.payload || {};\nconst s = flow.get('sm1') || {};\n\n// Support both old and new field names\ns.thresholds = {\n  tempMin: Number(p.tempMin ?? 18),\n  tempMax: Number(p.tempMax ?? p.tempHigh ?? 30),\n  humMin: Number(p.humMin ?? 30),\n  humMax: Number(p.humMax ?? p.humidityHigh ?? 70),\n  dustHigh: Number(p.dustHigh ?? p.dust ?? 400),\n  mq2High: Number(p.mq2High ?? p.mq2 ?? 60)\n};\n\nflow.set('sm1', s);\nmsg.payload = { ...s };\nreturn msg;",
+        "outputs": 1,
+        "x": 570,
+        "y": 360,
+        "wires": [
+            [
+                "3f283f1076d99985"
+            ]
+        ]
+    },
+    {
+        "id": "f6b661cc619114c5",
+        "type": "inject",
+        "z": "842c6d22ccf8aa51",
+        "name": "Tick (1s) lastSeen",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 300,
+        "wires": [
+            [
+                "18c5273a9bd4b754"
+            ]
+        ]
+    },
+    {
+        "id": "18c5273a9bd4b754",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Compute LAST SEEN",
+        "func": "const s = flow.get('sm1') || {};\nif (!s.lastSeenMs) return null;\n\nconst age = Math.floor((Date.now() - s.lastSeenMs)/1000);\nlet txt = 'now';\nif (age >= 2 && age < 60) txt = `${age}s ago`;\nif (age >= 60) {\n  const m = Math.floor(age/60);\n  const r = age % 60;\n  txt = `${m}m ${r}s ago`;\n}\n\ns.lastSeen = s.telemetryOnline ? txt : `offline · ${txt}`;\nflow.set('sm1', s);\nmsg.payload = { ...s };\nreturn msg;",
+        "outputs": 1,
+        "x": 560,
+        "y": 300,
+        "wires": [
+            [
+                "3f283f1076d99985"
+            ]
+        ]
+    },
+    {
+        "id": "3f283f1076d99985",
+        "type": "ui_template",
+        "z": "842c6d22ccf8aa51",
+        "group": "uiGroup_overview_v360",
+        "name": "Vealive360 Overview (cards + thresholds)",
+        "order": 1,
+        "width": "12",
+        "height": "12",
+        "format": "<style>\n  body.nr-dashboard-theme{\n    background: radial-gradient(1200px 700px at 15% 10%, rgba(255,255,255,0.12), transparent 55%),\n                radial-gradient(900px 600px at 90% 20%, rgba(255,255,255,0.10), transparent 60%),\n                linear-gradient(135deg, #00c6ff 0%, #7f00ff 100%) !important;\n  }\n  .v360-shell{\n    border-radius: 22px;\n    border: 1px solid rgba(255,255,255,.18);\n    background: rgba(0,0,0,.18);\n    box-shadow: 0 18px 50px rgba(0,0,0,.35);\n    backdrop-filter: blur(10px);\n    padding: 16px;\n  }\n  .v360-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}\n  .v360-brand{display:flex;align-items:center;gap:12px;min-width:0;}\n  .v360-logo{width:44px;height:44px;border-radius:16px;border:1px solid rgba(255,255,255,.22);\n    background: radial-gradient(22px 22px at 30% 25%, rgba(255,255,255,.45), transparent 55%),\n                linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.10));\n    box-shadow: 0 14px 30px rgba(0,0,0,.25);\n    position:relative;overflow:hidden;flex:0 0 auto;\n  }\n  .v360-logo:after{content:\"\";position:absolute;inset:-40%;background:linear-gradient(135deg, rgba(0,198,255,.55), rgba(127,0,255,.55));transform:rotate(25deg);}\n  .v360-title{min-width:0;}\n  .v360-title .h{font-size:18px;font-weight:900;line-height:1;background:linear-gradient(90deg,#c7f0ff,#e6d6ff);\n    -webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\n  .v360-title .p{opacity:.85;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.90)}\n  .v360-pill{padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(0,0,0,.10);font-size:12px;color:rgba(255,255,255,.9)}\n\n  .v360-grid{display:grid;gap:12px;grid-template-columns: repeat(4, minmax(0,1fr));}\n  @media (max-width: 960px){ .v360-grid{grid-template-columns: repeat(2, minmax(0,1fr));} }\n  @media (max-width: 520px){ .v360-grid{grid-template-columns: 1fr;} }\n\n  .kpi{border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.10);padding:12px;min-height:72px;position:relative;}\n  .kpi .t{font-size:12px;opacity:.85;color:rgba(255,255,255,.85);margin-bottom:6px;}\n  .kpi .v{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:900;color:rgba(255,255,255,.95);}\n\n  .dot{width:10px;height:10px;border-radius:50%;}\n  .dot-on{background:#2DFFB3;box-shadow:0 0 0 4px rgba(45,255,179,.12);} \n  .dot-off{background:#ff4d6d;box-shadow:0 0 0 4px rgba(255,77,109,.12);} \n  .dot-warn{background:#FFD166;box-shadow:0 0 0 4px rgba(255,209,102,.12);} \n\n  .iconbtn{position:absolute;right:10px;top:10px;border:none;cursor:pointer;padding:10px;border-radius:14px;\n    background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.18);\n  }\n  .iconbtn:active{transform:translateY(1px);}\n  .iconbtn svg{display:block}\n\n  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace;}\n  \n  .v360-section{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.12);}\n  .v360-section-title{font-size:14px;font-weight:700;color:rgba(255,255,255,.9);margin-bottom:10px;}\n  .threshold-grid{display:grid;gap:8px;grid-template-columns: repeat(3, minmax(0,1fr));}\n  @media (max-width: 640px){ .threshold-grid{grid-template-columns: repeat(2, minmax(0,1fr));} }\n  .threshold-item{background:rgba(255,255,255,.08);border-radius:12px;padding:10px;text-align:center;}\n  .threshold-item .label{font-size:11px;opacity:.7;color:rgba(255,255,255,.8);}\n  .threshold-item .value{font-size:16px;font-weight:700;color:#fff;margin-top:4px;}\n</style>\n\n<div class=\"v360-shell\">\n  <div class=\"v360-top\">\n    <div class=\"v360-brand\">\n      <div class=\"v360-logo\"></div>\n      <div class=\"v360-title\">\n        <div class=\"h\">Vealive360</div>\n        <div class=\"p\">SmartMonitor • Device 1</div>\n      </div>\n    </div>\n    <div class=\"v360-pill\">Broker&nbsp;&nbsp;<span class=\"mono\">63.34.243.171</span></div>\n  </div>\n\n  <div class=\"v360-grid\">\n\n    <div class=\"kpi\">\n      <div class=\"t\">DEVICE (telemetry)</div>\n      <div class=\"v\">\n        <span class=\"dot\" ng-class=\"state.telemetryOnline ? 'dot-on':'dot-off'\"></span>\n        <span>{{state.telemetryOnline ? 'online' : 'offline'}}</span>\n      </div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">MQTT LWT</div>\n      <div class=\"v\">\n        <span class=\"dot\" ng-class=\"(state.mqttLwt==='ONLINE') ? 'dot-on' : (state.mqttLwt==='OFFLINE' ? 'dot-off' : 'dot-warn')\"></span>\n        <span>{{state.mqttLwt || '--'}}</span>\n      </div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">ALERT</div>\n      <div class=\"v\">\n        <span class=\"dot\" ng-class=\"state.alert ? 'dot-off' : 'dot-on'\"></span>\n        <span>{{state.alert ? 'ALERT' : 'OK'}}</span>\n      </div>\n      <div style=\"font-size:11px;color:rgba(255,255,255,.7);margin-top:4px;\" ng-if=\"state.alert\">\n        {{state.alertReasons}}\n      </div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">BUZZER</div>\n      <button class=\"iconbtn\" ng-click=\"toggleBuzzer()\" title=\"Mute / Unmute\">\n        <svg ng-if=\"state.buzzer\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"white\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n          <path d=\"M11 5L6 9H2v6h4l5 4V5z\"/>\n          <path d=\"M15.5 8.5a5 5 0 010 7\"/>\n          <path d=\"M17.5 6.5a8 8 0 010 11\"/>\n        </svg>\n        <svg ng-if=\"!state.buzzer\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"white\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n          <path d=\"M11 5L6 9H2v6h4l5 4V5z\"/>\n          <path d=\"M23 9l-6 6\"/>\n          <path d=\"M17 9l6 6\"/>\n        </svg>\n      </button>\n      <div class=\"v\">\n        <span class=\"dot\" ng-class=\"state.buzzer ? 'dot-on':'dot-warn'\"></span>\n        <span>{{state.buzzer ? 'ON' : 'MUTED'}}</span>\n      </div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">RSSI</div>\n      <div class=\"v\"><span class=\"mono\">{{state.rssi || '--'}}</span></div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">UPTIME</div>\n      <div class=\"v\"><span class=\"mono\">{{state.uptime || '--'}}</span></div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">LAST SEEN</div>\n      <div class=\"v\"><span class=\"mono\">{{state.lastSeen || '--'}}</span></div>\n    </div>\n\n    <div class=\"kpi\">\n      <div class=\"t\">LAST COMMAND</div>\n      <div class=\"v\"><span class=\"mono\">{{state.lastCommand || '--'}}</span></div>\n    </div>\n\n  </div>\n  \n  <!-- Thresholds Section -->\n  <div class=\"v360-section\">\n    <div class=\"v360-section-title\">⚙️ Current Thresholds (from device)</div>\n    <div class=\"threshold-grid\">\n      <div class=\"threshold-item\">\n        <div class=\"label\">Temp Min</div>\n        <div class=\"value\">{{state.thresholds.tempMin || 18}}°C</div>\n      </div>\n      <div class=\"threshold-item\">\n        <div class=\"label\">Temp Max</div>\n        <div class=\"value\">{{state.thresholds.tempMax || 30}}°C</div>\n      </div>\n      <div class=\"threshold-item\">\n        <div class=\"label\">Humidity Min</div>\n        <div class=\"value\">{{state.thresholds.humMin || 30}}%</div>\n      </div>\n      <div class=\"threshold-item\">\n        <div class=\"label\">Humidity Max</div>\n        <div class=\"value\">{{state.thresholds.humMax || 70}}%</div>\n      </div>\n      <div class=\"threshold-item\">\n        <div class=\"label\">Dust High</div>\n        <div class=\"value\">{{state.thresholds.dustHigh || 400}}</div>\n      </div>\n      <div class=\"threshold-item\">\n        <div class=\"label\">Gas High</div>\n        <div class=\"value\">{{state.thresholds.mq2High || 60}}</div>\n      </div>\n    </div>\n  </div>\n\n</div>\n\n<script>\n(function(scope){\n  scope.state = scope.state || { thresholds: {} };\n\n  scope.$watch('msg', function(msg){\n    if(!msg || !msg.payload) return;\n    scope.state = Object.assign({}, scope.state, msg.payload);\n    if (!scope.state.thresholds) scope.state.thresholds = {};\n  });\n\n  scope.toggleBuzzer = function(){\n    var desired = (scope.state.buzzer ? 'OFF' : 'ON');\n    scope.send({ topic: 'cmd/buzzer', payload: desired });\n  };\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "x": 960,
+        "y": 220,
+        "wires": [
+            [
+                "0380f32ea93262b0"
+            ]
+        ]
+    },
+    {
+        "id": "0380f32ea93262b0",
+        "type": "function",
+        "z": "842c6d22ccf8aa51",
+        "name": "Build buzzer MQTT command + update lastCommand",
+        "func": "if (msg.topic !== 'cmd/buzzer') return null;\n\nconst desired = (msg.payload || '').toString().trim().toUpperCase();\nif (desired !== 'ON' && desired !== 'OFF') return null;\n\nconst s = flow.get('sm1') || {};\ns.lastCommand = `BUZZER ${desired}`;\nflow.set('sm1', s);\n\nconst mqttMsg = {\n  topic: 'vealive/smartmonitor/1/command/buzzer',\n  payload: JSON.stringify({ state: desired })\n};\n\nconst uiMsg = { payload: { ...s } };\nreturn [mqttMsg, uiMsg];",
+        "outputs": 2,
+        "x": 980,
+        "y": 340,
+        "wires": [
+            [
+                "78b78967a073d72d"
+            ],
+            [
+                "3f283f1076d99985"
+            ]
+        ]
+    },
+    {
+        "id": "78b78967a073d72d",
+        "type": "mqtt out",
+        "z": "842c6d22ccf8aa51",
+        "name": "Buzzer CMD OUT",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqttBrokerSM1_v360",
+        "x": 1220,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "4da3fb437ea8c3f1",
+        "type": "ui_gauge",
+        "z": "842c6d22ccf8aa51",
+        "name": "Temp",
+        "group": "uiGroup_gauges_v360",
+        "order": 1,
+        "width": "6",
+        "height": "4",
+        "gtype": "gage",
+        "title": "Temperature (°C)",
+        "label": "°C",
+        "format": "{{value}}",
+        "min": "-10",
+        "max": "80",
+        "colors": [
+            "#00c6ff",
+            "#7f00ff",
+            "#ff4d6d"
+        ],
+        "seg1": "28",
+        "seg2": "40",
+        "x": 940,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "668f70249c0ad48c",
+        "type": "ui_gauge",
+        "z": "842c6d22ccf8aa51",
+        "name": "Hum",
+        "group": "uiGroup_gauges_v360",
+        "order": 2,
+        "width": "6",
+        "height": "4",
+        "gtype": "gage",
+        "title": "Humidity (%)",
+        "label": "%",
+        "format": "{{value}}",
+        "min": "0",
+        "max": "100",
+        "colors": [
+            "#00c6ff",
+            "#7f00ff",
+            "#ff4d6d"
+        ],
+        "seg1": "60",
+        "seg2": "80",
+        "x": 940,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "6b5dd7e231980ca0",
+        "type": "ui_gauge",
+        "z": "842c6d22ccf8aa51",
+        "name": "Dust",
+        "group": "uiGroup_gauges_v360",
+        "order": 3,
+        "width": "6",
+        "height": "4",
+        "gtype": "gage",
+        "title": "Dust (ug/m3)",
+        "label": "ug/m3",
+        "format": "{{value}}",
+        "min": "0",
+        "max": "600",
+        "colors": [
+            "#00c6ff",
+            "#7f00ff",
+            "#ff4d6d"
+        ],
+        "seg1": "200",
+        "seg2": "400",
+        "x": 940,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "4bbc808eef98803c",
+        "type": "ui_gauge",
+        "z": "842c6d22ccf8aa51",
+        "name": "MQ2",
+        "group": "uiGroup_gauges_v360",
+        "order": 4,
+        "width": "6",
+        "height": "4",
+        "gtype": "gage",
+        "title": "Gas/Smoke (ppm)",
+        "label": "ppm",
+        "format": "{{value}}",
+        "min": "0",
+        "max": "1000",
+        "colors": [
+            "#00c6ff",
+            "#7f00ff",
+            "#ff4d6d"
+        ],
+        "seg1": "200",
+        "seg2": "400",
+        "x": 940,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "mqttBrokerSM1_v360",
+        "type": "mqtt-broker",
+        "name": "MQTT 63.34.243.171",
+        "broker": "63.34.243.171",
+        "port": "1883",
+        "clientid": "NR_V360_SM1_DASH",
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "10",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    },
+    {
+        "id": "uiGroup_overview_v360",
+        "type": "ui_group",
+        "name": "Overview",
+        "tab": "uiTab_v360",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "uiGroup_gauges_v360",
+        "type": "ui_group",
+        "name": "Live Gauges",
+        "tab": "uiTab_v360",
+        "order": 2,
+        "disp": true,
+        "width": "12",
+        "collapse": false
+    },
+    {
+        "id": "uiTab_v360",
+        "type": "ui_tab",
+        "name": "Vealive360 • SM1",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "f6ab4684bf0cd7f6",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]

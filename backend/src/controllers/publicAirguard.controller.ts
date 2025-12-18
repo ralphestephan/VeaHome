@@ -143,14 +143,28 @@ export async function setSmartMonitorThresholds(req: Request, res: Response) {
     if (typeof req.body?.dust === 'number') thresholds.dustHigh = req.body.dust;
     if (typeof req.body?.mq2 === 'number') thresholds.mq2High = req.body.mq2;
 
+    console.log(`[Airguard] Setting thresholds for device ${id}:`, thresholds);
+
     // Publish to MQTT topic for the device to receive
     const topic = `vealive/smartmonitor/${id}/command/thresholds`;
-    publishCommand(topic, thresholds);
+    const published = publishCommand(topic, thresholds);
+
+    if (!published) {
+      console.warn(`[Airguard] MQTT not connected, thresholds command not sent for device ${id}`);
+      return successResponse(res, {
+        message: 'Thresholds command queued (MQTT not connected)',
+        topic,
+        payload: thresholds,
+        mqttConnected: false,
+        warning: 'MQTT broker is not connected. Please check MQTT_URL environment variable.',
+      });
+    }
 
     return successResponse(res, {
       message: 'Thresholds command published',
       topic,
       payload: thresholds,
+      mqttConnected: true,
     });
   } catch (error: any) {
     console.error('setSmartMonitorThresholds error:', error);

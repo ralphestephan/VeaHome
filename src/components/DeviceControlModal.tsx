@@ -11,6 +11,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -38,11 +39,15 @@ import {
   CloudOff,
   Settings,
   Check,
+  AlertTriangle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { Device } from '../types';
 import { getApiClient, PublicAirguardApi } from '../services/api';
+import AirguardAlertBanner, { getAlertInfo, decodeAlertFlags } from './AirguardAlertBanner';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAL_SIZE = 220;
@@ -197,16 +202,43 @@ export default function DeviceControlModal({
     if (!device || device.type !== 'airguard') return;
     
     const smartMonitorId = device.metadata?.smartMonitorId;
-    if (!smartMonitorId) return;
+    if (!smartMonitorId) {
+      Alert.alert('Error', 'No SmartMonitor ID found for this device.');
+      return;
+    }
+    
+    // Validate inputs
+    const tempHigh = parseFloat(editingThresholds.tempHigh);
+    const tempLow = parseFloat(editingThresholds.tempLow);
+    const humidityHigh = parseFloat(editingThresholds.humidityHigh);
+    const humidityLow = parseFloat(editingThresholds.humidityLow);
+    const dustHigh = parseFloat(editingThresholds.dustHigh);
+    const mq2High = parseFloat(editingThresholds.mq2High);
+    
+    // Validation
+    if (isNaN(tempHigh) || isNaN(tempLow) || isNaN(humidityHigh) || isNaN(humidityLow) || isNaN(dustHigh) || isNaN(mq2High)) {
+      Alert.alert('Invalid Input', 'Please enter valid numbers for all thresholds.');
+      return;
+    }
+    
+    if (tempLow >= tempHigh) {
+      Alert.alert('Invalid Range', 'Temperature min must be less than max.');
+      return;
+    }
+    
+    if (humidityLow >= humidityHigh) {
+      Alert.alert('Invalid Range', 'Humidity min must be less than max.');
+      return;
+    }
     
     // Local state values
     const newThresholds = {
-      tempHigh: parseFloat(editingThresholds.tempHigh) || 35,
-      tempLow: parseFloat(editingThresholds.tempLow) || 10,
-      humidityHigh: parseFloat(editingThresholds.humidityHigh) || 80,
-      humidityLow: parseFloat(editingThresholds.humidityLow) || 20,
-      dustHigh: parseFloat(editingThresholds.dustHigh) || 400,
-      mq2High: parseFloat(editingThresholds.mq2High) || 60,
+      tempHigh,
+      tempLow,
+      humidityHigh,
+      humidityLow,
+      dustHigh,
+      mq2High,
     };
     
     // Map to API field names
@@ -221,13 +253,44 @@ export default function DeviceControlModal({
     
     setSavingThresholds(true);
     try {
-      await airguardApi.setThresholds(smartMonitorId, apiPayload);
+      console.log('[Airguard] Saving thresholds:', apiPayload);
+      const response = await airguardApi.setThresholds(smartMonitorId, apiPayload);
+      console.log('[Airguard] Save response:', response.data);
+      
+      const responseData = response.data?.data ?? response.data;
+      const mqttConnected = responseData?.mqttConnected !== false;
+      
       setThresholds(newThresholds);
       setShowThresholdSettings(false);
-      Alert.alert('Success', 'Thresholds sent to Airguard. Changes will apply when device receives the command.');
-    } catch (error) {
-      console.error('Failed to save thresholds:', error);
-      Alert.alert('Error', 'Failed to save thresholds. Please try again.');
+      
+      if (!mqttConnected) {
+        Alert.alert(
+          '⚠️ MQTT Not Connected', 
+          `Thresholds were saved but MQTT is not connected. The device may not receive the update immediately.\n\n` +
+          `Please ensure MQTT_URL is configured on the backend server.\n\n` +
+          `Temperature: ${tempLow}°C - ${tempHigh}°C\n` +
+          `Humidity: ${humidityLow}% - ${humidityHigh}%`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          '✅ Thresholds Saved', 
+          `New thresholds have been sent to the device.\n\n` +
+          `Temperature: ${tempLow}°C - ${tempHigh}°C\n` +
+          `Humidity: ${humidityLow}% - ${humidityHigh}%\n` +
+          `Dust Max: ${dustHigh} µg/m³\n` +
+          `Gas Max: ${mq2High}`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('[Airguard] Failed to save thresholds:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error';
+      Alert.alert(
+        'Failed to Save', 
+        `Could not send thresholds to device.\n\nError: ${errorMessage}\n\nPlease check that the backend is running and MQTT is connected.`,
+        [{ text: 'OK' }]
+      );
     } finally {
       setSavingThresholds(false);
     }
@@ -364,37 +427,45 @@ export default function DeviceControlModal({
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
-                {/* Alert banner if device is alerting - show which stats caused it */}
-                {(() => {
-                  const reasons: string[] = [];
-                  // Use alertFlags from live data if available (bitfield: 1=temp, 2=hum, 4=dust, 8=mq2)
-                  const alertFlags = liveAirguardData?.alertFlags ?? (device.airQualityData as any)?.alertFlags ?? 0;
-                  
-                  if (alertFlags & 1) reasons.push('Temp');
-                  if (alertFlags & 2) reasons.push('Humidity');
-                  if (alertFlags & 4) reasons.push('Dust');
-                  if (alertFlags & 8) reasons.push('Gas');
-                  
-                  // Fallback: check thresholds manually if no alertFlags
-                  if (reasons.length === 0 && !alertFlags) {
-                    const aq = liveAirguardData ?? device.airQualityData;
-                    if (aq?.dust != null && aq.dust > thresholds.dustHigh) reasons.push('Dust');
-                    if (aq?.mq2 != null && aq.mq2 > thresholds.mq2High) reasons.push('Gas');
-                    if (aq?.temperature != null && (aq.temperature > thresholds.tempHigh || aq.temperature < thresholds.tempLow)) reasons.push('Temp');
-                    if (aq?.humidity != null && (aq.humidity > thresholds.humidityHigh || aq.humidity < thresholds.humidityLow)) reasons.push('Humidity');
-                  }
-                  
-                  const hasAlert = alertFlags > 0 || (device.airQualityData?.alert) || reasons.length > 0;
-                  if (!hasAlert) return null;
-                  return (
-                    <View style={styles.alertBanner}>
-                      <CloudOff size={16} color="#fff" />
-                      <Text style={styles.alertBannerText}>
-                        Alert: {reasons.length > 0 ? reasons.join(', ') : 'Check Sensors'}
+                {/* Online/Offline Status */}
+                <View style={styles.connectionStatus}>
+                  {liveAirguardData?.isOnline ? (
+                    <>
+                      <Wifi size={14} color="#4CAF50" />
+                      <Text style={[styles.connectionStatusText, { color: '#4CAF50' }]}>
+                        Online
                       </Text>
-                    </View>
-                  );
-                })()}
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff size={14} color={colors.mutedForeground} />
+                      <Text style={styles.connectionStatusText}>
+                        {liveAirguardData ? 'Offline' : 'Loading...'}
+                      </Text>
+                    </>
+                  )}
+                </View>
+
+                {/* Alert banner using new component */}
+                <AirguardAlertBanner
+                  alertFlags={liveAirguardData?.alertFlags ?? (device.airQualityData as any)?.alertFlags}
+                  sensorData={{
+                    temperature: liveAirguardData?.temperature ?? device.airQualityData?.temperature,
+                    humidity: liveAirguardData?.humidity ?? device.airQualityData?.humidity,
+                    dust: liveAirguardData?.dust ?? device.airQualityData?.dust,
+                    mq2: liveAirguardData?.mq2 ?? device.airQualityData?.mq2,
+                  }}
+                  thresholds={{
+                    tempHigh: thresholds.tempHigh,
+                    tempLow: thresholds.tempLow,
+                    humidityHigh: thresholds.humidityHigh,
+                    humidityLow: thresholds.humidityLow,
+                    dustHigh: thresholds.dustHigh,
+                    mq2High: thresholds.mq2High,
+                  }}
+                  variant="full"
+                  showOkStatus={true}
+                />
 
                 {/* Use live data if available, fallback to device data */}
                 {(() => {
@@ -1191,6 +1262,22 @@ const createStyles = (colors: any, shadows: any) =>
 
     airguardControl: {
       gap: spacing.lg,
+    },
+    connectionStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+      alignSelf: 'center',
+    },
+    connectionStatusText: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: colors.mutedForeground,
     },
     airguardMetrics: {
       flexDirection: 'row',

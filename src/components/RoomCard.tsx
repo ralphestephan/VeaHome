@@ -10,6 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import { Room } from '../types';
+import { decodeAlertFlags } from './AirguardAlertBanner';
 
 interface RoomCardProps {
   room: Room;
@@ -36,13 +37,7 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
 
   // Use alertFlags from device telemetry if available (bitfield: 1=temp, 2=hum, 4=dust, 8=mq2)
   const alertFlags = (room as any).alertFlags ?? 0;
-  
-  // Collect alert reasons from alertFlags bitfield
-  const alertReasons: string[] = [];
-  if (alertFlags & 1) alertReasons.push('Temp');
-  if (alertFlags & 2) alertReasons.push('Humidity');
-  if (alertFlags & 4) alertReasons.push('Dust');
-  if (alertFlags & 8) alertReasons.push('Gas');
+  const alertReasons = decodeAlertFlags(alertFlags);
 
   // Device alert from Node-RED or alertFlags
   const deviceAlert = room.alert === true;
@@ -50,15 +45,27 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
 
   // Air quality (dust/gas only) - use alertFlags
   const hasAirSensors = pm25 !== undefined || mq2 !== undefined;
-  const isAirBad = (alertFlags & 4) !== 0 || (alertFlags & 8) !== 0;
+  const isAirBad = alertReasons.includes('Dust') || alertReasons.includes('Gas');
+
+  // Get alert icon based on type
+  const getAlertIcon = (): any => {
+    if (alertReasons.includes('Gas')) return 'fire-alert';
+    if (alertReasons.includes('Dust')) return 'weather-cloudy-alert';
+    if (alertReasons.includes('Temp')) return 'thermometer-alert';
+    if (alertReasons.includes('Humidity')) return 'water-alert';
+    return 'alert';
+  };
 
   // Alert badge component for top-left
   const renderAlertBadge = () => {
     if (!isAlert) return null;
+    
     return (
       <View style={styles.alertBadge}>
-        <MaterialCommunityIcons name="alert" size={14} color="#fff" />
-        <Text style={styles.alertBadgeText}>{alertReasons.join(', ') || 'Alert'}</Text>
+        <MaterialCommunityIcons name={getAlertIcon()} size={14} color="#fff" />
+        <Text style={styles.alertBadgeText}>
+          {alertReasons.length > 0 ? alertReasons.join(' · ') : 'Alert'}
+        </Text>
       </View>
     );
   };
@@ -67,39 +74,49 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
     <>
       {showTempHum && (
         <View style={styles.stats}>
-          <View style={styles.stat}>
+          <View style={[styles.stat, alertReasons.includes('Temp') && styles.statAlert]}>
             <MaterialCommunityIcons 
-              name="thermometer" 
+              name={alertReasons.includes('Temp') ? 'thermometer-alert' : 'thermometer'} 
               size={14} 
-              color={alertReasons.includes('Temp') ? colors.destructive : colors.primary} 
+              color={alertReasons.includes('Temp') ? '#FF6B6B' : colors.primary} 
             />
-            <Text style={[styles.statText, alertReasons.includes('Temp') && { color: colors.destructive }]}>
+            <Text style={[styles.statText, alertReasons.includes('Temp') && styles.statTextAlert]}>
               {temperatureText}
             </Text>
           </View>
-          <View style={styles.stat}>
+          <View style={[styles.stat, alertReasons.includes('Humidity') && styles.statAlert]}>
             <MaterialCommunityIcons 
-              name="water-percent" 
+              name={alertReasons.includes('Humidity') ? 'water-alert' : 'water-percent'} 
               size={14} 
-              color={alertReasons.includes('Humidity') ? colors.destructive : colors.primary} 
+              color={alertReasons.includes('Humidity') ? '#FF6B6B' : colors.primary} 
             />
-            <Text style={[styles.statText, alertReasons.includes('Humidity') && { color: colors.destructive }]}>
+            <Text style={[styles.statText, alertReasons.includes('Humidity') && styles.statTextAlert]}>
               {humidityText}
             </Text>
           </View>
         </View>
       )}
-      {/* Air quality based on dust/gas only */}
+      {/* Air quality display */}
       {hasAirSensors && (
         <View style={styles.airStatusRow}>
-          <MaterialCommunityIcons 
-            name={isAirBad ? 'weather-cloudy-alert' : 'weather-sunny'} 
-            size={14} 
-            color={isAirBad ? colors.destructive : colors.primary} 
-          />
-          <Text style={[styles.airQualityText, isAirBad && { color: colors.destructive }]}>
-            Air: {isAirBad ? 'Bad' : 'Good'}
-          </Text>
+          {alertReasons.includes('Dust') && (
+            <View style={styles.airAlertChip}>
+              <MaterialCommunityIcons name="weather-cloudy-alert" size={12} color="#FF6B6B" />
+              <Text style={styles.airAlertText}>Dust</Text>
+            </View>
+          )}
+          {alertReasons.includes('Gas') && (
+            <View style={styles.airAlertChip}>
+              <MaterialCommunityIcons name="fire-alert" size={12} color="#FF6B6B" />
+              <Text style={styles.airAlertText}>Gas</Text>
+            </View>
+          )}
+          {!isAirBad && (
+            <View style={styles.airOkChip}>
+              <MaterialCommunityIcons name="check-circle" size={12} color="#4CAF50" />
+              <Text style={styles.airOkText}>Air OK</Text>
+            </View>
+          )}
         </View>
       )}
     </>
@@ -174,7 +191,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.sm,
     left: spacing.sm,
-    backgroundColor: colors.destructive,
+    backgroundColor: '#FF6B6B',
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
@@ -182,11 +199,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     zIndex: 10,
+    shadowColor: '#FF6B6B',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   alertBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#fff',
+    letterSpacing: 0.3,
   },
   gradient: {
     flex: 1,
@@ -229,18 +252,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  statAlert: {
+    backgroundColor: 'rgba(255, 107, 107, 0.25)',
   },
   statText: {
     fontSize: 11,
     color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
   },
-  airQualityText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.9)',
+  statTextAlert: {
+    color: '#FF6B6B',
   },
   airStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  airAlertChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(255, 107, 107, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  airAlertText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
+  airOkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  airOkText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#4CAF50',
   },
 });

@@ -57,16 +57,22 @@ export function initMqttClient() {
 }
 
 export function publishCommand(topic: string, payload: Record<string, unknown>) {
-  if (!client || !isConnected) {
-    console.warn('[mqtt] Client not ready, skipping publish');
-    return;
-  }
   const message = JSON.stringify(payload);
+  console.log(`[mqtt] Publishing to ${topic}:`, message);
+  
+  if (!client || !isConnected) {
+    console.warn('[mqtt] Client not ready, skipping publish. Topic:', topic);
+    return false;
+  }
+  
   client.publish(topic, message, undefined, (err) => {
     if (err) {
       console.error('[mqtt] Publish failed', err);
+    } else {
+      console.log('[mqtt] Successfully published to', topic);
     }
   });
+  return true;
 }
 
 export function shutdownMqtt() {

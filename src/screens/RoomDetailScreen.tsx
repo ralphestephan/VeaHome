@@ -48,6 +48,7 @@ import { useDemo } from '../context/DemoContext';
 import { getApiClient, HomeApi, HubApi, PublicAirguardApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useTheme } from '../context/ThemeContext';
+import { decodeAlertFlags } from '../components/AirguardAlertBanner';
 import { 
   NeonCard, 
   SectionHeader, 
@@ -257,6 +258,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
             const dust = toNum(latest.dust);
             const mq2 = toNum(latest.mq2);
             const alert = !!latest.alert;
+            const alertFlags = toNum(latest.alertFlags) ?? 0;
 
             // Set airQualityData if we have ANY sensor data
             const hasAnyData = temperature !== undefined || humidity !== undefined || 
@@ -275,6 +277,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                     dust,
                     mq2,
                     alert,
+                    alertFlags,
                   }
                 : d.airQualityData,
               alarmMuted: !latest.buzzerEnabled,
@@ -293,6 +296,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         airQuality: airguard?.airQualityData?.aqi ?? baseRoom?.airQuality,
         pm25: airguard?.airQualityData?.pm25 ?? baseRoom?.pm25,
         mq2: airguard?.airQualityData?.mq2 ?? baseRoom?.mq2,
+        alertFlags: airguard?.airQualityData?.alertFlags ?? (baseRoom as any)?.alertFlags ?? 0,
+        alert: airguard?.airQualityData?.alert ?? baseRoom?.alert,
       };
 
       setRoom(nextRoom);
@@ -506,23 +511,27 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const onlineDevicesCount = devices.filter((d) => d.isOnline !== false).length;
   const isRoomOnline = devices.length === 0 || onlineDevicesCount > 0;
 
-  // Alert detection from room data
-  const PM25_BAD_THRESHOLD = 400;
-  const MQ2_BAD_THRESHOLD = 60;
-  const TEMP_HIGH_THRESHOLD = 35;
-  const HUMIDITY_HIGH_THRESHOLD = 80;
+  // Alert detection from room data - prioritize alertFlags from device
+  const alertFlags = (room as any).alertFlags ?? 0;
+  let alertReasons: string[] = decodeAlertFlags(alertFlags);
+  
+  // Fallback to manual threshold detection if no alertFlags
+  if (alertReasons.length === 0) {
+    const PM25_BAD_THRESHOLD = 400;
+    const MQ2_BAD_THRESHOLD = 60;
+    const TEMP_HIGH_THRESHOLD = 35;
+    const HUMIDITY_HIGH_THRESHOLD = 80;
 
-  const alertReasons: string[] = [];
-  if (room.pm25 !== undefined && room.pm25 > PM25_BAD_THRESHOLD) alertReasons.push('Dust');
-  if (room.mq2 !== undefined && room.mq2 > MQ2_BAD_THRESHOLD) alertReasons.push('Gas');
-  if (typeof room.temperature === 'number' && room.temperature > TEMP_HIGH_THRESHOLD) alertReasons.push('Temp');
-  if (typeof room.humidity === 'number' && room.humidity > HUMIDITY_HIGH_THRESHOLD) alertReasons.push('Humidity');
+    if (room.pm25 !== undefined && room.pm25 > PM25_BAD_THRESHOLD) alertReasons.push('Dust');
+    if (room.mq2 !== undefined && room.mq2 > MQ2_BAD_THRESHOLD) alertReasons.push('Gas');
+    if (typeof room.temperature === 'number' && room.temperature > TEMP_HIGH_THRESHOLD) alertReasons.push('Temp');
+    if (typeof room.humidity === 'number' && room.humidity > HUMIDITY_HIGH_THRESHOLD) alertReasons.push('Humidity');
+  }
   const hasRoomAlert = alertReasons.length > 0 || room.alert === true;
 
-  // Air quality (dust/gas only)
+  // Air quality (dust/gas only) - use alertFlags or alertReasons
   const hasAirSensors = room.pm25 !== undefined || room.mq2 !== undefined;
-  const isAirBad = (room.pm25 !== undefined && room.pm25 > PM25_BAD_THRESHOLD) || 
-                   (room.mq2 !== undefined && room.mq2 > MQ2_BAD_THRESHOLD);
+  const isAirBad = alertReasons.includes('Dust') || alertReasons.includes('Gas');
 
   const handleClimatePress = () => {
     if (!thermostatDevice) {
