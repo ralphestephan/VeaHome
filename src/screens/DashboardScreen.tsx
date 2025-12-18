@@ -565,7 +565,7 @@ export default function DashboardScreen() {
             </View>
           </View>
           
-          <Animated.View style={[styles.viewModeWrapper, { opacity: viewContentFade }]}>
+          <Animated.View style={[styles.viewModeWrapper, { opacity: viewContentFade, position: 'relative' }]}>
             {viewMode === '2d' ? (
               <InteractiveFloorPlan
                 ref={floorPlanRef}
@@ -595,6 +595,14 @@ export default function DashboardScreen() {
                 )}
               </NeonCard>
             )}
+            
+            {/* Room Popup Overlay - positioned ON the floor plan */}
+            <RoomPopupCard
+              room={selectedRoomData || null}
+              visible={showRoomPopup}
+              onClose={handleRoomPopupClose}
+              onViewDetails={handleRoomViewDetails}
+            />
           </Animated.View>
 
           {/* Selected Room Preview */}
@@ -770,14 +778,6 @@ export default function DashboardScreen() {
           onToggleMute={handleMuteToggle}
         />
       )}
-
-      {/* Room Popup Card - shows when clicking on a room in floor plan */}
-      <RoomPopupCard
-        room={selectedRoomData || null}
-        visible={showRoomPopup}
-        onClose={handleRoomPopupClose}
-        onViewDetails={handleRoomViewDetails}
-      />
     </View>
   );
 }

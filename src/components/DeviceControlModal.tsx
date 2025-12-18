@@ -133,12 +133,28 @@ export default function DeviceControlModal({
   // Memoize API client
   const airguardApi = useMemo(() => PublicAirguardApi(getApiClient()), []);
 
+  // Helper to get smartMonitorId from device (can be in signalMappings or metadata)
+  const getSmartMonitorId = useCallback((): string | number | null => {
+    if (!device) return null;
+    // Check signalMappings first (this is where device onboarding stores it)
+    const fromSignalMappings = (device.signalMappings as any)?.smartMonitorId ?? 
+                               (device.signalMappings as any)?.smartmonitorId;
+    if (fromSignalMappings) return fromSignalMappings;
+    // Fallback to metadata
+    const fromMetadata = device.metadata?.smartMonitorId;
+    if (fromMetadata) return fromMetadata;
+    return null;
+  }, [device]);
+
   // Fetch latest airguard data
   const fetchAirguardData = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
     
-    const smartMonitorId = device.metadata?.smartMonitorId;
-    if (!smartMonitorId) return;
+    const smartMonitorId = getSmartMonitorId();
+    if (!smartMonitorId) {
+      console.warn('[Airguard] No smartMonitorId found on device:', device.id);
+      return;
+    }
     
     try {
       const [latestRes, statusRes] = await Promise.all([
@@ -161,13 +177,13 @@ export default function DeviceControlModal({
     } catch (error) {
       console.warn('Failed to fetch airguard data:', error);
     }
-  }, [device, airguardApi]);
+  }, [device, airguardApi, getSmartMonitorId]);
 
   // Fetch thresholds when modal opens
   const fetchThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
     
-    const smartMonitorId = device.metadata?.smartMonitorId;
+    const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) return;
     
     try {
@@ -195,15 +211,15 @@ export default function DeviceControlModal({
     } catch (error) {
       console.warn('Failed to fetch thresholds:', error);
     }
-  }, [device, airguardApi]);
+  }, [device, airguardApi, getSmartMonitorId]);
 
   // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
     
-    const smartMonitorId = device.metadata?.smartMonitorId;
+    const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) {
-      Alert.alert('Error', 'No SmartMonitor ID found for this device.');
+      Alert.alert('Error', 'No SmartMonitor ID found for this device. Please re-add the device.');
       return;
     }
     
@@ -294,7 +310,7 @@ export default function DeviceControlModal({
     } finally {
       setSavingThresholds(false);
     }
-  }, [device, editingThresholds, airguardApi]);
+  }, [device, editingThresholds, airguardApi, getSmartMonitorId]);
 
   // Poll airguard data while modal is visible
   useEffect(() => {
