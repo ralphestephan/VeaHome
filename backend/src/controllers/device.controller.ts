@@ -375,14 +375,14 @@ export async function setDeviceThresholds(req: Request, res: Response) {
 
     // Publish threshold update to MQTT - device will update and republish to config topic
     const topic = `vealive/smartmonitor/${deviceNumericId}/set/config`;
-    const payload = JSON.stringify({
+    const payload = {
       tempMin,
       tempMax,
       humMin,
       humMax,
       dustHigh,
       mq2High,
-    });
+    };
 
     await publishCommand(topic, payload);
     console.log(`[Thresholds] Published to ${topic}:`, payload);
