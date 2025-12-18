@@ -227,6 +227,15 @@ static void drawRight(int x, int y, const String& s, int font, uint16_t fg, uint
   tft.drawString(s, x, y, font);
 }
 
+// Get signal strength bars (0-4) based on RSSI
+static int getSignalBars(int rssi) {
+  if (rssi >= -50) return 4;  // Excellent
+  if (rssi >= -60) return 3;  // Good
+  if (rssi >= -70) return 2;  // Fair
+  if (rssi >= -80) return 1;  // Weak
+  return 0;  // Very weak
+}
+
 // -------------------------------------------------------------
 // Setup
 // -------------------------------------------------------------
@@ -923,60 +932,100 @@ void drawCards(int temp, int hum, int dust, int mq2) {
 
 void drawFooter() {
   static String lastFooterStr = "";
+  static int lastSignalBars = -1;
   
   String footerStr;
+  int signalBars = 0;
+  
   if (apModeActive) {
     footerStr = "AP: 192.168.4.1";
+    signalBars = -1;
   } else {
     String shortSsid = ssid;
-    if (shortSsid.length() > 12) {
-      shortSsid = shortSsid.substring(0, 11) + "..";
+    if (shortSsid.length() > 15) {
+      shortSsid = shortSsid.substring(0, 14) + "..";
     }
-    footerStr = shortSsid + " " + String(WiFi.RSSI()) + "dBm";
+    footerStr = shortSsid;
+    signalBars = getSignalBars(WiFi.RSSI());
   }
 
-  if (footerStr == lastFooterStr) return;
+  if (footerStr == lastFooterStr && signalBars == lastSignalBars) return;
 
-  tft.fillRect(0, H - FOOT_H + 1, W - 50, FOOT_H - 1, COL_BG);
+  // Clear footer area (except mute icon)
+  tft.fillRect(0, H - FOOT_H + 1, W - 40, FOOT_H - 1, COL_BG);
+  
+  // Draw SSID
   drawLeft(8, H - FOOT_H + 4, footerStr, 2, COL_MUTED, COL_BG);
   
+  // Draw signal strength bars if connected - positioned at ~1/3 from left
+  if (signalBars >= 0) {
+    int barWidth = 3;
+    int barGap = 2;
+    int barX = 105;  // Fixed position, roughly 1/3 from left edge
+    int barY = H - FOOT_H + 5;
+    
+    for (int i = 0; i < 4; i++) {
+      int barHeight = 4 + i * 2;  // Heights: 4, 6, 8, 10
+      uint16_t barColor = (i < signalBars) ? COL_OK : COL_MUTED;
+      tft.fillRect(barX + i * (barWidth + barGap), barY + (10 - barHeight), barWidth, barHeight, barColor);
+    }
+  }
+  
   lastFooterStr = footerStr;
+  lastSignalBars = signalBars;
 }
 
 void drawMuteIcon(bool muted) {
-  int ix = W - 36;
+  int ix = W - 28;
   int iy = H - FOOT_H + 2;
-  int iw = 32;
+  int iw = 24;
   int ih = FOOT_H - 4;
 
-  // Clear area
-  tft.fillRect(ix, iy, iw, ih, COL_BG);
+  // Clear entire area thoroughly
+  tft.fillRect(ix - 2, iy - 1, iw + 4, ih + 2, COL_BG);
 
+  // Only show icon when muted
   if (muted) {
-    // Draw muted speaker icon
-    uint16_t col = COL_WARN;
+    // Draw simple muted speaker icon - clean and minimal
+    uint16_t speakerCol = COL_WARN;
+    uint16_t xCol = COL_ALERT;
     
-    // Speaker body
-    tft.fillRect(ix + 4, iy + 5, 6, 6, col);
-    tft.fillTriangle(ix + 10, iy + 8, ix + 18, iy + 2, ix + 18, iy + 14, col);
+    // Calculate center position
+    int centerY = iy + (ih / 2);
     
-    // X mark
-    tft.drawLine(ix + 20, iy + 4, ix + 28, iy + 12, COL_ALERT);
-    tft.drawLine(ix + 20, iy + 5, ix + 28, iy + 13, COL_ALERT);
-    tft.drawLine(ix + 28, iy + 4, ix + 20, iy + 12, COL_ALERT);
-    tft.drawLine(ix + 28, iy + 5, ix + 20, iy + 13, COL_ALERT);
-  } else {
-    // Draw speaker with waves
-    uint16_t col = COL_OK;
+    // Speaker rectangle (small box)
+    int boxW = 4;
+    int boxH = 6;
+    int boxX = ix + 4;
+    int boxY = centerY - (boxH / 2);
+    tft.fillRect(boxX, boxY, boxW, boxH, speakerCol);
     
-    // Speaker body
-    tft.fillRect(ix + 4, iy + 5, 6, 6, col);
-    tft.fillTriangle(ix + 10, iy + 8, ix + 18, iy + 2, ix + 18, iy + 14, col);
+    // Speaker cone (triangle pointing right)
+    int coneLeft = boxX + boxW;
+    int coneRight = coneLeft + 6;
+    int coneTop = centerY - 4;
+    int coneBottom = centerY + 4;
+    tft.fillTriangle(
+      coneLeft, centerY,        // left point (connects to box)
+      coneRight, coneTop,        // top right point
+      coneRight, coneBottom,     // bottom right point
+      speakerCol
+    );
     
-    // Sound waves
-    tft.drawArc(ix + 18, iy + 8, 6, 4, 315, 45, col, COL_BG);
-    tft.drawArc(ix + 18, iy + 8, 10, 8, 315, 45, col, COL_BG);
+    // X mark - clean and bold, positioned to the right of speaker
+    int xCenterX = ix + 18;
+    int xSize = 6;
+    // Draw thick X
+    for (int offset = 0; offset < 2; offset++) {
+      // Diagonal \
+      tft.drawLine(xCenterX - xSize/2 + offset, centerY - xSize/2, 
+                   xCenterX + xSize/2 + offset, centerY + xSize/2, xCol);
+      // Diagonal /
+      tft.drawLine(xCenterX - xSize/2 + offset, centerY + xSize/2, 
+                   xCenterX + xSize/2 + offset, centerY - xSize/2, xCol);
+    }
   }
+  // When unmuted, show nothing (clean footer)
 }
 
 // -------------------------------------------------------------

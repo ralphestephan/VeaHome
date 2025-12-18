@@ -127,6 +127,7 @@ export default function DeviceControlModal({
   });
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [togglingMute, setTogglingMute] = useState(false);
+  const [loadingAirguardData, setLoadingAirguardData] = useState(false);
   
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
@@ -165,27 +166,42 @@ export default function DeviceControlModal({
       return;
     }
     
+    setLoadingAirguardData(true);
     try {
       const [latestRes, statusRes] = await Promise.all([
         airguardApi.getLatest(smartMonitorId),
         airguardApi.getStatus(smartMonitorId),
       ]);
       
-      const latest = latestRes.data;
-      const status = statusRes.data;
+      // Backend response: { success: true, data: { data: {...} } }
+      const latest = latestRes.data?.data;
+      const status = statusRes.data?.data;
       
-      setLiveAirguardData({
+      if (!latest) {
+        console.error('[Airguard] No data:', latestRes.data);
+        return;
+      }
+      
+      console.log('[Airguard] Received:', latest);
+      
+      // Map backend fields - backend returns temperature/humidity (not temp/hum)
+      const newData = {
         temperature: latest.temperature,
         humidity: latest.humidity,
-        dust: latest.dust,
+        dust: latest.dust || latest.pm25 || latest.aqi,
         mq2: latest.mq2,
-        buzzer: latest.buzzer === 1 || latest.buzzer === true,
-        isOnline: status.online,
-        alertFlags: latest.alertFlags ?? 0,
+        buzzer: latest.buzzer === 1 || latest.buzzer === true || latest.buzzerEnabled === true,
+        isOnline: status?.online === true || status?.online === 1,
+        alertFlags: latest.alertFlags || 0,
         rssi: latest.rssi,
-      });
+      };
+      
+      console.log('[Airguard] Mapped:', newData);
+      setLiveAirguardData(newData);
     } catch (error) {
-      console.warn('Failed to fetch airguard data:', error);
+      console.error('[Airguard] Failed to fetch data:', error);
+    } finally {
+      setLoadingAirguardData(false);
     }
   }, [device, airguardApi, getSmartMonitorId]);
 
@@ -223,43 +239,27 @@ export default function DeviceControlModal({
     }
   }, [device, airguardApi, getSmartMonitorId]);
 
-  // Toggle mute/unmute buzzer directly via API
+  // Toggle mute/unmute buzzer - simple MQTT command
   const handleMuteToggle = useCallback(async (wantMuted: boolean) => {
     if (!device || device.type !== 'airguard') return;
     
     const smartMonitorId = getSmartMonitorId();
-    if (!smartMonitorId) {
-      setConfirmPopup({
-        visible: true,
-        type: 'error',
-        title: 'Error',
-        message: 'No SmartMonitor ID found for this device.',
-      });
-      return;
-    }
+    if (!smartMonitorId) return;
     
     setTogglingMute(true);
     try {
       // wantMuted=true means turn buzzer OFF, wantMuted=false means turn buzzer ON
-      await airguardApi.setBuzzer(smartMonitorId, wantMuted ? 'OFF' : 'ON');
+      const targetState = wantMuted ? 'OFF' : 'ON';
+      await airguardApi.setBuzzer(smartMonitorId, targetState);
       
-      // Update local state
+      // Update local state optimistically
       setLiveAirguardData(prev => prev ? { ...prev, buzzer: !wantMuted } : null);
-      
-      // Also call parent handler if provided
-      onToggleMute?.(device.id, wantMuted);
     } catch (error: any) {
       console.error('[Airguard] Failed to toggle buzzer:', error);
-      setConfirmPopup({
-        visible: true,
-        type: 'error',
-        title: 'Failed to Toggle Buzzer',
-        message: error?.response?.data?.message || error?.message || 'Unknown error',
-      });
     } finally {
       setTogglingMute(false);
     }
-  }, [device, airguardApi, getSmartMonitorId, onToggleMute]);
+  }, [device, airguardApi, getSmartMonitorId]);
 
   // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
@@ -380,19 +380,25 @@ export default function DeviceControlModal({
   useEffect(() => {
     if (!visible || !device || device.type !== 'airguard') {
       setLiveAirguardData(null);
+      setLoadingAirguardData(false);
       setShowThresholdSettings(false);
       return;
     }
+    
+    const smartMonitorId = getSmartMonitorId();
+    if (!smartMonitorId) return;
     
     // Initial fetch
     fetchAirguardData();
     fetchThresholds();
     
-    // Poll every 3 seconds
-    const interval = setInterval(fetchAirguardData, 3000);
+    // Poll every 2 seconds for live updates
+    const interval = setInterval(() => {
+      fetchAirguardData();
+    }, 2000);
     
     return () => clearInterval(interval);
-  }, [visible, device, fetchAirguardData, fetchThresholds]);
+  }, [visible, device, fetchAirguardData, fetchThresholds, getSmartMonitorId]);
 
   useEffect(() => {
     if (device) {
@@ -523,28 +529,9 @@ export default function DeviceControlModal({
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
-                {/* Online/Offline Status & Signal Strength */}
-                <View style={styles.statusRow}>
-                  <View style={styles.connectionStatus}>
-                    {liveAirguardData?.isOnline ? (
-                      <>
-                        <Wifi size={14} color="#4CAF50" />
-                        <Text style={[styles.connectionStatusText, { color: '#4CAF50' }]}>
-                          Online
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <WifiOff size={14} color={colors.mutedForeground} />
-                        <Text style={styles.connectionStatusText}>
-                          {liveAirguardData ? 'Offline' : 'Loading...'}
-                        </Text>
-                      </>
-                    )}
-                  </View>
-                  
-                  {/* Signal Strength Indicator */}
-                  {liveAirguardData?.rssi && (
+                {/* Signal Strength Indicator - Only show when online with signal */}
+                {liveAirguardData?.rssi && liveAirguardData?.isOnline !== false && (
+                  <View style={styles.statusRow}>
                     <View style={styles.signalStrengthContainer}>
                       {(() => {
                         const signal = getSignalStrength(liveAirguardData.rssi);
@@ -569,17 +556,17 @@ export default function DeviceControlModal({
                         );
                       })()}
                     </View>
-                  )}
-                </View>
+                  </View>
+                )}
 
-                {/* Alert banner using new component */}
+                {/* Alert banner using new component - ONLY use live data when available */}
                 <AirguardAlertBanner
-                  alertFlags={liveAirguardData?.alertFlags ?? (device.airQualityData as any)?.alertFlags}
+                  alertFlags={liveAirguardData?.alertFlags ?? 0}
                   sensorData={{
-                    temperature: liveAirguardData?.temperature ?? device.airQualityData?.temperature,
-                    humidity: liveAirguardData?.humidity ?? device.airQualityData?.humidity,
-                    dust: liveAirguardData?.dust ?? device.airQualityData?.dust,
-                    mq2: liveAirguardData?.mq2 ?? device.airQualityData?.mq2,
+                    temperature: liveAirguardData?.temperature,
+                    humidity: liveAirguardData?.humidity,
+                    dust: liveAirguardData?.dust,
+                    mq2: liveAirguardData?.mq2,
                   }}
                   thresholds={{
                     tempHigh: thresholds.tempHigh,
@@ -593,23 +580,33 @@ export default function DeviceControlModal({
                   showOkStatus={true}
                 />
 
-                {/* Use live data if available, fallback to device data */}
+                {/* Use live data only - show loading if not available */}
                 {(() => {
-                  const aq = liveAirguardData ?? device.airQualityData;
-                  const temp = aq?.temperature;
-                  const hum = aq?.humidity;
-                  const dust = aq?.dust;
-                  const mq2 = aq?.mq2;
-                  const isMuted = liveAirguardData?.buzzer === false || device.alarmMuted;
+                  // Only use fresh live data, no fallbacks to stale device properties
+                  const temp = liveAirguardData?.temperature;
+                  const hum = liveAirguardData?.humidity;
+                  const dust = liveAirguardData?.dust;
+                  const mq2 = liveAirguardData?.mq2;
+                  // buzzer: true = unmuted (alarm on), false = muted (alarm off)
+                  const isMuted = liveAirguardData?.buzzer === false;
                   
-                  // Use dynamic thresholds with min/max for temp and humidity
-                  const tempAlert = (temp ?? 0) > thresholds.tempHigh || (temp ?? 100) < thresholds.tempLow;
-                  const humAlert = (hum ?? 0) > thresholds.humidityHigh || (hum ?? 100) < thresholds.humidityLow;
-                  const dustAlert = (dust ?? 0) > thresholds.dustHigh;
-                  const mq2Alert = (mq2 ?? 0) > thresholds.mq2High;
+                  // Calculate alerts based on current values and thresholds
+                  const tempAlert = temp != null && (temp > thresholds.tempHigh || temp < thresholds.tempLow);
+                  const humAlert = hum != null && (hum > thresholds.humidityHigh || hum < thresholds.humidityLow);
+                  const dustAlert = dust != null && dust > thresholds.dustHigh;
+                  const mq2Alert = mq2 != null && mq2 > thresholds.mq2High;
                   
                   return (
                     <>
+                      {loadingAirguardData && !liveAirguardData && (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                          <ActivityIndicator size="large" color={colors.primary} />
+                          <Text style={{ color: colors.mutedForeground, marginTop: 10 }}>
+                            Loading sensor data...
+                          </Text>
+                        </View>
+                      )}
+                      
                       <View style={styles.airguardMetrics}>
                         <View style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}>
                           <Thermometer size={24} color={tempAlert ? '#FF6B6B' : colors.primary} />
@@ -646,7 +643,11 @@ export default function DeviceControlModal({
 
                       <TouchableOpacity
                         style={[styles.muteButton, isMuted && styles.muteButtonActive]}
-                        onPress={() => handleMuteToggle(!isMuted)}
+                        onPress={() => {
+                          // If currently muted, we want to unmute (pass false to wantMuted)
+                          // If currently unmuted, we want to mute (pass true to wantMuted)
+                          handleMuteToggle(!isMuted);
+                        }}
                         disabled={togglingMute}
                         activeOpacity={0.85}
                       >

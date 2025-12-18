@@ -10,12 +10,16 @@ export async function getSmartMonitorLatestTelemetry(req: Request, res: Response
   try {
     const { id } = req.params;
     const data = await getSmartMonitorLatest(String(id));
+    
+    console.log(`[Airguard] Device ${id} - InfluxDB data:`, data);
+    
     if (!data) {
+      console.warn(`[Airguard] No telemetry data found for device ${id}`);
       return successResponse(res, { data: null });
     }
 
     // For demo UI: treat dust as AQI (your ESP32 doesn't publish AQI)
-    return successResponse(res, {
+    const response = {
       data: {
         time: data.time,
         temperature: data.temp,
@@ -31,7 +35,10 @@ export async function getSmartMonitorLatestTelemetry(req: Request, res: Response
         rssi: data.rssi,
         uptime: data.uptime,
       },
-    });
+    };
+    
+    console.log(`[Airguard] Device ${id} - Response:`, response.data);
+    return successResponse(res, response);
   } catch (error: any) {
     console.error('getSmartMonitorLatestTelemetry error:', error);
     return errorResponse(res, error.message || 'Failed to query telemetry', 500);
