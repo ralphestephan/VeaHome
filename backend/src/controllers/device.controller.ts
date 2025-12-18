@@ -326,7 +326,7 @@ export async function getDeviceThresholds(req: Request, res: Response) {
     }
 
     // Fetch thresholds from InfluxDB smartmonitor_config measurement
-    const config = await getSmartMonitorConfig(deviceNumericId);
+    const config = await getSmartMonitorConfig(String(deviceNumericId));
     
     if (!config) {
       // Return defaults if no config found
