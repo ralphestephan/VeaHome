@@ -281,7 +281,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
       } catch {
         // ignore polling errors
       }
-    }, 5000);
+    }, 2000); // Poll every 2 seconds for faster updates
 
     return () => clearInterval(interval);
   }, [homeId, currentHomeId, token, isDemoMode]);

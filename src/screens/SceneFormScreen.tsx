@@ -114,13 +114,24 @@ export default function SceneFormScreen() {
     } else {
       newSelected.add(deviceId);
       const device = devices.find(d => d.id === deviceId);
-      setDeviceStates({
-        ...deviceStates,
-        [deviceId]: {
-          isActive: device?.isActive || false,
-          value: device?.value || undefined,
-        },
-      });
+      
+      // Initialize state based on device type
+      if (device?.type === 'airguard') {
+        setDeviceStates({
+          ...deviceStates,
+          [deviceId]: {
+            buzzer: true, // Default unmuted (buzzer ON)
+          },
+        });
+      } else {
+        setDeviceStates({
+          ...deviceStates,
+          [deviceId]: {
+            isActive: device?.isActive || false,
+            value: device?.value || undefined,
+          },
+        });
+      }
     }
     setSelectedDevices(newSelected);
   };
@@ -320,42 +331,72 @@ export default function SceneFormScreen() {
 
                   {isSelected && (
                     <View style={styles.deviceConfig}>
-                      <View style={styles.configRow}>
-                        <Text style={styles.configLabel}>State</Text>
-                        <TouchableOpacity
-                          style={[
-                            styles.toggleButton,
-                            deviceState.isActive && styles.toggleButtonActive,
-                          ]}
-                          onPress={() =>
-                            updateDeviceState(device.id, 'isActive', !deviceState.isActive)
-                          }
-                        >
-                          <Text
-                            style={[
-                              styles.toggleText,
-                              deviceState.isActive && styles.toggleTextActive,
-                            ]}
-                          >
-                            {deviceState.isActive ? 'ON' : 'OFF'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
+                      {device.type === 'airguard' ? (
+                        <>
+                          {/* AirGuard: Mute/Unmute control */}
+                          <View style={styles.configRow}>
+                            <Text style={styles.configLabel}>Buzzer</Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.toggleButton,
+                                deviceState.buzzer !== false && styles.toggleButtonActive,
+                              ]}
+                              onPress={() =>
+                                updateDeviceState(device.id, 'buzzer', deviceState.buzzer === false)
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.toggleText,
+                                  deviceState.buzzer !== false && styles.toggleTextActive,
+                                ]}
+                              >
+                                {deviceState.buzzer === false ? 'MUTED' : 'UNMUTED'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          {/* Regular devices: On/Off control */}
+                          <View style={styles.configRow}>
+                            <Text style={styles.configLabel}>State</Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.toggleButton,
+                                deviceState.isActive && styles.toggleButtonActive,
+                              ]}
+                              onPress={() =>
+                                updateDeviceState(device.id, 'isActive', !deviceState.isActive)
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.toggleText,
+                                  deviceState.isActive && styles.toggleTextActive,
+                                ]}
+                              >
+                                {deviceState.isActive ? 'ON' : 'OFF'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
 
-                      {(device.type === 'light' || device.value !== undefined) && (
-                        <View style={styles.configRow}>
-                          <Text style={styles.configLabel}>Value</Text>
-                          <TextInput
-                            style={styles.valueInput}
-                            value={deviceState.value?.toString() || ''}
-                            onChangeText={(text) =>
-                              updateDeviceState(device.id, 'value', Number(text))
-                            }
-                            placeholder={device.value?.toString() || '0'}
-                            keyboardType="numeric"
-                            placeholderTextColor={colors.mutedForeground}
-                          />
-                        </View>
+                          {(device.type === 'light' || device.value !== undefined) && (
+                            <View style={styles.configRow}>
+                              <Text style={styles.configLabel}>Value</Text>
+                              <TextInput
+                                style={styles.valueInput}
+                                value={deviceState.value?.toString() || ''}
+                                onChangeText={(text) =>
+                                  updateDeviceState(device.id, 'value', Number(text))
+                                }
+                                placeholder={device.value?.toString() || '0'}
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                          )}
+                        </>
                       )}
                     </View>
                   )}

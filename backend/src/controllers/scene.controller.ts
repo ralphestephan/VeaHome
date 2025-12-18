@@ -150,12 +150,26 @@ export async function activateScene(req: Request, res: Response) {
 
         await updateDevice(deviceId, normalized.update);
 
-        const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
-        if (normalized.command && mqttTopic) {
-          publishCommand(`${mqttTopic}/devices/${deviceId}/control`, {
-            ...normalized.command,
-            sceneId,
+        // Handle AirGuard buzzer control via MQTT
+        if (device.type === 'airguard' && normalized.command.action?.startsWith('BUZZER_')) {
+          const smartMonitorId = device.metadata?.smartMonitorId || 1;
+          const buzzerState = normalized.command.action === 'BUZZER_ON' ? 'ON' : 'OFF';
+          publishCommand(`vealive/smartmonitor/${smartMonitorId}/control`, {
+            command: 'SET_BUZZER',
+            state: buzzerState,
+            timestamp: normalized.command.timestamp,
+            source: 'scene',
           });
+          console.log(`[Scene] Set AirGuard ${smartMonitorId} buzzer to ${buzzerState}`);
+        } else {
+          // Regular device MQTT control
+          const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
+          if (normalized.command && mqttTopic) {
+            publishCommand(`${mqttTopic}/devices/${deviceId}/control`, {
+              ...normalized.command,
+              sceneId,
+            });
+          }
         }
 
         await recordDeviceActivity({
@@ -196,12 +210,22 @@ function normalizeDeviceState(state: Record<string, unknown>) {
   };
   let hasUpdate = false;
 
+  // Handle AirGuard buzzer control
+  if (typeof state.buzzer === 'boolean') {
+    update.buzzer = state.buzzer;
+    command.action = state.buzzer ? 'BUZZER_ON' : 'BUZZER_OFF';
+    command.buzzer = state.buzzer;
+    hasUpdate = true;
+  }
+
+  // Handle regular device on/off
   if (typeof state.isActive === 'boolean') {
     update.isActive = state.isActive;
     command.action = state.isActive ? 'ON' : 'OFF';
     hasUpdate = true;
   }
 
+  // Handle device value (brightness, temperature, etc.)
   if (typeof state.value === 'number') {
     update.value = state.value;
     command.value = state.value;

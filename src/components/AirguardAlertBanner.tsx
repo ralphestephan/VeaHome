@@ -32,8 +32,8 @@ export function decodeAlertFlags(alertFlags: number): string[] {
 }
 
 /**
- * Get alert info from alertFlags AND sensor values with thresholds
- * Combines both sources to ensure accurate alert state
+ * Get alert info from alertFlags from the backend
+ * The backend is the source of truth for alerts - it tracks violations over time
  */
 export function getAlertInfo(
   alertFlags?: number,
@@ -52,64 +52,15 @@ export function getAlertInfo(
     mq2High?: number;
   }
 ): AlertInfo {
-  // Start with alertFlags from device if provided
-  let reasons: string[] = [];
-  let combinedFlags = 0;
+  // Use the backend's alertFlags as the source of truth
+  // The device/backend maintains alert state even if current readings are normal
+  const flags = alertFlags ?? 0;
+  const reasons = decodeAlertFlags(flags);
   
-  if (typeof alertFlags === 'number') {
-    reasons = decodeAlertFlags(alertFlags);
-    combinedFlags = alertFlags;
-  }
+  const result = { hasAlert: reasons.length > 0, reasons, alertFlags: flags };
+  console.log('[getAlertInfo] Using backend alertFlags:', flags, 'Reasons:', reasons, 'Current sensor data:', sensorData);
   
-  // Also check sensor data against thresholds (in case alertFlags is stale or missing)
-  if (sensorData && thresholds) {
-    const { temperature, humidity, dust, mq2 } = sensorData;
-    const { tempHigh = 35, tempLow = 10, humidityHigh = 80, humidityLow = 20, dustHigh = 400, mq2High = 60 } = thresholds;
-    
-    // Compute actual violations
-    const tempViolation = temperature != null && (temperature > tempHigh || temperature < tempLow);
-    const humViolation = humidity != null && (humidity > humidityHigh || humidity < humidityLow);
-    const dustViolation = dust != null && dust > dustHigh;
-    const mq2Violation = mq2 != null && mq2 > mq2High;
-    
-    // Add to reasons if not already present
-    if (tempViolation && !reasons.includes('Temp')) {
-      reasons.push('Temp');
-      combinedFlags |= 1;
-    }
-    if (humViolation && !reasons.includes('Humidity')) {
-      reasons.push('Humidity');
-      combinedFlags |= 2;
-    }
-    if (dustViolation && !reasons.includes('Dust')) {
-      reasons.push('Dust');
-      combinedFlags |= 4;
-    }
-    if (mq2Violation && !reasons.includes('Gas')) {
-      reasons.push('Gas');
-      combinedFlags |= 8;
-    }
-    
-    // Remove reasons that are no longer valid (sensor data shows it's OK now)
-    if (!tempViolation) {
-      reasons = reasons.filter(r => r !== 'Temp');
-      combinedFlags &= ~1;
-    }
-    if (!humViolation) {
-      reasons = reasons.filter(r => r !== 'Humidity');
-      combinedFlags &= ~2;
-    }
-    if (!dustViolation) {
-      reasons = reasons.filter(r => r !== 'Dust');
-      combinedFlags &= ~4;
-    }
-    if (!mq2Violation) {
-      reasons = reasons.filter(r => r !== 'Gas');
-      combinedFlags &= ~8;
-    }
-  }
-  
-  return { hasAlert: reasons.length > 0, reasons, alertFlags: combinedFlags };
+  return result;
 }
 
 interface AirguardAlertBannerProps {

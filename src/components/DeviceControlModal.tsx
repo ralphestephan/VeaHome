@@ -222,8 +222,12 @@ export default function DeviceControlModal({
     
     try {
       const res = await airguardApi.getThresholds(smartMonitorId);
+      console.log('[Thresholds] API response:', JSON.stringify(res, null, 2));
       const data = res.data?.data;
+      console.log('[Thresholds] Extracted data:', JSON.stringify(data, null, 2));
+      
       if (data) {
+        // Use API values directly, only fallback if explicitly null/undefined
         const newThresholds = {
           tempHigh: data.tempMax ?? data.tempHigh ?? 35,
           tempLow: data.tempMin ?? data.tempLow ?? 10,
@@ -232,6 +236,7 @@ export default function DeviceControlModal({
           dustHigh: data.dustHigh ?? data.dust ?? 400,
           mq2High: data.mq2High ?? data.mq2 ?? 60,
         };
+        console.log('[Thresholds] Applied:', newThresholds);
         setThresholds(newThresholds);
         setEditingThresholds({
           tempHigh: String(newThresholds.tempHigh),
@@ -241,9 +246,11 @@ export default function DeviceControlModal({
           dustHigh: String(newThresholds.dustHigh),
           mq2High: String(newThresholds.mq2High),
         });
+      } else {
+        console.warn('[Thresholds] No data in response, using defaults');
       }
     } catch (error) {
-      console.warn('Failed to fetch thresholds:', error);
+      console.error('[Thresholds] Failed to fetch:', error);
     }
   }, [device, airguardApi, getSmartMonitorId]);
 
@@ -579,7 +586,16 @@ export default function DeviceControlModal({
 
                 {/* Alert banner using new component - ONLY use live data when available */}
                 <AirguardAlertBanner
-                  alertFlags={liveAirguardData?.alertFlags ?? 0}
+                  alertFlags={(() => {
+                    const flags = liveAirguardData?.alertFlags ?? 0;
+                    console.log('[AlertBanner] AlertFlags:', flags, 'Sensor data:', {
+                      temp: liveAirguardData?.temperature,
+                      hum: liveAirguardData?.humidity,
+                      dust: liveAirguardData?.dust,
+                      mq2: liveAirguardData?.mq2
+                    }, 'Thresholds:', thresholds);
+                    return flags;
+                  })()}
                   sensorData={{
                     temperature: liveAirguardData?.temperature,
                     humidity: liveAirguardData?.humidity,
@@ -689,7 +705,10 @@ export default function DeviceControlModal({
                       {/* Threshold Settings Button */}
                       <TouchableOpacity
                         style={styles.thresholdToggle}
-                        onPress={() => setShowThresholdSettings(true)}
+                        onPress={() => {
+                          fetchThresholds(); // Fetch current thresholds before opening
+                          setShowThresholdSettings(true);
+                        }}
                         activeOpacity={0.8}
                       >
                         <Settings size={18} color={colors.mutedForeground} />

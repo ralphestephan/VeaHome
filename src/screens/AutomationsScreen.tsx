@@ -1,15 +1,21 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Wand2, Plus, Trash2, Clock, Sun, Moon, Home, Zap } from 'lucide-react-native';
+import { Wand2, Plus, Trash2, Clock, Sun, Moon, Home, Zap, Edit } from 'lucide-react-native';
 import Header from '../components/Header';
 import CreationHero from '../components/CreationHero';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, AutomationsApi } from '../services/api';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AutomationsScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const { token, currentHomeId, user } = useAuth();
   const { colors, gradients, shadows } = useTheme();
   const isDemoMode = token === 'DEMO_TOKEN';
@@ -54,13 +60,11 @@ export default function AutomationsScreen() {
 
   const handleCreate = async () => {
     if (!homeId) return;
-    try {
-      const payload = { name: 'New Automation', trigger: { type: 'time', at: '08:00' }, actions: [] };
-      await automationsApi.createAutomation(homeId, payload);
-      loadAutomations();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to create automation');
-    }
+    navigation.navigate('AutomationForm', { homeId });
+  };
+
+  const handleEdit = (automation: any) => {
+    navigation.navigate('AutomationForm', { homeId, automationId: automation.id });
   };
 
   const handleToggleAutomation = (id: string) => {
@@ -116,7 +120,11 @@ export default function AutomationsScreen() {
           {automations.map((a) => {
             const IconComponent = getAutomationIcon(a);
             return (
-              <View key={a.id} style={[styles.card, a.enabled && styles.cardActive]}>
+              <TouchableOpacity
+                key={a.id}
+                onPress={() => handleEdit(a)}
+                style={[styles.card, a.enabled && styles.cardActive]}
+              >
                 <View style={styles.cardHeader}>
                   <View style={[styles.icon, a.enabled && styles.iconActive]}>
                     <IconComponent size={18} color={a.enabled ? colors.primary : colors.mutedForeground} />
@@ -124,28 +132,30 @@ export default function AutomationsScreen() {
                   <View style={styles.titleWrap}>
                     <Text style={styles.cardTitle}>{a.name}</Text>
                     <Text style={styles.cardSubtitle}>
-                      {a.trigger?.type || 'custom'} • {a.trigger?.at || a.trigger?.event || ''}
+                      {a.trigger?.type || 'custom'} • {a.trigger?.at || a.trigger?.event || a.trigger?.sensorType || ''}
                     </Text>
                   </View>
-                  {isDemoMode ? (
-                    <Switch
-                      value={a.enabled}
-                      onValueChange={() => handleToggleAutomation(a.id)}
-                      trackColor={{ false: colors.muted, true: colors.primary + '60' }}
-                      thumbColor={a.enabled ? colors.primary : colors.mutedForeground}
-                    />
-                  ) : (
-                    <TouchableOpacity onPress={() => handleDelete(a.id)}>
-                      <Trash2 size={18} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  )}
+                  <View style={styles.cardActions}>
+                    {isDemoMode ? (
+                      <Switch
+                        value={a.enabled}
+                        onValueChange={() => handleToggleAutomation(a.id)}
+                        trackColor={{ false: colors.muted, true: colors.primary + '60' }}
+                        thumbColor={a.enabled ? colors.primary : colors.mutedForeground}
+                      />
+                    ) : (
+                      <TouchableOpacity onPress={() => handleDelete(a.id)}>
+                        <Trash2 size={18} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
                 {a.actions && a.actions.length > 0 && (
                   <Text style={styles.actionsText}>
                     {a.actions.length} action{a.actions.length > 1 ? 's' : ''}
                   </Text>
                 )}
-              </View>
+              </TouchableOpacity>
             );
           })}
           {automations.length === 0 && (
@@ -199,6 +209,7 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       backgroundColor: `${colors.primary}20`,
     },
     titleWrap: { flex: 1 },
+    cardActions: { marginLeft: spacing.sm },
     cardTitle: { color: colors.foreground, fontWeight: '600', fontSize: fontSize.md },
     cardSubtitle: { color: colors.mutedForeground, fontSize: fontSize.sm, marginTop: 2 },
     actionsText: { 

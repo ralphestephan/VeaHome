@@ -8,6 +8,7 @@ export type RootStackParamList = {
   Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;
   SceneForm: { sceneId?: string; homeId: string };
+  AutomationForm: { automationId?: string; homeId: string };
   Schedules: undefined;
   HomeSelector: undefined;
   DeviceGroups: undefined;
