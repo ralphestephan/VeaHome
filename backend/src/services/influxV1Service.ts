@@ -91,8 +91,9 @@ export async function getSmartMonitorLatest(deviceNumericId: string) {
 }
 
 export async function getSmartMonitorStatus(deviceNumericId: string) {
-  // Query with time to determine staleness
-  const baseSelect = 'SELECT LAST(online) AS online, time FROM smartmonitor_status';
+  // Use telemetry timestamp instead of separate status measurement
+  // Device publishes telemetry every 2 seconds, so if last telemetry is recent, device is online
+  const baseSelect = 'SELECT time FROM smartmonitor_telemetry';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       const result = await queryInfluxV1(q);
@@ -103,18 +104,25 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
   };
 
   const row = await tryQueries([
-    `${baseSelect} WHERE deviceId='${deviceNumericId}'`,
-    `${baseSelect} WHERE "deviceId"='${deviceNumericId}'`,
-    baseSelect,
+    `${baseSelect} WHERE deviceId='${deviceNumericId}' ORDER BY time DESC LIMIT 1`,
+    `${baseSelect} WHERE "deviceId"='${deviceNumericId}' ORDER BY time DESC LIMIT 1`,
+    `${baseSelect} ORDER BY time DESC LIMIT 1`,
   ]);
 
-  if (!row) return null;
+  if (!row) {
+    return {
+      time: null,
+      online: false,
+      isStale: true,
+    };
+  }
 
-  // Staleness check: if the last status is older than 2 minutes, consider offline
-  const staleMs = 2 * 60 * 1000; // 2 minutes
+  // Staleness check: if the last telemetry is older than 10 seconds, consider offline
+  // (Device publishes every 2 seconds, so 10s = 5 missed publishes)
+  const staleMs = 10 * 1000; // 10 seconds
   const lastTime = row.time ? new Date(row.time).getTime() : 0;
   const isStale = Date.now() - lastTime > staleMs;
-  const onlineValue = isStale ? false : Boolean(row.online);
+  const onlineValue = !isStale;
 
   return {
     time: row.time,

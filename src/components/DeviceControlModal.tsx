@@ -173,16 +173,23 @@ export default function DeviceControlModal({
         airguardApi.getStatus(smartMonitorId),
       ]);
       
-      // Backend response: { success: true, data: { data: {...} } }
-      const latest = latestRes.data?.data;
-      const status = statusRes.data?.data;
+      // Backend response has TRIPLE nesting: { success: true, data: { data: { data: {...} } } }
+      // This is because successResponse wraps it, then controller wraps it again
+      const latestWrapper = latestRes.data?.data;
+      const statusWrapper = statusRes.data?.data;
+      
+      // Extract actual data from the inner wrapper
+      const latest = latestWrapper?.data || latestWrapper;
+      const status = statusWrapper?.data || statusWrapper;
+      
+      console.log('[Airguard] Raw response:', { latestWrapper, statusWrapper });
+      console.log('[Airguard] Extracted data:', { latest, status });
       
       if (!latest) {
-        console.error('[Airguard] No data:', latestRes.data);
+        console.error('[Airguard] No data in response:', latestRes.data);
+        setLiveAirguardData(null);
         return;
       }
-      
-      console.log('[Airguard] Received:', latest);
       
       // Map backend fields - backend returns temperature/humidity (not temp/hum)
       const newData = {
@@ -196,10 +203,12 @@ export default function DeviceControlModal({
         rssi: latest.rssi,
       };
       
-      console.log('[Airguard] Mapped:', newData);
+      console.log('[Airguard] Mapped data:', newData);
+      console.log('[Airguard] AlertFlags value:', newData.alertFlags, 'Type:', typeof newData.alertFlags);
       setLiveAirguardData(newData);
     } catch (error) {
       console.error('[Airguard] Failed to fetch data:', error);
+      setLiveAirguardData(null);
     } finally {
       setLoadingAirguardData(false);
     }
@@ -250,16 +259,22 @@ export default function DeviceControlModal({
     try {
       // wantMuted=true means turn buzzer OFF, wantMuted=false means turn buzzer ON
       const targetState = wantMuted ? 'OFF' : 'ON';
+      console.log(`[Airguard] Sending buzzer command: ${targetState}`);
       await airguardApi.setBuzzer(smartMonitorId, targetState);
       
       // Update local state optimistically
       setLiveAirguardData(prev => prev ? { ...prev, buzzer: !wantMuted } : null);
+      
+      // Force immediate sync from backend after 500ms to get actual state
+      setTimeout(() => {
+        fetchAirguardData();
+        setTogglingMute(false);
+      }, 500);
     } catch (error: any) {
       console.error('[Airguard] Failed to toggle buzzer:', error);
-    } finally {
       setTogglingMute(false);
     }
-  }, [device, airguardApi, getSmartMonitorId]);
+  }, [device, airguardApi, getSmartMonitorId, fetchAirguardData]);
 
   // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
@@ -382,6 +397,7 @@ export default function DeviceControlModal({
       setLiveAirguardData(null);
       setLoadingAirguardData(false);
       setShowThresholdSettings(false);
+      setTogglingMute(false);
       return;
     }
     
@@ -392,12 +408,15 @@ export default function DeviceControlModal({
     fetchAirguardData();
     fetchThresholds();
     
-    // Poll every 2 seconds for live updates
+    // Poll every 2 seconds for live updates - ALWAYS sync, no pauses
     const interval = setInterval(() => {
       fetchAirguardData();
     }, 2000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      setTogglingMute(false);
+    };
   }, [visible, device, fetchAirguardData, fetchThresholds, getSmartMonitorId]);
 
   useEffect(() => {

@@ -43,9 +43,9 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
   const deviceAlert = room.alert === true;
   const isAlert = alertReasons.length > 0 || deviceAlert;
 
-  // Air quality (dust/gas only) - use alertFlags
+  // Air quality (dust/gas only) - use bitwise check on alertFlags
   const hasAirSensors = pm25 !== undefined || mq2 !== undefined;
-  const isAirBad = alertReasons.includes('Dust') || alertReasons.includes('Gas');
+  const isAirBad = (alertFlags & 4) !== 0 || (alertFlags & 8) !== 0;
 
   // Get alert icon based on type
   const getAlertIcon = (): any => {
