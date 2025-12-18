@@ -93,8 +93,10 @@ export async function getSmartMonitorThresholds(req: Request, res: Response) {
       // Return default thresholds if none stored
       return successResponse(res, {
         data: {
-          tempHigh: 35,
-          humidityHigh: 80,
+          tempMin: 18,
+          tempMax: 30,
+          humMin: 30,
+          humMax: 70,
           dustHigh: 400,
           mq2High: 60,
           isDefault: true,
@@ -105,10 +107,12 @@ export async function getSmartMonitorThresholds(req: Request, res: Response) {
     return successResponse(res, {
       data: {
         time: thresholds.time,
-        tempHigh: thresholds.tempHigh,
-        humidityHigh: thresholds.humidityHigh,
-        dustHigh: thresholds.dustHigh,
-        mq2High: thresholds.mq2High,
+        tempMin: thresholds.tempMin ?? 18,
+        tempMax: thresholds.tempMax ?? 30,
+        humMin: thresholds.humMin ?? 30,
+        humMax: thresholds.humMax ?? 70,
+        dustHigh: thresholds.dustHigh ?? thresholds.dust ?? 400,
+        mq2High: thresholds.mq2High ?? thresholds.mq2 ?? 60,
         isDefault: false,
       },
     });
@@ -121,15 +125,21 @@ export async function getSmartMonitorThresholds(req: Request, res: Response) {
 export async function setSmartMonitorThresholds(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { tempHigh, humidityHigh, dustHigh, mq2High } = req.body || {};
+    const { tempMin, tempMax, humMin, humMax, dustHigh, mq2High } = req.body || {};
 
-    // Validate thresholds
-    const thresholds = {
-      tempHigh: typeof tempHigh === 'number' ? tempHigh : 35,
-      humidityHigh: typeof humidityHigh === 'number' ? humidityHigh : 80,
-      dustHigh: typeof dustHigh === 'number' ? dustHigh : 400,
-      mq2High: typeof mq2High === 'number' ? mq2High : 60,
-    };
+    // Build thresholds object - only include fields that were provided
+    const thresholds: Record<string, number> = {};
+    
+    if (typeof tempMin === 'number') thresholds.tempMin = tempMin;
+    if (typeof tempMax === 'number') thresholds.tempMax = tempMax;
+    if (typeof humMin === 'number') thresholds.humMin = humMin;
+    if (typeof humMax === 'number') thresholds.humMax = humMax;
+    if (typeof dustHigh === 'number') thresholds.dustHigh = dustHigh;
+    if (typeof mq2High === 'number') thresholds.mq2High = mq2High;
+    
+    // Also support legacy field names
+    if (typeof req.body?.dust === 'number') thresholds.dustHigh = req.body.dust;
+    if (typeof req.body?.mq2 === 'number') thresholds.mq2High = req.body.mq2;
 
     // Publish to MQTT topic for the device to receive
     const topic = `vealive/smartmonitor/${id}/command/thresholds`;

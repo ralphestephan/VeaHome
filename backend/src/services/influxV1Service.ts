@@ -124,7 +124,7 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
 
 export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: string) {
   // Query thresholds from smartmonitor_thresholds measurement
-  const baseSelect = 'SELECT LAST(tempHigh) AS tempHigh, LAST(humidityHigh) AS humidityHigh, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_thresholds';
+  const baseSelect = 'SELECT LAST(tempMin) AS tempMin, LAST(tempMax) AS tempMax, LAST(humMin) AS humMin, LAST(humMax) AS humMax, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_thresholds';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       try {
@@ -148,8 +148,12 @@ export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: strin
 
   return {
     time: row.time,
-    tempHigh: row.tempHigh,
-    humidityHigh: row.humidityHigh,
+    tempMin: row.tempMin,
+    tempMax: row.tempMax,
+    humMin: row.humMin,
+    humMax: row.humMax,
+    dust: row.dust,
+    mq2: row.mq2,
     dustHigh: row.dustHigh,
     mq2High: row.mq2High,
   };

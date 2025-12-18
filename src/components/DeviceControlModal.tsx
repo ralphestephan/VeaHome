@@ -101,17 +101,21 @@ export default function DeviceControlModal({
     isOnline?: boolean;
   } | null>(null);
   
-  // Threshold state for Airguard
+  // Threshold state for Airguard (min/max for temp & humidity)
   const [thresholds, setThresholds] = useState({
     tempHigh: 35,
+    tempLow: 10,
     humidityHigh: 80,
+    humidityLow: 20,
     dustHigh: 400,
     mq2High: 60,
   });
   const [showThresholdSettings, setShowThresholdSettings] = useState(false);
   const [editingThresholds, setEditingThresholds] = useState({
     tempHigh: '35',
+    tempLow: '10',
     humidityHigh: '80',
+    humidityLow: '20',
     dustHigh: '400',
     mq2High: '60',
   });
@@ -164,15 +168,19 @@ export default function DeviceControlModal({
       const data = res.data?.data;
       if (data) {
         const newThresholds = {
-          tempHigh: data.tempHigh ?? 35,
-          humidityHigh: data.humidityHigh ?? 80,
-          dustHigh: data.dustHigh ?? 400,
-          mq2High: data.mq2High ?? 60,
+          tempHigh: data.tempMax ?? data.tempHigh ?? 35,
+          tempLow: data.tempMin ?? data.tempLow ?? 10,
+          humidityHigh: data.humMax ?? data.humidityHigh ?? 80,
+          humidityLow: data.humMin ?? data.humidityLow ?? 20,
+          dustHigh: data.dustHigh ?? data.dust ?? 400,
+          mq2High: data.mq2High ?? data.mq2 ?? 60,
         };
         setThresholds(newThresholds);
         setEditingThresholds({
           tempHigh: String(newThresholds.tempHigh),
+          tempLow: String(newThresholds.tempLow),
           humidityHigh: String(newThresholds.humidityHigh),
+          humidityLow: String(newThresholds.humidityLow),
           dustHigh: String(newThresholds.dustHigh),
           mq2High: String(newThresholds.mq2High),
         });
@@ -182,23 +190,36 @@ export default function DeviceControlModal({
     }
   }, [device, airguardApi]);
 
-  // Save thresholds to device via MQTT
+  // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
     
     const smartMonitorId = device.metadata?.smartMonitorId;
     if (!smartMonitorId) return;
     
+    // Local state values
     const newThresholds = {
       tempHigh: parseFloat(editingThresholds.tempHigh) || 35,
+      tempLow: parseFloat(editingThresholds.tempLow) || 10,
       humidityHigh: parseFloat(editingThresholds.humidityHigh) || 80,
+      humidityLow: parseFloat(editingThresholds.humidityLow) || 20,
       dustHigh: parseFloat(editingThresholds.dustHigh) || 400,
       mq2High: parseFloat(editingThresholds.mq2High) || 60,
     };
     
+    // Map to API field names
+    const apiPayload = {
+      tempMax: newThresholds.tempHigh,
+      tempMin: newThresholds.tempLow,
+      humMax: newThresholds.humidityHigh,
+      humMin: newThresholds.humidityLow,
+      dustHigh: newThresholds.dustHigh,
+      mq2High: newThresholds.mq2High,
+    };
+    
     setSavingThresholds(true);
     try {
-      await airguardApi.setThresholds(smartMonitorId, newThresholds);
+      await airguardApi.setThresholds(smartMonitorId, apiPayload);
       setThresholds(newThresholds);
       setShowThresholdSettings(false);
       Alert.alert('Success', 'Thresholds sent to Airguard. Changes will apply when device receives the command.');
@@ -348,8 +369,8 @@ export default function DeviceControlModal({
                   const aq = liveAirguardData ?? device.airQualityData;
                   if (aq?.dust != null && aq.dust > thresholds.dustHigh) reasons.push('Dust');
                   if (aq?.mq2 != null && aq.mq2 > thresholds.mq2High) reasons.push('Gas');
-                  if (aq?.temperature != null && aq.temperature > thresholds.tempHigh) reasons.push('Temp');
-                  if (aq?.humidity != null && aq.humidity > thresholds.humidityHigh) reasons.push('Humidity');
+                  if (aq?.temperature != null && (aq.temperature > thresholds.tempHigh || aq.temperature < thresholds.tempLow)) reasons.push('Temp');
+                  if (aq?.humidity != null && (aq.humidity > thresholds.humidityHigh || aq.humidity < thresholds.humidityLow)) reasons.push('Humidity');
                   const hasAlert = (device.airQualityData?.alert) || reasons.length > 0;
                   if (!hasAlert) return null;
                   return (
@@ -371,9 +392,9 @@ export default function DeviceControlModal({
                   const mq2 = aq?.mq2;
                   const isMuted = liveAirguardData?.buzzer === false || device.alarmMuted;
                   
-                  // Use dynamic thresholds
-                  const tempAlert = (temp ?? 0) > thresholds.tempHigh;
-                  const humAlert = (hum ?? 0) > thresholds.humidityHigh;
+                  // Use dynamic thresholds with min/max for temp and humidity
+                  const tempAlert = (temp ?? 0) > thresholds.tempHigh || (temp ?? 100) < thresholds.tempLow;
+                  const humAlert = (hum ?? 0) > thresholds.humidityHigh || (hum ?? 100) < thresholds.humidityLow;
                   const dustAlert = (dust ?? 0) > thresholds.dustHigh;
                   const mq2Alert = (mq2 ?? 0) > thresholds.mq2High;
                   
@@ -433,102 +454,182 @@ export default function DeviceControlModal({
                         </LinearGradient>
                       </TouchableOpacity>
 
-                      {/* Threshold Settings Toggle */}
+                      {/* Threshold Settings Button */}
                       <TouchableOpacity
                         style={styles.thresholdToggle}
-                        onPress={() => setShowThresholdSettings(!showThresholdSettings)}
+                        onPress={() => setShowThresholdSettings(true)}
                         activeOpacity={0.8}
                       >
                         <Settings size={18} color={colors.mutedForeground} />
                         <Text style={styles.thresholdToggleText}>
-                          {showThresholdSettings ? 'Hide Threshold Settings' : 'Threshold Settings'}
+                          Threshold Settings
                         </Text>
                       </TouchableOpacity>
 
-                      {/* Threshold Settings Panel */}
-                      {showThresholdSettings && (
-                        <View style={styles.thresholdPanel}>
-                          <Text style={styles.thresholdPanelTitle}>Alert Thresholds</Text>
-                          <Text style={styles.thresholdPanelSubtitle}>
-                            Set the values at which alerts will trigger
-                          </Text>
-                          
-                          <View style={styles.thresholdRow}>
-                            <View style={styles.thresholdInputGroup}>
-                              <Thermometer size={16} color={colors.primary} />
-                              <Text style={styles.thresholdLabel}>Temp (°C)</Text>
-                              <TextInput
-                                style={styles.thresholdInput}
-                                value={editingThresholds.tempHigh}
-                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempHigh: text }))}
-                                keyboardType="numeric"
-                                placeholder="35"
-                                placeholderTextColor={colors.mutedForeground}
-                              />
-                            </View>
-                            
-                            <View style={styles.thresholdInputGroup}>
-                              <Droplets size={16} color={colors.primary} />
-                              <Text style={styles.thresholdLabel}>Humidity (%)</Text>
-                              <TextInput
-                                style={styles.thresholdInput}
-                                value={editingThresholds.humidityHigh}
-                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityHigh: text }))}
-                                keyboardType="numeric"
-                                placeholder="80"
-                                placeholderTextColor={colors.mutedForeground}
-                              />
-                            </View>
-                          </View>
-                          
-                          <View style={styles.thresholdRow}>
-                            <View style={styles.thresholdInputGroup}>
-                              <Wind size={16} color={colors.primary} />
-                              <Text style={styles.thresholdLabel}>Dust</Text>
-                              <TextInput
-                                style={styles.thresholdInput}
-                                value={editingThresholds.dustHigh}
-                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, dustHigh: text }))}
-                                keyboardType="numeric"
-                                placeholder="400"
-                                placeholderTextColor={colors.mutedForeground}
-                              />
-                            </View>
-                            
-                            <View style={styles.thresholdInputGroup}>
-                              <Fan size={16} color={colors.primary} />
-                              <Text style={styles.thresholdLabel}>Gas/Smoke</Text>
-                              <TextInput
-                                style={styles.thresholdInput}
-                                value={editingThresholds.mq2High}
-                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, mq2High: text }))}
-                                keyboardType="numeric"
-                                placeholder="60"
-                                placeholderTextColor={colors.mutedForeground}
-                              />
-                            </View>
-                          </View>
-                          
-                          <TouchableOpacity
-                            style={[styles.saveThresholdsButton, savingThresholds && styles.saveThresholdsButtonDisabled]}
-                            onPress={saveThresholds}
-                            disabled={savingThresholds}
-                            activeOpacity={0.85}
+                      {/* Threshold Settings Popup Modal */}
+                      <Modal
+                        visible={showThresholdSettings}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowThresholdSettings(false)}
+                      >
+                        <View style={styles.thresholdModalOverlay}>
+                          <TouchableOpacity 
+                            style={StyleSheet.absoluteFill} 
+                            onPress={() => setShowThresholdSettings(false)} 
+                            activeOpacity={1}
                           >
-                            <LinearGradient
-                              colors={[colors.primary, colors.neonCyan]}
-                              style={styles.saveThresholdsGradient}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 0 }}
-                            >
-                              <Check size={18} color="#fff" />
-                              <Text style={styles.saveThresholdsText}>
-                                {savingThresholds ? 'Sending...' : 'Save & Sync to Device'}
-                              </Text>
-                            </LinearGradient>
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
                           </TouchableOpacity>
+                          
+                          <View style={styles.thresholdModalContent}>
+                            <LinearGradient
+                              colors={[colors.card, colors.cardAlt]}
+                              style={styles.thresholdModalInner}
+                            >
+                              {/* Header */}
+                              <View style={styles.thresholdModalHeader}>
+                                <Text style={styles.thresholdModalTitle}>Alert Thresholds</Text>
+                                <TouchableOpacity onPress={() => setShowThresholdSettings(false)} style={styles.thresholdModalClose}>
+                                  <X size={20} color={colors.mutedForeground} />
+                                </TouchableOpacity>
+                              </View>
+                              
+                              <Text style={styles.thresholdModalSubtitle}>
+                                Set the min/max values at which alerts will trigger
+                              </Text>
+                              
+                              <ScrollView style={styles.thresholdScrollView} showsVerticalScrollIndicator={false}>
+                                {/* Temperature Section */}
+                                <View style={styles.thresholdSection}>
+                                  <View style={styles.thresholdSectionHeader}>
+                                    <Thermometer size={20} color={colors.primary} />
+                                    <Text style={styles.thresholdSectionTitle}>Temperature (°C)</Text>
+                                  </View>
+                                  <View style={styles.thresholdMinMaxRow}>
+                                    <View style={styles.thresholdMinMaxGroup}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Min</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.tempLow}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempLow: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="10"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                    <View style={styles.thresholdMinMaxGroup}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Max</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.tempHigh}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempHigh: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="35"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                                
+                                {/* Humidity Section */}
+                                <View style={styles.thresholdSection}>
+                                  <View style={styles.thresholdSectionHeader}>
+                                    <Droplets size={20} color={colors.primary} />
+                                    <Text style={styles.thresholdSectionTitle}>Humidity (%)</Text>
+                                  </View>
+                                  <View style={styles.thresholdMinMaxRow}>
+                                    <View style={styles.thresholdMinMaxGroup}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Min</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.humidityLow}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityLow: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="20"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                    <View style={styles.thresholdMinMaxGroup}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Max</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.humidityHigh}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityHigh: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="80"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                                
+                                {/* Dust Section */}
+                                <View style={styles.thresholdSection}>
+                                  <View style={styles.thresholdSectionHeader}>
+                                    <Wind size={20} color={colors.primary} />
+                                    <Text style={styles.thresholdSectionTitle}>Dust (µg/m³)</Text>
+                                  </View>
+                                  <View style={styles.thresholdMinMaxRow}>
+                                    <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.dustHigh}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, dustHigh: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="400"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                                
+                                {/* Gas/Smoke Section */}
+                                <View style={styles.thresholdSection}>
+                                  <View style={styles.thresholdSectionHeader}>
+                                    <Fan size={20} color={colors.primary} />
+                                    <Text style={styles.thresholdSectionTitle}>Gas/Smoke</Text>
+                                  </View>
+                                  <View style={styles.thresholdMinMaxRow}>
+                                    <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
+                                      <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
+                                      <TextInput
+                                        style={styles.thresholdInput}
+                                        value={editingThresholds.mq2High}
+                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, mq2High: text }))}
+                                        keyboardType="numeric"
+                                        placeholder="60"
+                                        placeholderTextColor={colors.mutedForeground}
+                                      />
+                                    </View>
+                                  </View>
+                                </View>
+                              </ScrollView>
+                              
+                              {/* Save Button */}
+                              <TouchableOpacity
+                                style={[styles.saveThresholdsButton, savingThresholds && styles.saveThresholdsButtonDisabled]}
+                                onPress={saveThresholds}
+                                disabled={savingThresholds}
+                                activeOpacity={0.85}
+                              >
+                                <LinearGradient
+                                  colors={[colors.primary, colors.neonCyan]}
+                                  style={styles.saveThresholdsGradient}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 0 }}
+                                >
+                                  <Check size={18} color="#fff" />
+                                  <Text style={styles.saveThresholdsText}>
+                                    {savingThresholds ? 'Sending...' : 'Save & Sync to Device'}
+                                  </Text>
+                                </LinearGradient>
+                              </TouchableOpacity>
+                            </LinearGradient>
+                          </View>
                         </View>
-                      )}
+                      </Modal>
                     </>
                   );
                 })()}
@@ -1150,6 +1251,82 @@ const createStyles = (colors: any, shadows: any) =>
     thresholdToggleText: {
       fontSize: fontSize.sm,
       color: colors.mutedForeground,
+    },
+    // Threshold popup modal styles
+    thresholdModalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.lg,
+    },
+    thresholdModalContent: {
+      width: '100%',
+      maxWidth: 400,
+      maxHeight: SCREEN_HEIGHT * 0.8,
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+    },
+    thresholdModalInner: {
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    thresholdModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    thresholdModalTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    thresholdModalClose: {
+      width: 32,
+      height: 32,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.muted,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    thresholdModalSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginTop: -spacing.xs,
+    },
+    thresholdScrollView: {
+      maxHeight: SCREEN_HEIGHT * 0.45,
+    },
+    thresholdSection: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    thresholdSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    thresholdSectionTitle: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    thresholdMinMaxRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    thresholdMinMaxGroup: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    thresholdMinMaxLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: 'center',
     },
     thresholdPanel: {
       backgroundColor: colors.muted,

@@ -119,8 +119,14 @@ export const PublicAirguardApi = (client: AxiosInstance) => ({
     client.post(`/public/airguard/${smartMonitorId}/buzzer`, { state }),
   getThresholds: (smartMonitorId: number | string) => 
     client.get(`/public/airguard/${smartMonitorId}/thresholds`),
-  setThresholds: (smartMonitorId: number | string, thresholds: { tempHigh?: number; humidityHigh?: number; dustHigh?: number; mq2High?: number }) =>
-    client.post(`/public/airguard/${smartMonitorId}/thresholds`, thresholds),
+  setThresholds: (smartMonitorId: number | string, thresholds: { 
+    tempMin?: number; 
+    tempMax?: number; 
+    humMin?: number; 
+    humMax?: number; 
+    dustHigh?: number; 
+    mq2High?: number;
+  }) => client.post(`/public/airguard/${smartMonitorId}/thresholds`, thresholds),
 });
 
 // Device Groups
