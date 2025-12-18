@@ -50,24 +50,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (envelope?.data ?? envelope) as T;
   };
 
+  const normalizeStoredToken = (raw: string | null): string | null => {
+    if (!raw) return null;
+    const t = raw.trim();
+    if (!t) return null;
+    if (t === 'null' || t === 'undefined') return null;
+    return t;
+  };
+
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem('auth_token');
+        const storedRaw = await AsyncStorage.getItem('auth_token');
+        const stored = normalizeStoredToken(storedRaw);
         const storedHome = await AsyncStorage.getItem('current_home_id');
         // Only restore token if it's not a demo token
         if (stored && stored !== 'DEMO_TOKEN') {
           setToken(stored);
           if (storedHome) _setCurrentHomeId(storedHome);
+
+          // Hydrate the real user immediately; if the token is stale, clear it.
+          try {
+            const bootClient = getApiClient(async () => stored);
+            const bootAuth = AuthApi(bootClient);
+            const res = await bootAuth.me();
+            const payload = unwrap<{ user: AuthUser; homes?: { id: string; name: string }[] }>(res.data);
+            setUser(payload.user);
+            if (payload.homes) setHomes(payload.homes);
+            if (payload.user?.homeId) {
+              _setCurrentHomeId(payload.user.homeId);
+              await AsyncStorage.setItem('current_home_id', payload.user.homeId);
+            }
+          } catch {
+            setUser(null);
+            setToken(null);
+            setHomes([]);
+            _setCurrentHomeId(null);
+            await AsyncStorage.removeItem('auth_token');
+            await AsyncStorage.removeItem('current_home_id');
+          }
         } else if (stored === 'DEMO_TOKEN') {
           // Clear demo token - user must explicitly login
           await AsyncStorage.removeItem('auth_token');
           await AsyncStorage.removeItem('current_home_id');
           _setCurrentHomeId(null);
+          setUser(null);
+          setToken(null);
+          setHomes([]);
         } else {
           // No token -> don't keep stale home selection around
           await AsyncStorage.removeItem('current_home_id');
           _setCurrentHomeId(null);
+          setUser(null);
+          setToken(null);
+          setHomes([]);
         }
       } finally {
         setLoading(false);

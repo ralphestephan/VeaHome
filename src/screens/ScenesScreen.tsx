@@ -220,17 +220,22 @@ export default function ScenesScreen() {
 
     try {
       setAutomationLoading(true);
-      const response = await automationsApi.listAutomations(homeId).catch(() => ({ data: [] }));
-      const payload = Array.isArray(response?.data) ? response.data : [];
-      if (!Array.isArray(response?.data)) {
-        console.warn('Unexpected automation payload', response?.data);
+      const response = await automationsApi.listAutomations(homeId).catch(() => ({ data: [] } as any));
+      const raw = (response as any)?.data;
+      const payload =
+        raw?.data?.automations ?? raw?.automations ?? raw?.data ?? raw;
+      const list = Array.isArray(payload) ? payload : [];
+
+      if (!Array.isArray(payload)) {
+        console.warn('Unexpected automation payload', raw);
         setAutomationError('Automation payload looked different than expected.');
-      } else if (!payload.length) {
+      } else if (!list.length) {
         setAutomationError('No automations configured yet.');
       } else {
         setAutomationError(null);
       }
-      setAutomations(normalizeAutomations(payload));
+
+      setAutomations(normalizeAutomations(list));
     } catch (e) {
       console.error('Error loading automations:', e);
       setAutomations([]);
@@ -270,7 +275,9 @@ export default function ScenesScreen() {
     try {
       setLoading(true);
       const response = await scenesApi.listScenes(homeId);
-      setScenes(response.data || []);
+      const raw = (response as any)?.data;
+      const payload = raw?.data?.scenes ?? raw?.scenes ?? raw?.data ?? raw;
+      setScenes(Array.isArray(payload) ? payload : []);
     } catch (e) {
       console.error('Error loading scenes:', e);
       // Fallback to empty array

@@ -131,7 +131,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer theme={navigationTheme}>
-      {loading ? null : token ? (
+      {loading ? null : token && user ? (
         <Stack.Navigator
           screenOptions={{
             headerShown: false,

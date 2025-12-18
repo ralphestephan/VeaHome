@@ -123,8 +123,8 @@ export const fontWeight = {
   bold: '700' as const,
 };
 
-// Expanded gradients for futuristic UI
-export const gradients = {
+// Expanded gradients for futuristic UI (dark mode)
+export const darkGradients = {
   background: ['#060816', '#0A1025'] as const,
   backgroundRadial: ['#0D1129', '#060816'] as const,
   card: ['rgba(15, 20, 40, 0.95)', 'rgba(10, 14, 31, 0.98)'] as const,
@@ -144,6 +144,36 @@ export const gradients = {
   overlay: ['rgba(6, 8, 22, 0)', 'rgba(6, 8, 22, 0.95)'] as const,
   overlayTop: ['rgba(6, 8, 22, 0.9)', 'rgba(6, 8, 22, 0)'] as const,
 };
+
+// Light mode gradients
+export const lightGradients = {
+  background: ['#F8FAFC', '#EEF2FF'] as const,
+  backgroundRadial: ['#FFFFFF', '#F1F5F9'] as const,
+  card: ['rgba(255, 255, 255, 0.95)', 'rgba(248, 250, 252, 0.98)'] as const,
+  cardHover: ['rgba(255, 255, 255, 0.98)', 'rgba(241, 245, 249, 0.98)'] as const,
+  cardActive: ['rgba(79, 110, 247, 0.1)', 'rgba(255, 255, 255, 0.95)'] as const,
+  accent: ['#4F6EF7', '#7B93FF'] as const,
+  accentAlt: ['#B366FF', '#4F6EF7'] as const,
+  neonBlue: ['#00C2FF', '#4F6EF7'] as const,
+  neonPurple: ['#B366FF', '#7C3AED'] as const,
+  neonCyan: ['#00FFF0', '#00C2FF'] as const,
+  neonPink: ['#FF66B2', '#B366FF'] as const,
+  success: ['#00E5A0', '#00B880'] as const,
+  warning: ['#FFB547', '#FF9500'] as const,
+  destructive: ['#FF5A7E', '#E54858'] as const,
+  glass: ['rgba(0, 0, 0, 0.03)', 'rgba(0, 0, 0, 0.01)'] as const,
+  glassEdge: ['rgba(0, 0, 0, 0.06)', 'rgba(0, 0, 0, 0.02)'] as const,
+  overlay: ['rgba(255, 255, 255, 0)', 'rgba(248, 250, 252, 0.95)'] as const,
+  overlayTop: ['rgba(248, 250, 252, 0.9)', 'rgba(255, 255, 255, 0)'] as const,
+};
+
+// For backwards compatibility, export gradients as dark gradients
+export const gradients = darkGradients;
+
+// Get theme gradients based on mode
+export type ThemeGradients = typeof darkGradients;
+export const getThemeGradients = (mode: ThemeMode): ThemeGradients =>
+  mode === 'light' ? lightGradients : darkGradients;
 
 // Shadow presets for depth and glow effects
 export const shadows = {

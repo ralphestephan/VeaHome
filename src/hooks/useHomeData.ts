@@ -81,6 +81,7 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
       airQuality: airguard?.airQualityData?.aqi ?? room.airQuality,
       pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
       mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
+      alert: airguard?.airQualityData?.alert ?? room.alert,
       lights: roomDevices.filter((d) => d.type === 'light').length,
     };
   });
@@ -121,6 +122,11 @@ export const useHomeData = (homeId: string | null | undefined) => {
       return unwrap<any>(res, 'data');
     };
 
+    const fetchStatus = async (smartMonitorId: number | string) => {
+      const res = await client.get(`/public/airguard/${smartMonitorId}/status`, { timeout: 4000 });
+      return unwrap<any>(res, 'data');
+    };
+
     const enriched = await Promise.all(
       baseDevices.map(async (d) => {
         if (d.type !== 'airguard') return d;
@@ -131,8 +137,17 @@ export const useHomeData = (homeId: string | null | undefined) => {
           1;
 
         try {
-          const latest = await fetchLatest(smartMonitorId);
-          if (!latest) return d;
+          const [latest, status] = await Promise.all([
+            fetchLatest(smartMonitorId).catch(() => null),
+            fetchStatus(smartMonitorId).catch(() => null),
+          ]);
+
+          // Determine online status - default to offline if no status data
+          const isOnline = status?.online ?? false;
+
+          if (!latest) {
+            return { ...d, isOnline };
+          }
 
           const toNum = (v: any): number | undefined => {
             if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -147,27 +162,35 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const humidity = toNum(latest.humidity);
           const aqi = toNum(latest.aqi);
           const pm25 = toNum(latest.pm25 ?? latest.dust);
+          const dust = toNum(latest.dust);
           const mq2 = toNum(latest.mq2);
+          const alert = !!latest.alert;
 
           const buzzerEnabled = !!latest.buzzerEnabled;
+
+          // Set airQualityData if we have ANY sensor data
+          const hasAnyData = temperature !== undefined || humidity !== undefined || 
+                             aqi !== undefined || dust !== undefined || mq2 !== undefined;
+
           return {
             ...d,
-            airQualityData:
-              typeof temperature === 'number' &&
-              typeof humidity === 'number' &&
-              typeof aqi === 'number'
-                ? {
-                    temperature,
-                    humidity,
-                    aqi,
-                    pm25,
-                    mq2,
-                  }
-                : d.airQualityData,
+            isOnline,
+            isActive: isOnline,
+            airQualityData: hasAnyData
+              ? {
+                  temperature: temperature ?? 0,
+                  humidity: humidity ?? 0,
+                  aqi: aqi ?? dust ?? 0,
+                  pm25: pm25 ?? dust,
+                  dust,
+                  mq2,
+                  alert,
+                }
+              : d.airQualityData,
             alarmMuted: !buzzerEnabled,
           };
         } catch {
-          return d;
+          return { ...d, isOnline: false };
         }
       }),
     );

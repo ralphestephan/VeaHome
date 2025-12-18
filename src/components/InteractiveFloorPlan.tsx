@@ -22,7 +22,7 @@ import {
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, G, Text as SvgText, Circle } from 'react-native-svg';
 import { Thermometer, Droplets, Lightbulb, Zap, Edit2, Save, X, Plus } from 'lucide-react-native';
 import { colors as defaultColors, spacing, borderRadius, ThemeColors } from '../constants/theme';
 import { roomsData, RoomData } from '../constants/rooms';
@@ -93,6 +93,13 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
   const [newRoomColor, setNewRoomColor] = useState(COLOR_PALETTE[0]);
   const draggingRoomId = useRef<string | null>(null);
   const dragStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  
+  // Edit room modal state
+  const [isEditRoomModalVisible, setIsEditRoomModalVisible] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [editRoomName, setEditRoomName] = useState('');
+  const [editRoomImage, setEditRoomImage] = useState('');
+  const [editRoomColor, setEditRoomColor] = useState(COLOR_PALETTE[0]);
 
   useEffect(() => {
     if (!rooms || rooms.length === 0) {
@@ -183,6 +190,10 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       : room.color;
 
     const offset = roomPositions[room.id] || { x: 0, y: 0 };
+    const center = getPathCenter(room.path);
+
+    // Find the full room object for editing
+    const fullRoom = combinedRooms.find(r => r.id === room.id);
 
     return (
       <G
@@ -196,21 +207,57 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
           stroke={isSelected ? colors.primary : '#ffffff'}
           strokeWidth={isSelected ? 3 : 1.5}
           opacity={isHovered || isSelected ? 1 : 0.85}
-          onPress={() => onRoomSelect(room.id)}
+          onPress={() => {
+            if (isEditMode && fullRoom) {
+              // In edit mode, double-tap or show edit option
+              openEditRoomModal(fullRoom);
+            } else {
+              onRoomSelect(room.id);
+            }
+          }}
           onPressIn={() => { if (isEditMode) draggingRoomId.current = room.id; }}
         />
-        {/* Room Labels */}
+        {/* Room Labels - positioned with small offset to ensure visibility inside room */}
         <SvgText
-          x={getPathCenter(room.path).x}
-          y={getPathCenter(room.path).y}
+          x={center.x}
+          y={center.y - 2}
           fill={isSelected ? 'white' : '#000000'}
-          fontSize={12}
-          fontWeight={600}
+          fontSize={11}
+          fontWeight={700}
           textAnchor={'middle'}
           alignmentBaseline={'middle'}
+          onPress={() => {
+            if (isEditMode && fullRoom) {
+              openEditRoomModal(fullRoom);
+            } else {
+              onRoomSelect(room.id);
+            }
+          }}
         >
           {room.name}
         </SvgText>
+        {/* Edit indicator in edit mode */}
+        {isEditMode && (
+          <G onPress={() => fullRoom && openEditRoomModal(fullRoom)}>
+            <Circle
+              cx={center.x}
+              cy={center.y + 12}
+              r={10}
+              fill="rgba(255,255,255,0.9)"
+            />
+            <SvgText
+              x={center.x}
+              y={center.y + 16}
+              fill={colors.primary}
+              fontSize={10}
+              fontWeight={700}
+              textAnchor={'middle'}
+              alignmentBaseline={'middle'}
+            >
+              ✎
+            </SvgText>
+          </G>
+        )}
       </G>
     );
   };
@@ -240,6 +287,57 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
     setNewRoomHumidity('55');
     setNewRoomLights('1');
     setNewRoomColor(COLOR_PALETTE[0]);
+  };
+
+  // Open edit room modal with room data populated
+  const openEditRoomModal = (room: Room) => {
+    setEditingRoom(room);
+    setEditRoomName(room.name);
+    setEditRoomImage(room.image || '');
+    // Get current color from roomVisuals or use default
+    const currentVisual = roomVisuals[room.id];
+    setEditRoomColor(currentVisual?.color || COLOR_PALETTE[0]);
+    setIsEditRoomModalVisible(true);
+  };
+
+  // Reset edit room modal state
+  const resetEditModalState = () => {
+    setIsEditRoomModalVisible(false);
+    setEditingRoom(null);
+    setEditRoomName('');
+    setEditRoomImage('');
+    setEditRoomColor(COLOR_PALETTE[0]);
+  };
+
+  // Handle saving room edits
+  const handleSaveRoomEdit = () => {
+    if (!editingRoom) return;
+    
+    const trimmedName = editRoomName.trim() || editingRoom.name;
+    
+    // Update local rooms if this was a locally created room
+    setLocalRooms((prev) => 
+      prev.map((r) => 
+        r.id === editingRoom.id 
+          ? { ...r, name: trimmedName, image: editRoomImage || r.image }
+          : r
+      )
+    );
+    
+    // Update room visuals with new color
+    setRoomVisuals((prev) => ({
+      ...prev,
+      [editingRoom.id]: {
+        ...prev[editingRoom.id],
+        color: editRoomColor,
+      },
+    }));
+    
+    // TODO: If there's an API update callback, call it here
+    // For now, we save locally and let the layout save handle persistence
+    
+    resetEditModalState();
+    Alert.alert('Room Updated', `${trimmedName} has been updated.`);
   };
 
   const handleCreateRoom = async () => {
@@ -510,21 +608,97 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
           </View>
         </View>
       </Modal>
+
+      {/* Edit Room Modal */}
+      <Modal
+        visible={isEditRoomModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={resetEditModalState}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Room</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Room name"
+              placeholderTextColor={colors.mutedForeground}
+              value={editRoomName}
+              onChangeText={setEditRoomName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Image URL (optional)"
+              placeholderTextColor={colors.mutedForeground}
+              value={editRoomImage}
+              onChangeText={setEditRoomImage}
+            />
+            <Text style={styles.modalLabel}>Room color</Text>
+            <View style={styles.colorOptionsRow}>
+              {COLOR_PALETTE.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: color },
+                    editRoomColor === color && styles.colorSwatchSelected,
+                  ]}
+                  onPress={() => setEditRoomColor(color)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${color} for room color`}
+                >
+                  {editRoomColor === color ? <View style={styles.colorSwatchIndicator} /> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButtonSecondary} onPress={resetEditModalState}>
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveRoomEdit}>
+                <Text style={styles.modalButtonPrimaryText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 });
 
 export default InteractiveFloorPlan;
 
-// Helper function to get center of SVG path
+// Helper function to get center of SVG path - calculates centroid of all path points
 function getPathCenter(path: string): { x: number; y: number } {
-  const matches = path.match(/[0-9]+/g);
-  if (!matches || matches.length < 4) return { x: 0, y: 0 };
+  // Extract all coordinate pairs from the path
+  const coordMatches = path.match(/[MLml]\s*(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)/g);
+  if (!coordMatches || coordMatches.length === 0) {
+    // Fallback to simple number extraction
+    const nums = path.match(/[0-9]+/g)?.map(Number);
+    if (!nums || nums.length < 4) return { x: 0, y: 0 };
+    const x = (nums[0] + nums[2]) / 2;
+    const y = (nums[1] + nums[3]) / 2;
+    return { x, y };
+  }
   
-  const nums = matches.map(Number);
-  const x = (nums[0] + nums[2]) / 2;
-  const y = (nums[1] + nums[3]) / 2;
-  return { x, y };
+  // Parse all x,y pairs and calculate bounding box center
+  const points: { x: number; y: number }[] = [];
+  coordMatches.forEach(match => {
+    const nums = match.match(/-?\d+(?:\.\d+)?/g);
+    if (nums && nums.length >= 2) {
+      points.push({ x: parseFloat(nums[0]), y: parseFloat(nums[1]) });
+    }
+  });
+  
+  if (points.length === 0) return { x: 0, y: 0 };
+  
+  // Calculate bounding box center (more reliable than centroid for UI positioning)
+  const minX = Math.min(...points.map(p => p.x));
+  const maxX = Math.max(...points.map(p => p.x));
+  const minY = Math.min(...points.map(p => p.y));
+  const maxY = Math.max(...points.map(p => p.y));
+  
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
 const createStyles = (colors: ThemeColors = defaultColors) => StyleSheet.create({

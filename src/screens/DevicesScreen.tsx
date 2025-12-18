@@ -660,7 +660,7 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     tabButtonInactive: {
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      backgroundColor: colors.muted,
     },
     tabText: {
       fontSize: fontSize.xs,

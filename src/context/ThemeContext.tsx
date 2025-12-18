@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useMemo, useState, ReactNode, useCallback } from 'react';
-import { ThemeMode, ThemeColors, getThemeColors, gradients, shadows, animations } from '../constants/theme';
+import { ThemeMode, ThemeColors, ThemeGradients, getThemeColors, getThemeGradients, shadows, animations } from '../constants/theme';
 
 interface ThemeContextValue {
   mode: ThemeMode;
   colors: ThemeColors;
-  gradients: typeof gradients;
+  gradients: ThemeGradients;
   shadows: typeof shadows;
   animations: typeof animations;
   setMode: (mode: ThemeMode) => void;
@@ -30,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return {
       mode,
       colors: getThemeColors(mode),
-      gradients,
+      gradients: getThemeGradients(mode),
       shadows,
       animations,
       setMode,

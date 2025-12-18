@@ -181,6 +181,7 @@ export default function DashboardScreen() {
   };
 
   const handleRoomSelect = (roomId: string) => {
+    userSelectedRoomRef.current = roomId;
     setSelectedRoom(roomId);
     requestAnimationFrame(scrollToRoomPreview);
   };
@@ -340,6 +341,8 @@ export default function DashboardScreen() {
   const firstName = user?.name?.split(' ')[0] || 'Guest';
   const selectedRoomData = selectedRoom ? rooms.find((room: Room) => room.id === selectedRoom) : null;
   const activeDevicesCount = devices.filter((device: Device) => device.isActive).length;
+  const onlineDevicesCount = devices.filter((device: Device) => device.isOnline !== false).length;
+  const isHomeOnline = onlineDevicesCount > 0;
   const lightsOnCount = devices.filter((d: Device) => d.type === 'light' && d.isActive).length;
   const totalLights = devices.filter((d: Device) => d.type === 'light').length;
   const avgTemperature = rooms.length
@@ -359,11 +362,16 @@ export default function DashboardScreen() {
     return 'Good evening';
   };
 
+  // Track if user explicitly selected a room (to avoid auto-scrolling on data refresh)
+  const userSelectedRoomRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!selectedRoomData) return;
+    // Only scroll if user explicitly selected this room
+    if (!selectedRoomData || userSelectedRoomRef.current !== selectedRoom) return;
     const timeout = setTimeout(scrollToRoomPreview, 150);
+    userSelectedRoomRef.current = null; // Reset after scrolling
     return () => clearTimeout(timeout);
-  }, [selectedRoomData]);
+  }, [selectedRoomData, selectedRoom]);
 
   const handleNotificationsPress = () => {
     navigation.navigate('Notifications');
@@ -479,14 +487,19 @@ export default function DashboardScreen() {
                   <Text style={styles.heroBadgeText}>VeaHome</Text>
                 </View>
                 <StatusBadge 
-                  variant={isCloudConnected ? 'online' : 'offline'} 
+                  variant={isHomeOnline ? 'online' : 'offline'} 
                   size="sm" 
-                  pulse={isCloudConnected}
+                  label={isHomeOnline ? 'Online' : 'Offline'}
+                  pulse={isHomeOnline}
                 />
               </View>
               
               <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
-              <Text style={styles.heroSubtitle}>Your home is running smoothly</Text>
+              <Text style={styles.heroSubtitle}>
+                {isHomeOnline 
+                  ? (activeDevicesCount > 0 ? 'Your home is running smoothly' : 'All devices are idle')
+                  : 'All devices are offline'}
+              </Text>
               
               <View style={styles.heroStats}>
                 <View style={styles.heroStatItem}>
@@ -521,10 +534,10 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <HomeStatusBar
             homeName={home?.name || 'My Home'}
-            isOnline={isCloudConnected}
+            isOnline={isHomeOnline}
             hubCount={1}
             deviceCount={devices.length}
-            activeDeviceCount={activeDevicesCount}
+            activeDeviceCount={onlineDevicesCount}
             onHomeSelect={() => navigation.navigate('HomeSelector')}
           />
         </View>

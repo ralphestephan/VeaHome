@@ -90,7 +90,8 @@ export async function getSmartMonitorLatest(deviceNumericId: string) {
 }
 
 export async function getSmartMonitorStatus(deviceNumericId: string) {
-  const baseSelect = 'SELECT LAST(online) AS online FROM smartmonitor_status';
+  // Query with time to determine staleness
+  const baseSelect = 'SELECT LAST(online) AS online, time FROM smartmonitor_status';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       const result = await queryInfluxV1(q);
@@ -108,8 +109,48 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
 
   if (!row) return null;
 
+  // Staleness check: if the last status is older than 2 minutes, consider offline
+  const staleMs = 2 * 60 * 1000; // 2 minutes
+  const lastTime = row.time ? new Date(row.time).getTime() : 0;
+  const isStale = Date.now() - lastTime > staleMs;
+  const onlineValue = isStale ? false : Boolean(row.online);
+
   return {
     time: row.time,
-    online: row.online,
+    online: onlineValue,
+    isStale,
+  };
+}
+
+export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: string) {
+  // Query thresholds from smartmonitor_thresholds measurement
+  const baseSelect = 'SELECT LAST(tempHigh) AS tempHigh, LAST(humidityHigh) AS humidityHigh, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_thresholds';
+  const tryQueries = async (queries: string[]) => {
+    for (const q of queries) {
+      try {
+        const result = await queryInfluxV1(q);
+        const row = extractSingleRow(result);
+        if (row) return row;
+      } catch {
+        // Continue to next query on error
+      }
+    }
+    return null;
+  };
+
+  const row = await tryQueries([
+    `${baseSelect} WHERE deviceId='${deviceNumericId}'`,
+    `${baseSelect} WHERE "deviceId"='${deviceNumericId}'`,
+    baseSelect,
+  ]);
+
+  if (!row) return null;
+
+  return {
+    time: row.time,
+    tempHigh: row.tempHigh,
+    humidityHigh: row.humidityHigh,
+    dustHigh: row.dustHigh,
+    mq2High: row.mq2High,
   };
 }

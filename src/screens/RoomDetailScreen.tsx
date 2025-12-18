@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +29,7 @@ import {
   Play,
   Settings,
   Sparkles,
+  Trash2,
 } from 'lucide-react-native';
 import { 
   spacing, 
@@ -92,6 +94,38 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const homeApi = HomeApi(client);
   const hubApi = HubApi(client);
   const airguardApi = PublicAirguardApi(client);
+
+  const handleDeleteRoom = () => {
+    if (isDemoMode) return;
+    if (!homeId) {
+      showToast('Missing home', { type: 'error' });
+      return;
+    }
+
+    Alert.alert(
+      'Delete room?',
+      'This will delete the room. Any devices assigned to it may become unassigned.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading('delete_room');
+              await homeApi.deleteRoom(homeId, String(roomId));
+              showToast('Room deleted', { type: 'success' });
+              navigation.goBack();
+            } catch {
+              showToast('Failed to delete room', { type: 'error' });
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // Hero animation on mount
   useEffect(() => {
@@ -197,29 +231,56 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
             (d.signalMappings as any)?.smartmonitorId ??
             1;
           try {
-            const latestRes = await airguardApi.getLatest(smartMonitorId);
+            const [latestRes, statusRes] = await Promise.all([
+              airguardApi.getLatest(smartMonitorId).catch(() => null),
+              airguardApi.getStatus(smartMonitorId).catch(() => null),
+            ]);
+
             const latest =
               (latestRes as any)?.data?.data?.data ??
               (latestRes as any)?.data?.data ??
               (latestRes as any)?.data;
-            if (!latest) return d;
+
+            const status =
+              (statusRes as any)?.data?.data?.data ??
+              (statusRes as any)?.data?.data ??
+              (statusRes as any)?.data;
+
+            const isOnline = status?.online ?? false;
+
+            if (!latest) return { ...d, isOnline, isActive: isOnline };
 
             const temperature = toNum(latest.temperature);
             const humidity = toNum(latest.humidity);
             const aqi = toNum(latest.aqi);
             const pm25 = toNum(latest.pm25 ?? latest.dust);
+            const dust = toNum(latest.dust);
             const mq2 = toNum(latest.mq2);
+            const alert = !!latest.alert;
+
+            // Set airQualityData if we have ANY sensor data
+            const hasAnyData = temperature !== undefined || humidity !== undefined || 
+                               aqi !== undefined || dust !== undefined || mq2 !== undefined;
 
             return {
               ...d,
-              airQualityData:
-                typeof temperature === 'number' && typeof humidity === 'number' && typeof aqi === 'number'
-                  ? { temperature, humidity, aqi, pm25, mq2 }
-                  : d.airQualityData,
+              isOnline,
+              isActive: isOnline,
+              airQualityData: hasAnyData
+                ? {
+                    temperature: temperature ?? 0,
+                    humidity: humidity ?? 0,
+                    aqi: aqi ?? dust ?? 0,
+                    pm25: pm25 ?? dust,
+                    dust,
+                    mq2,
+                    alert,
+                  }
+                : d.airQualityData,
               alarmMuted: !latest.buzzerEnabled,
             };
           } catch {
-            return d;
+            return { ...d, isOnline: false };
           }
         }),
       );
@@ -316,7 +377,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       .then(() => {
         setDevices((prev) => prev.map((d) => (d.id === deviceId ? { ...d, alarmMuted: muted } : d)));
         setSelectedDevice((prev: any) => (prev && prev.id === deviceId ? { ...prev, alarmMuted: muted } : prev));
-        loadRoomData();
+        // Don't reload - just update local state for smoother UX
       })
       .catch((e) => {
         console.error('Failed to set Airguard buzzer state:', e);
@@ -441,6 +502,28 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     ? room.devices
     : devices.length;
 
+  // Room online status: at least one device is online
+  const onlineDevicesCount = devices.filter((d) => d.isOnline !== false).length;
+  const isRoomOnline = devices.length === 0 || onlineDevicesCount > 0;
+
+  // Alert detection from room data
+  const PM25_BAD_THRESHOLD = 400;
+  const MQ2_BAD_THRESHOLD = 60;
+  const TEMP_HIGH_THRESHOLD = 35;
+  const HUMIDITY_HIGH_THRESHOLD = 80;
+
+  const alertReasons: string[] = [];
+  if (room.pm25 !== undefined && room.pm25 > PM25_BAD_THRESHOLD) alertReasons.push('Dust');
+  if (room.mq2 !== undefined && room.mq2 > MQ2_BAD_THRESHOLD) alertReasons.push('Gas');
+  if (typeof room.temperature === 'number' && room.temperature > TEMP_HIGH_THRESHOLD) alertReasons.push('Temp');
+  if (typeof room.humidity === 'number' && room.humidity > HUMIDITY_HIGH_THRESHOLD) alertReasons.push('Humidity');
+  const hasRoomAlert = alertReasons.length > 0 || room.alert === true;
+
+  // Air quality (dust/gas only)
+  const hasAirSensors = room.pm25 !== undefined || room.mq2 !== undefined;
+  const isAirBad = (room.pm25 !== undefined && room.pm25 > PM25_BAD_THRESHOLD) || 
+                   (room.mq2 !== undefined && room.mq2 > MQ2_BAD_THRESHOLD);
+
   const handleClimatePress = () => {
     if (!thermostatDevice) {
       showToast('Add a thermostat to control climate from here.', { type: 'info' });
@@ -494,6 +577,26 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         title={room.name || 'Room'}
         showBack
         showSettings={false}
+        rightContent={
+          !isDemoMode ? (
+            <TouchableOpacity
+              onPress={handleDeleteRoom}
+              accessibilityRole="button"
+              accessibilityLabel="Delete room"
+              disabled={actionLoading === 'delete_room'}
+              activeOpacity={0.7}
+              style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+            >
+              <Trash2
+                size={20}
+                color={colors.foreground}
+                opacity={actionLoading === 'delete_room' ? 0.5 : 1}
+              />
+            </TouchableOpacity>
+          ) : (
+            undefined
+          )
+        }
       />
       
       <ScrollView
@@ -529,7 +632,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                       <Sparkles size={12} color={colors.neonCyan} />
                       <Text style={styles.heroBadgeText}>{room.scene || 'No Scene'}</Text>
                     </View>
-                    <StatusBadge variant="online" size="sm" />
+                    {hasRoomAlert && (
+                      <StatusBadge variant="warning" size="sm" label={`Alert: ${alertReasons.join(', ')}`} />
+                    )}
+                    <StatusBadge variant={isRoomOnline ? 'online' : 'offline'} size="sm" label={isRoomOnline ? 'Online' : 'Offline'} />
                   </View>
                   <Text style={styles.heroTitle}>{room.name}</Text>
                   <Text style={styles.heroSubtitle}>
@@ -552,7 +658,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                     <Sparkles size={12} color={colors.neonCyan} />
                     <Text style={styles.heroBadgeText}>{room.scene || 'No Scene'}</Text>
                   </View>
-                  <StatusBadge variant="online" size="sm" />
+                  {hasRoomAlert && (
+                    <StatusBadge variant="warning" size="sm" label={`Alert: ${alertReasons.join(', ')}`} />
+                  )}
+                  <StatusBadge variant={isRoomOnline ? 'online' : 'offline'} size="sm" label={isRoomOnline ? 'Online' : 'Offline'} />
                 </View>
                 <Text style={styles.heroTitle}>{room.name}</Text>
                 <Text style={styles.heroSubtitle}>
@@ -565,22 +674,48 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
         {/* Room Stats */}
         <View style={styles.statsRow}>
-          <NeonCard style={styles.statCard}>
-            <Thermometer size={18} color={colors.neonBlue} />
-            <Text style={styles.statValue}>{room.temperature}°C</Text>
+          <NeonCard style={[styles.statCard, alertReasons.includes('Temp') && { borderColor: colors.destructive }]}>
+            <Thermometer size={18} color={alertReasons.includes('Temp') ? colors.destructive : colors.neonBlue} />
+            <Text style={[styles.statValue, alertReasons.includes('Temp') && { color: colors.destructive }]}>
+              {room.temperature}°C
+            </Text>
             <Text style={styles.statLabel}>Temp</Text>
           </NeonCard>
-          <NeonCard style={styles.statCard}>
-            <Droplets size={18} color={colors.neonCyan} />
-            <Text style={styles.statValue}>{room.humidity}%</Text>
+          <NeonCard style={[styles.statCard, alertReasons.includes('Humidity') && { borderColor: colors.destructive }]}>
+            <Droplets size={18} color={alertReasons.includes('Humidity') ? colors.destructive : colors.neonCyan} />
+            <Text style={[styles.statValue, alertReasons.includes('Humidity') && { color: colors.destructive }]}>
+              {room.humidity}%
+            </Text>
             <Text style={styles.statLabel}>Humidity</Text>
           </NeonCard>
-          <NeonCard style={styles.statCard}>
-            <Zap size={18} color={colors.warning} />
-            <Text style={styles.statValue}>{room.power}</Text>
-            <Text style={styles.statLabel}>Power</Text>
-          </NeonCard>
+          {hasAirSensors ? (
+            <NeonCard style={[styles.statCard, isAirBad && { borderColor: colors.destructive }]}>
+              <Wind size={18} color={isAirBad ? colors.destructive : colors.success} />
+              <Text style={[styles.statValue, isAirBad && { color: colors.destructive }]}>
+                {isAirBad ? 'Bad' : 'Good'}
+              </Text>
+              <Text style={styles.statLabel}>Air</Text>
+            </NeonCard>
+          ) : (
+            <NeonCard style={styles.statCard}>
+              <Zap size={18} color={colors.warning} />
+              <Text style={styles.statValue}>{room.power}</Text>
+              <Text style={styles.statLabel}>Power</Text>
+            </NeonCard>
+          )}
         </View>
+
+        {/* Alert Banner */}
+        {hasRoomAlert && (
+          <View style={styles.alertBanner}>
+            <View style={styles.alertBannerContent}>
+              <Wind size={16} color="#fff" />
+              <Text style={styles.alertBannerText}>
+                Alert: {alertReasons.length > 0 ? alertReasons.join(', ') : 'Sensor Alert'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Scene Controls */}
         <View style={styles.section}>
@@ -914,6 +1049,25 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => Styl
   statLabel: {
     fontSize: fontSize.xs,
     color: colors.mutedForeground,
+  },
+
+  // Alert Banner
+  alertBanner: {
+    backgroundColor: colors.destructive,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  alertBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  alertBannerText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: '#fff',
   },
   
   // Scene Section

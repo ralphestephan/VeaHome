@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Dimensions,
   PanResponder,
   ScrollView,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -32,10 +34,15 @@ import {
   Droplets,
   Volume2,
   VolumeX,
+  Trash2,
+  CloudOff,
+  Settings,
+  Check,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { Device } from '../types';
+import { getApiClient, PublicAirguardApi } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAL_SIZE = 220;
@@ -84,8 +91,142 @@ export default function DeviceControlModal({
   const [localMode, setLocalMode] = useState<string>('manual');
   const [isActive, setIsActive] = useState(device?.isActive ?? false);
   
+  // Live airguard data state
+  const [liveAirguardData, setLiveAirguardData] = useState<{
+    temperature?: number;
+    humidity?: number;
+    dust?: number;
+    mq2?: number;
+    buzzer?: boolean;
+    isOnline?: boolean;
+  } | null>(null);
+  
+  // Threshold state for Airguard
+  const [thresholds, setThresholds] = useState({
+    tempHigh: 35,
+    humidityHigh: 80,
+    dustHigh: 400,
+    mq2High: 60,
+  });
+  const [showThresholdSettings, setShowThresholdSettings] = useState(false);
+  const [editingThresholds, setEditingThresholds] = useState({
+    tempHigh: '35',
+    humidityHigh: '80',
+    dustHigh: '400',
+    mq2High: '60',
+  });
+  const [savingThresholds, setSavingThresholds] = useState(false);
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
+  
+  // Memoize API client
+  const airguardApi = useMemo(() => PublicAirguardApi(getApiClient()), []);
+
+  // Fetch latest airguard data
+  const fetchAirguardData = useCallback(async () => {
+    if (!device || device.type !== 'airguard') return;
+    
+    const smartMonitorId = device.metadata?.smartMonitorId;
+    if (!smartMonitorId) return;
+    
+    try {
+      const [latestRes, statusRes] = await Promise.all([
+        airguardApi.getLatest(smartMonitorId),
+        airguardApi.getStatus(smartMonitorId),
+      ]);
+      
+      const latest = latestRes.data;
+      const status = statusRes.data;
+      
+      setLiveAirguardData({
+        temperature: latest.temperature,
+        humidity: latest.humidity,
+        dust: latest.dust,
+        mq2: latest.mq2,
+        buzzer: latest.buzzer === 1 || latest.buzzer === true,
+        isOnline: status.online,
+      });
+    } catch (error) {
+      console.warn('Failed to fetch airguard data:', error);
+    }
+  }, [device, airguardApi]);
+
+  // Fetch thresholds when modal opens
+  const fetchThresholds = useCallback(async () => {
+    if (!device || device.type !== 'airguard') return;
+    
+    const smartMonitorId = device.metadata?.smartMonitorId;
+    if (!smartMonitorId) return;
+    
+    try {
+      const res = await airguardApi.getThresholds(smartMonitorId);
+      const data = res.data?.data;
+      if (data) {
+        const newThresholds = {
+          tempHigh: data.tempHigh ?? 35,
+          humidityHigh: data.humidityHigh ?? 80,
+          dustHigh: data.dustHigh ?? 400,
+          mq2High: data.mq2High ?? 60,
+        };
+        setThresholds(newThresholds);
+        setEditingThresholds({
+          tempHigh: String(newThresholds.tempHigh),
+          humidityHigh: String(newThresholds.humidityHigh),
+          dustHigh: String(newThresholds.dustHigh),
+          mq2High: String(newThresholds.mq2High),
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to fetch thresholds:', error);
+    }
+  }, [device, airguardApi]);
+
+  // Save thresholds to device via MQTT
+  const saveThresholds = useCallback(async () => {
+    if (!device || device.type !== 'airguard') return;
+    
+    const smartMonitorId = device.metadata?.smartMonitorId;
+    if (!smartMonitorId) return;
+    
+    const newThresholds = {
+      tempHigh: parseFloat(editingThresholds.tempHigh) || 35,
+      humidityHigh: parseFloat(editingThresholds.humidityHigh) || 80,
+      dustHigh: parseFloat(editingThresholds.dustHigh) || 400,
+      mq2High: parseFloat(editingThresholds.mq2High) || 60,
+    };
+    
+    setSavingThresholds(true);
+    try {
+      await airguardApi.setThresholds(smartMonitorId, newThresholds);
+      setThresholds(newThresholds);
+      setShowThresholdSettings(false);
+      Alert.alert('Success', 'Thresholds sent to Airguard. Changes will apply when device receives the command.');
+    } catch (error) {
+      console.error('Failed to save thresholds:', error);
+      Alert.alert('Error', 'Failed to save thresholds. Please try again.');
+    } finally {
+      setSavingThresholds(false);
+    }
+  }, [device, editingThresholds, airguardApi]);
+
+  // Poll airguard data while modal is visible
+  useEffect(() => {
+    if (!visible || !device || device.type !== 'airguard') {
+      setLiveAirguardData(null);
+      setShowThresholdSettings(false);
+      return;
+    }
+    
+    // Initial fetch
+    fetchAirguardData();
+    fetchThresholds();
+    
+    // Poll every 3 seconds
+    const interval = setInterval(fetchAirguardData, 3000);
+    
+    return () => clearInterval(interval);
+  }, [visible, device, fetchAirguardData, fetchThresholds]);
 
   useEffect(() => {
     if (device) {
@@ -183,77 +324,214 @@ export default function DeviceControlModal({
                 </View>
                 <View>
                   <Text style={styles.deviceName}>{device.name}</Text>
-                  <Text style={styles.deviceRoom}>{device.roomId || 'Unknown Room'}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <X size={20} color={colors.mutedForeground} />
-              </TouchableOpacity>
+              <View style={styles.headerRight}>
+                {isAirguard && onDelete && (
+                  <TouchableOpacity onPress={() => onDelete(device.id)} style={styles.trashButton}>
+                    <Trash2 size={18} color="#FF6B6B" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <X size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
-                <View style={styles.airguardMetrics}>
-                  <View style={styles.airguardMetricCard}>
-                    <Thermometer size={24} color={colors.primary} />
-                    <Text style={styles.airguardMetricValue}>
-                      {device.airQualityData?.temperature ?? '--'}°C
-                    </Text>
-                    <Text style={styles.airguardMetricLabel}>Temperature</Text>
-                  </View>
+                {/* Alert banner if device is alerting - show which stats caused it */}
+                {(() => {
+                  const reasons: string[] = [];
+                  // Use live data if available, fallback to device data
+                  const aq = liveAirguardData ?? device.airQualityData;
+                  if (aq?.dust != null && aq.dust > thresholds.dustHigh) reasons.push('Dust');
+                  if (aq?.mq2 != null && aq.mq2 > thresholds.mq2High) reasons.push('Gas');
+                  if (aq?.temperature != null && aq.temperature > thresholds.tempHigh) reasons.push('Temp');
+                  if (aq?.humidity != null && aq.humidity > thresholds.humidityHigh) reasons.push('Humidity');
+                  const hasAlert = (device.airQualityData?.alert) || reasons.length > 0;
+                  if (!hasAlert) return null;
+                  return (
+                    <View style={styles.alertBanner}>
+                      <CloudOff size={16} color="#fff" />
+                      <Text style={styles.alertBannerText}>
+                        Alert: {reasons.length > 0 ? reasons.join(', ') : 'Air Quality'}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
-                  <View style={styles.airguardMetricCard}>
-                    <Droplets size={24} color={colors.primary} />
-                    <Text style={styles.airguardMetricValue}>
-                      {device.airQualityData?.humidity ?? '--'}%
-                    </Text>
-                    <Text style={styles.airguardMetricLabel}>Humidity</Text>
-                  </View>
+                {/* Use live data if available, fallback to device data */}
+                {(() => {
+                  const aq = liveAirguardData ?? device.airQualityData;
+                  const temp = aq?.temperature;
+                  const hum = aq?.humidity;
+                  const dust = aq?.dust;
+                  const mq2 = aq?.mq2;
+                  const isMuted = liveAirguardData?.buzzer === false || device.alarmMuted;
+                  
+                  // Use dynamic thresholds
+                  const tempAlert = (temp ?? 0) > thresholds.tempHigh;
+                  const humAlert = (hum ?? 0) > thresholds.humidityHigh;
+                  const dustAlert = (dust ?? 0) > thresholds.dustHigh;
+                  const mq2Alert = (mq2 ?? 0) > thresholds.mq2High;
+                  
+                  return (
+                    <>
+                      <View style={styles.airguardMetrics}>
+                        <View style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}>
+                          <Thermometer size={24} color={tempAlert ? '#FF6B6B' : colors.primary} />
+                          <Text style={[styles.airguardMetricValue, tempAlert && { color: '#FF6B6B' }]}>
+                            {temp != null ? `${Number(temp).toFixed(1)}°C` : '--'}
+                          </Text>
+                          <Text style={styles.airguardMetricLabel}>Temp</Text>
+                        </View>
 
-                  <View style={styles.airguardMetricCard}>
-                    <Wind size={24} color={colors.primary} />
-                    <Text style={styles.airguardMetricValue}>
-                      {device.airQualityData?.aqi ?? '--'}
-                    </Text>
-                    <Text style={styles.airguardMetricLabel}>AQI</Text>
-                  </View>
-                </View>
+                        <View style={[styles.airguardMetricCard, humAlert && styles.alertMetricCard]}>
+                          <Droplets size={24} color={humAlert ? '#FF6B6B' : colors.primary} />
+                          <Text style={[styles.airguardMetricValue, humAlert && { color: '#FF6B6B' }]}>
+                            {hum != null ? `${Math.round(hum)}%` : '--'}
+                          </Text>
+                          <Text style={styles.airguardMetricLabel}>Humidity</Text>
+                        </View>
 
-                <TouchableOpacity
-                  style={[styles.muteButton, device.alarmMuted && styles.muteButtonActive]}
-                  onPress={() => onToggleMute?.(device.id, !device.alarmMuted)}
-                  activeOpacity={0.85}
-                >
-                  <LinearGradient
-                    colors={device.alarmMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
-                    style={styles.muteButtonGradient}
-                  >
-                    {device.alarmMuted ? (
-                      <VolumeX size={22} color="#fff" />
-                    ) : (
-                      <Volume2 size={22} color={colors.mutedForeground} />
-                    )}
-                    <Text style={[styles.muteLabel, device.alarmMuted && styles.muteLabelActive]}>
-                      {device.alarmMuted ? 'Alarm Muted' : 'Mute Alarm'}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                        <View style={[styles.airguardMetricCard, dustAlert && styles.alertMetricCard]}>
+                          <Wind size={24} color={dustAlert ? '#FF6B6B' : colors.primary} />
+                          <Text style={[styles.airguardMetricValue, dustAlert && { color: '#FF6B6B' }]}>
+                            {dust != null ? `${dust}` : '--'}
+                          </Text>
+                          <Text style={styles.airguardMetricLabel}>Dust</Text>
+                        </View>
 
-                {onDelete && (
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => onDelete(device.id)}
-                    activeOpacity={0.9}
-                  >
-                    <LinearGradient
-                      colors={['#FF6B6B', '#FF8E53']}
-                      style={styles.deleteButtonGradient}
-                    >
-                      <Text style={styles.deleteButtonText}>Remove Device</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
+                        <View style={[styles.airguardMetricCard, mq2Alert && styles.alertMetricCard]}>
+                          <Fan size={24} color={mq2Alert ? '#FF6B6B' : colors.primary} />
+                          <Text style={[styles.airguardMetricValue, mq2Alert && { color: '#FF6B6B' }]}>
+                            {mq2 != null ? `${mq2}` : '--'}
+                          </Text>
+                          <Text style={styles.airguardMetricLabel}>Gas/Smoke</Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.muteButton, isMuted && styles.muteButtonActive]}
+                        onPress={() => onToggleMute?.(device.id, !isMuted)}
+                        activeOpacity={0.85}
+                      >
+                        <LinearGradient
+                          colors={isMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
+                          style={styles.muteButtonGradient}
+                        >
+                          {isMuted ? (
+                            <VolumeX size={22} color="#fff" />
+                          ) : (
+                            <Volume2 size={22} color={colors.mutedForeground} />
+                          )}
+                          <Text style={[styles.muteLabel, isMuted && styles.muteLabelActive]}>
+                            {isMuted ? 'Alarm Muted' : 'Mute Alarm'}
+                          </Text>
+                        </LinearGradient>
+                      </TouchableOpacity>
+
+                      {/* Threshold Settings Toggle */}
+                      <TouchableOpacity
+                        style={styles.thresholdToggle}
+                        onPress={() => setShowThresholdSettings(!showThresholdSettings)}
+                        activeOpacity={0.8}
+                      >
+                        <Settings size={18} color={colors.mutedForeground} />
+                        <Text style={styles.thresholdToggleText}>
+                          {showThresholdSettings ? 'Hide Threshold Settings' : 'Threshold Settings'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Threshold Settings Panel */}
+                      {showThresholdSettings && (
+                        <View style={styles.thresholdPanel}>
+                          <Text style={styles.thresholdPanelTitle}>Alert Thresholds</Text>
+                          <Text style={styles.thresholdPanelSubtitle}>
+                            Set the values at which alerts will trigger
+                          </Text>
+                          
+                          <View style={styles.thresholdRow}>
+                            <View style={styles.thresholdInputGroup}>
+                              <Thermometer size={16} color={colors.primary} />
+                              <Text style={styles.thresholdLabel}>Temp (°C)</Text>
+                              <TextInput
+                                style={styles.thresholdInput}
+                                value={editingThresholds.tempHigh}
+                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempHigh: text }))}
+                                keyboardType="numeric"
+                                placeholder="35"
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                            
+                            <View style={styles.thresholdInputGroup}>
+                              <Droplets size={16} color={colors.primary} />
+                              <Text style={styles.thresholdLabel}>Humidity (%)</Text>
+                              <TextInput
+                                style={styles.thresholdInput}
+                                value={editingThresholds.humidityHigh}
+                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityHigh: text }))}
+                                keyboardType="numeric"
+                                placeholder="80"
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                          </View>
+                          
+                          <View style={styles.thresholdRow}>
+                            <View style={styles.thresholdInputGroup}>
+                              <Wind size={16} color={colors.primary} />
+                              <Text style={styles.thresholdLabel}>Dust</Text>
+                              <TextInput
+                                style={styles.thresholdInput}
+                                value={editingThresholds.dustHigh}
+                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, dustHigh: text }))}
+                                keyboardType="numeric"
+                                placeholder="400"
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                            
+                            <View style={styles.thresholdInputGroup}>
+                              <Fan size={16} color={colors.primary} />
+                              <Text style={styles.thresholdLabel}>Gas/Smoke</Text>
+                              <TextInput
+                                style={styles.thresholdInput}
+                                value={editingThresholds.mq2High}
+                                onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, mq2High: text }))}
+                                keyboardType="numeric"
+                                placeholder="60"
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                          </View>
+                          
+                          <TouchableOpacity
+                            style={[styles.saveThresholdsButton, savingThresholds && styles.saveThresholdsButtonDisabled]}
+                            onPress={saveThresholds}
+                            disabled={savingThresholds}
+                            activeOpacity={0.85}
+                          >
+                            <LinearGradient
+                              colors={[colors.primary, colors.neonCyan]}
+                              style={styles.saveThresholdsGradient}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                            >
+                              <Check size={18} color="#fff" />
+                              <Text style={styles.saveThresholdsText}>
+                                {savingThresholds ? 'Sending...' : 'Save & Sync to Device'}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </>
+                  );
+                })()}
               </View>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
@@ -532,6 +810,34 @@ const createStyles = (colors: any, shadows: any) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    trashButton: {
+      width: 36,
+      height: 36,
+      borderRadius: borderRadius.md,
+      backgroundColor: 'rgba(255, 107, 107, 0.15)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    alertBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: '#FF6B6B',
+      borderRadius: borderRadius.lg,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    alertBannerText: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: '#fff',
+    },
     climateControl: {
       alignItems: 'center',
       gap: spacing.xl,
@@ -770,22 +1076,28 @@ const createStyles = (colors: any, shadows: any) =>
     },
 
     airguardControl: {
-      gap: spacing.xl,
+      gap: spacing.lg,
     },
     airguardMetrics: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
-      gap: spacing.md,
+      gap: spacing.sm,
     },
     airguardMetricCard: {
-      flex: 1,
+      width: '48%',
       alignItems: 'center',
       backgroundColor: colors.muted,
       borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      gap: spacing.sm,
+      padding: spacing.md,
+      gap: spacing.xs,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    alertMetricCard: {
+      borderColor: '#FF6B6B',
+      borderWidth: 2,
+      backgroundColor: 'rgba(255, 107, 107, 0.1)',
     },
     airguardMetricValue: {
       fontSize: fontSize.xl,
@@ -821,6 +1133,87 @@ const createStyles = (colors: any, shadows: any) =>
       color: colors.mutedForeground,
     },
     muteLabelActive: {
+      color: '#fff',
+    },
+
+    thresholdToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    thresholdToggleText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    thresholdPanel: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      gap: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    thresholdPanelTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '600',
+      color: colors.foreground,
+      textAlign: 'center',
+    },
+    thresholdPanelSubtitle: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      textAlign: 'center',
+      marginTop: -spacing.xs,
+    },
+    thresholdRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    thresholdInputGroup: {
+      flex: 1,
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    thresholdLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+    },
+    thresholdInput: {
+      width: '100%',
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      textAlign: 'center',
+    },
+    saveThresholdsButton: {
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+      marginTop: spacing.xs,
+    },
+    saveThresholdsButtonDisabled: {
+      opacity: 0.6,
+    },
+    saveThresholdsGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+    saveThresholdsText: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
       color: '#fff',
     },
 

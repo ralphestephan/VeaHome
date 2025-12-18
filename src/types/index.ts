@@ -31,17 +31,24 @@ export interface Device {
   type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan' | 'airguard';
   category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
   isActive: boolean;
+  isOnline?: boolean;
   value?: number;
   unit?: string;
   roomId: string;
   hubId?: string;
   signalMappings?: Record<string, unknown>;
+  metadata?: {
+    smartMonitorId?: string | number;
+    [key: string]: any;
+  };
   airQualityData?: {
     temperature: number;
     humidity: number;
     aqi: number;
     pm25?: number;
+    dust?: number;
     mq2?: number;
+    alert?: boolean;
   };
   alarmMuted?: boolean;
 }
@@ -65,6 +72,7 @@ export interface Room {
   airQuality?: number;
   pm25?: number;
   mq2?: number;
+  alert?: boolean;
   image?: string;
   model3dUrl?: string;
   accentColor?: string;

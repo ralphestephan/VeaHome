@@ -79,6 +79,7 @@ export const HomeApi = (client: AxiosInstance) => ({
   getRooms: (homeId: string) => client.get(`/homes/${homeId}/rooms`),
   createRoom: (homeId: string, payload: any) => client.post(`/homes/${homeId}/rooms`, payload),
   getRoom: (homeId: string, roomId: string) => client.get(`/homes/${homeId}/rooms/${roomId}`),
+  deleteRoom: (homeId: string, roomId: string) => client.delete(`/homes/${homeId}/rooms/${roomId}`),
   updateRoomLayout: (homeId: string, layout: any) => client.put(`/homes/${homeId}/layout`, { layout }),
   getEnergy: (homeId: string, range?: 'day' | 'week' | 'month') => {
     const params = range ? { range } : {};
@@ -116,6 +117,10 @@ export const PublicAirguardApi = (client: AxiosInstance) => ({
   getStatus: (smartMonitorId: number | string) => client.get(`/public/airguard/${smartMonitorId}/status`),
   setBuzzer: (smartMonitorId: number | string, state: 'ON' | 'OFF') =>
     client.post(`/public/airguard/${smartMonitorId}/buzzer`, { state }),
+  getThresholds: (smartMonitorId: number | string) => 
+    client.get(`/public/airguard/${smartMonitorId}/thresholds`),
+  setThresholds: (smartMonitorId: number | string, thresholds: { tempHigh?: number; humidityHigh?: number; dustHigh?: number; mq2High?: number }) =>
+    client.post(`/public/airguard/${smartMonitorId}/thresholds`, thresholds),
 });
 
 // Device Groups
