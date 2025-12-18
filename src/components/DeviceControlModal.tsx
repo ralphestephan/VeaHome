@@ -10,7 +10,6 @@ import {
   PanResponder,
   ScrollView,
   TextInput,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -126,6 +125,15 @@ export default function DeviceControlModal({
     mq2High: '60',
   });
   const [savingThresholds, setSavingThresholds] = useState(false);
+  const [togglingMute, setTogglingMute] = useState(false);
+  
+  // Confirmation popup state (Vealive styled, replaces Alert.alert)
+  const [confirmPopup, setConfirmPopup] = useState<{
+    visible: boolean;
+    type: 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+  }>({ visible: false, type: 'success', title: '', message: '' });
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
@@ -213,13 +221,56 @@ export default function DeviceControlModal({
     }
   }, [device, airguardApi, getSmartMonitorId]);
 
+  // Toggle mute/unmute buzzer directly via API
+  const handleMuteToggle = useCallback(async (wantMuted: boolean) => {
+    if (!device || device.type !== 'airguard') return;
+    
+    const smartMonitorId = getSmartMonitorId();
+    if (!smartMonitorId) {
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Error',
+        message: 'No SmartMonitor ID found for this device.',
+      });
+      return;
+    }
+    
+    setTogglingMute(true);
+    try {
+      // wantMuted=true means turn buzzer OFF, wantMuted=false means turn buzzer ON
+      await airguardApi.setBuzzer(smartMonitorId, wantMuted ? 'OFF' : 'ON');
+      
+      // Update local state
+      setLiveAirguardData(prev => prev ? { ...prev, buzzer: !wantMuted } : null);
+      
+      // Also call parent handler if provided
+      onToggleMute?.(device.id, wantMuted);
+    } catch (error: any) {
+      console.error('[Airguard] Failed to toggle buzzer:', error);
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Failed to Toggle Buzzer',
+        message: error?.response?.data?.message || error?.message || 'Unknown error',
+      });
+    } finally {
+      setTogglingMute(false);
+    }
+  }, [device, airguardApi, getSmartMonitorId, onToggleMute]);
+
   // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
     
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) {
-      Alert.alert('Error', 'No SmartMonitor ID found for this device. Please re-add the device.');
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Error',
+        message: 'No SmartMonitor ID found for this device. Please re-add the device.',
+      });
       return;
     }
     
@@ -233,17 +284,32 @@ export default function DeviceControlModal({
     
     // Validation
     if (isNaN(tempHigh) || isNaN(tempLow) || isNaN(humidityHigh) || isNaN(humidityLow) || isNaN(dustHigh) || isNaN(mq2High)) {
-      Alert.alert('Invalid Input', 'Please enter valid numbers for all thresholds.');
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Invalid Input',
+        message: 'Please enter valid numbers for all thresholds.',
+      });
       return;
     }
     
     if (tempLow >= tempHigh) {
-      Alert.alert('Invalid Range', 'Temperature min must be less than max.');
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Invalid Range',
+        message: 'Temperature min must be less than max.',
+      });
       return;
     }
     
     if (humidityLow >= humidityHigh) {
-      Alert.alert('Invalid Range', 'Humidity min must be less than max.');
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Invalid Range',
+        message: 'Humidity min must be less than max.',
+      });
       return;
     }
     
@@ -280,33 +346,29 @@ export default function DeviceControlModal({
       setShowThresholdSettings(false);
       
       if (!mqttConnected) {
-        Alert.alert(
-          '⚠️ MQTT Not Connected', 
-          `Thresholds were saved but MQTT is not connected. The device may not receive the update immediately.\n\n` +
-          `Please ensure MQTT_URL is configured on the backend server.\n\n` +
-          `Temperature: ${tempLow}°C - ${tempHigh}°C\n` +
-          `Humidity: ${humidityLow}% - ${humidityHigh}%`,
-          [{ text: 'OK' }]
-        );
+        setConfirmPopup({
+          visible: true,
+          type: 'warning',
+          title: 'MQTT Not Connected',
+          message: `Thresholds saved but MQTT offline.\n\nTemp: ${tempLow}°C - ${tempHigh}°C\nHumidity: ${humidityLow}% - ${humidityHigh}%`,
+        });
       } else {
-        Alert.alert(
-          '✅ Thresholds Saved', 
-          `New thresholds have been sent to the device.\n\n` +
-          `Temperature: ${tempLow}°C - ${tempHigh}°C\n` +
-          `Humidity: ${humidityLow}% - ${humidityHigh}%\n` +
-          `Dust Max: ${dustHigh} µg/m³\n` +
-          `Gas Max: ${mq2High}`,
-          [{ text: 'OK' }]
-        );
+        setConfirmPopup({
+          visible: true,
+          type: 'success',
+          title: 'Thresholds Saved',
+          message: `Temp: ${tempLow}°C - ${tempHigh}°C\nHumidity: ${humidityLow}% - ${humidityHigh}%\nDust: ${dustHigh} µg/m³\nGas: ${mq2High}`,
+        });
       }
     } catch (error: any) {
       console.error('[Airguard] Failed to save thresholds:', error);
       const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error';
-      Alert.alert(
-        'Failed to Save', 
-        `Could not send thresholds to device.\n\nError: ${errorMessage}\n\nPlease check that the backend is running and MQTT is connected.`,
-        [{ text: 'OK' }]
-      );
+      setConfirmPopup({
+        visible: true,
+        type: 'error',
+        title: 'Failed to Save',
+        message: `Could not send thresholds.\n\n${errorMessage}`,
+      });
     } finally {
       setSavingThresholds(false);
     }
@@ -536,20 +598,23 @@ export default function DeviceControlModal({
 
                       <TouchableOpacity
                         style={[styles.muteButton, isMuted && styles.muteButtonActive]}
-                        onPress={() => onToggleMute?.(device.id, !isMuted)}
+                        onPress={() => handleMuteToggle(!isMuted)}
+                        disabled={togglingMute}
                         activeOpacity={0.85}
                       >
                         <LinearGradient
                           colors={isMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
                           style={styles.muteButtonGradient}
                         >
-                          {isMuted ? (
+                          {togglingMute ? (
+                            <ActivityIndicator size="small" color={isMuted ? '#fff' : colors.mutedForeground} />
+                          ) : isMuted ? (
                             <VolumeX size={22} color="#fff" />
                           ) : (
                             <Volume2 size={22} color={colors.mutedForeground} />
                           )}
                           <Text style={[styles.muteLabel, isMuted && styles.muteLabelActive]}>
-                            {isMuted ? 'Alarm Muted' : 'Mute Alarm'}
+                            {togglingMute ? 'Updating...' : isMuted ? 'Alarm Muted' : 'Mute Alarm'}
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
@@ -947,6 +1012,69 @@ export default function DeviceControlModal({
           </LinearGradient>
         </Animated.View>
       </Animated.View>
+
+      {/* Vealive-styled Confirmation Popup */}
+      <Modal
+        visible={confirmPopup.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmPopup(prev => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill} 
+            onPress={() => setConfirmPopup(prev => ({ ...prev, visible: false }))} 
+            activeOpacity={1}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
+          </TouchableOpacity>
+          
+          <View style={styles.confirmContent}>
+            <LinearGradient
+              colors={[colors.card, colors.cardAlt]}
+              style={styles.confirmCard}
+            >
+              {/* Icon */}
+              <View style={[
+                styles.confirmIconContainer,
+                confirmPopup.type === 'success' && styles.confirmIconSuccess,
+                confirmPopup.type === 'warning' && styles.confirmIconWarning,
+                confirmPopup.type === 'error' && styles.confirmIconError,
+              ]}>
+                {confirmPopup.type === 'success' && <Check size={32} color="#fff" />}
+                {confirmPopup.type === 'warning' && <AlertTriangle size={32} color="#fff" />}
+                {confirmPopup.type === 'error' && <X size={32} color="#fff" />}
+              </View>
+              
+              {/* Title */}
+              <Text style={styles.confirmTitle}>{confirmPopup.title}</Text>
+              
+              {/* Message */}
+              <Text style={styles.confirmMessage}>{confirmPopup.message}</Text>
+              
+              {/* OK Button */}
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={() => setConfirmPopup(prev => ({ ...prev, visible: false }))}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={
+                    confirmPopup.type === 'success' ? ['#4CAF50', '#2E7D32'] :
+                    confirmPopup.type === 'warning' ? ['#FFB300', '#FF8F00'] :
+                    ['#FF6B6B', '#FF5252']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.confirmButtonGradient}
+                >
+                  <Text style={styles.confirmButtonText}>OK</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -1520,6 +1648,71 @@ const createStyles = (colors: any, shadows: any) =>
       paddingVertical: spacing.md,
     },
     deleteButtonText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: '#fff',
+    },
+
+    // Vealive-styled confirmation popup
+    confirmOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    confirmContent: {
+      width: SCREEN_WIDTH - 64,
+      maxWidth: 340,
+    },
+    confirmCard: {
+      borderRadius: borderRadius.xxl,
+      padding: spacing.xl,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows?.lg,
+    },
+    confirmIconContainer: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+    },
+    confirmIconSuccess: {
+      backgroundColor: '#4CAF50',
+    },
+    confirmIconWarning: {
+      backgroundColor: '#FFB300',
+    },
+    confirmIconError: {
+      backgroundColor: '#FF6B6B',
+    },
+    confirmTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+      textAlign: 'center',
+      marginBottom: spacing.sm,
+    },
+    confirmMessage: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: spacing.lg,
+    },
+    confirmButton: {
+      width: '100%',
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    confirmButtonGradient: {
+      paddingVertical: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    confirmButtonText: {
       fontSize: fontSize.md,
       fontWeight: '700',
       color: '#fff',
