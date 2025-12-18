@@ -34,27 +34,23 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
       ? `${Math.round(room.humidity)}%`
       : '—';
 
-  // Thresholds aligned with ESP32 SmartMonitor sketch
-  const PM25_BAD_THRESHOLD = 400;
-  const MQ2_BAD_THRESHOLD = 60;
-  const TEMP_HIGH_THRESHOLD = 35;
-  const HUMIDITY_HIGH_THRESHOLD = 80;
-
-  // Collect alert reasons for ANY threshold exceeded
+  // Use alertFlags from device telemetry if available (bitfield: 1=temp, 2=hum, 4=dust, 8=mq2)
+  const alertFlags = (room as any).alertFlags ?? 0;
+  
+  // Collect alert reasons from alertFlags bitfield
   const alertReasons: string[] = [];
-  if (pm25 !== undefined && pm25 > PM25_BAD_THRESHOLD) alertReasons.push('Dust');
-  if (mq2 !== undefined && mq2 > MQ2_BAD_THRESHOLD) alertReasons.push('Gas');
-  if (typeof room.temperature === 'number' && room.temperature > TEMP_HIGH_THRESHOLD) alertReasons.push('Temp');
-  if (typeof room.humidity === 'number' && room.humidity > HUMIDITY_HIGH_THRESHOLD) alertReasons.push('Humidity');
+  if (alertFlags & 1) alertReasons.push('Temp');
+  if (alertFlags & 2) alertReasons.push('Humidity');
+  if (alertFlags & 4) alertReasons.push('Dust');
+  if (alertFlags & 8) alertReasons.push('Gas');
 
-  // Device alert from Node-RED
+  // Device alert from Node-RED or alertFlags
   const deviceAlert = room.alert === true;
   const isAlert = alertReasons.length > 0 || deviceAlert;
 
-  // Air quality (dust/gas only)
+  // Air quality (dust/gas only) - use alertFlags
   const hasAirSensors = pm25 !== undefined || mq2 !== undefined;
-  const isAirBad = (pm25 !== undefined && pm25 > PM25_BAD_THRESHOLD) || 
-                   (mq2 !== undefined && mq2 > MQ2_BAD_THRESHOLD);
+  const isAirBad = (alertFlags & 4) !== 0 || (alertFlags & 8) !== 0;
 
   // Alert badge component for top-left
   const renderAlertBadge = () => {

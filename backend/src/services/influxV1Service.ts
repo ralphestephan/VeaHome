@@ -56,7 +56,7 @@ function extractSingleRow(result: any): Record<string, any> | null {
 export async function getSmartMonitorLatest(deviceNumericId: string) {
   // NOTE: measurement name must match your Node-RED write.
   const baseSelect =
-    'SELECT LAST(temp) AS temp, LAST(hum) AS hum, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(alert) AS alert, LAST(buzzer) AS buzzer, LAST(rssi) AS rssi, LAST(uptime) AS uptime FROM smartmonitor_telemetry';
+    'SELECT LAST(temp) AS temp, LAST(hum) AS hum, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(alert) AS alert, LAST(alertFlags) AS alertFlags, LAST(buzzer) AS buzzer, LAST(rssi) AS rssi, LAST(uptime) AS uptime FROM smartmonitor_telemetry';
 
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
@@ -83,6 +83,7 @@ export async function getSmartMonitorLatest(deviceNumericId: string) {
     dust: row.dust,
     mq2: row.mq2,
     alert: row.alert,
+    alertFlags: row.alertFlags,
     buzzer: row.buzzer,
     rssi: row.rssi,
     uptime: row.uptime,

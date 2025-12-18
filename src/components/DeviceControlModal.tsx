@@ -99,6 +99,7 @@ export default function DeviceControlModal({
     mq2?: number;
     buzzer?: boolean;
     isOnline?: boolean;
+    alertFlags?: number;
   } | null>(null);
   
   // Threshold state for Airguard (min/max for temp & humidity)
@@ -150,6 +151,7 @@ export default function DeviceControlModal({
         mq2: latest.mq2,
         buzzer: latest.buzzer === 1 || latest.buzzer === true,
         isOnline: status.online,
+        alertFlags: latest.alertFlags ?? 0,
       });
     } catch (error) {
       console.warn('Failed to fetch airguard data:', error);
@@ -365,19 +367,30 @@ export default function DeviceControlModal({
                 {/* Alert banner if device is alerting - show which stats caused it */}
                 {(() => {
                   const reasons: string[] = [];
-                  // Use live data if available, fallback to device data
-                  const aq = liveAirguardData ?? device.airQualityData;
-                  if (aq?.dust != null && aq.dust > thresholds.dustHigh) reasons.push('Dust');
-                  if (aq?.mq2 != null && aq.mq2 > thresholds.mq2High) reasons.push('Gas');
-                  if (aq?.temperature != null && (aq.temperature > thresholds.tempHigh || aq.temperature < thresholds.tempLow)) reasons.push('Temp');
-                  if (aq?.humidity != null && (aq.humidity > thresholds.humidityHigh || aq.humidity < thresholds.humidityLow)) reasons.push('Humidity');
-                  const hasAlert = (device.airQualityData?.alert) || reasons.length > 0;
+                  // Use alertFlags from live data if available (bitfield: 1=temp, 2=hum, 4=dust, 8=mq2)
+                  const alertFlags = liveAirguardData?.alertFlags ?? (device.airQualityData as any)?.alertFlags ?? 0;
+                  
+                  if (alertFlags & 1) reasons.push('Temp');
+                  if (alertFlags & 2) reasons.push('Humidity');
+                  if (alertFlags & 4) reasons.push('Dust');
+                  if (alertFlags & 8) reasons.push('Gas');
+                  
+                  // Fallback: check thresholds manually if no alertFlags
+                  if (reasons.length === 0 && !alertFlags) {
+                    const aq = liveAirguardData ?? device.airQualityData;
+                    if (aq?.dust != null && aq.dust > thresholds.dustHigh) reasons.push('Dust');
+                    if (aq?.mq2 != null && aq.mq2 > thresholds.mq2High) reasons.push('Gas');
+                    if (aq?.temperature != null && (aq.temperature > thresholds.tempHigh || aq.temperature < thresholds.tempLow)) reasons.push('Temp');
+                    if (aq?.humidity != null && (aq.humidity > thresholds.humidityHigh || aq.humidity < thresholds.humidityLow)) reasons.push('Humidity');
+                  }
+                  
+                  const hasAlert = alertFlags > 0 || (device.airQualityData?.alert) || reasons.length > 0;
                   if (!hasAlert) return null;
                   return (
                     <View style={styles.alertBanner}>
                       <CloudOff size={16} color="#fff" />
                       <Text style={styles.alertBannerText}>
-                        Alert: {reasons.length > 0 ? reasons.join(', ') : 'Air Quality'}
+                        Alert: {reasons.length > 0 ? reasons.join(', ') : 'Check Sensors'}
                       </Text>
                     </View>
                   );
