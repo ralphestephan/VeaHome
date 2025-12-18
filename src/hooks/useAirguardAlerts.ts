@@ -1,0 +1,171 @@
+import { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
+import { useNotifications } from '../context/NotificationsContext';
+import { Device } from '../types';
+
+interface AlertState {
+  deviceId: string;
+  alertFlags: number;
+  firstAlertTime: number;
+  lastReminderTime: number;
+}
+
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+const REMINDER_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+
+export function useAirguardAlerts(devices: Device[]) {
+  const { addNotification } = useNotifications();
+  const alertStatesRef = useRef<Map<string, AlertState>>(new Map());
+
+  useEffect(() => {
+    const checkAlerts = async () => {
+      const airguards = devices.filter(d => d.type === 'airguard');
+      
+      for (const device of airguards) {
+        const currentAlertFlags = device.airQualityData?.alertFlags ?? 0;
+        const deviceId = device.id;
+        const previousState = alertStatesRef.current.get(deviceId);
+
+        // No alert currently
+        if (currentAlertFlags === 0) {
+          // Clear state if alert resolved
+          if (previousState) {
+            alertStatesRef.current.delete(deviceId);
+            
+            // Send resolution notification
+            addNotification({
+              title: `${device.name} - Alert Resolved`,
+              message: 'All sensors have returned to normal levels.',
+              time: 'Just now',
+              category: 'alert',
+              deviceId,
+            });
+            
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `${device.name} - Alert Resolved ✅`,
+                body: 'All sensors have returned to normal levels.',
+                data: { deviceId, type: 'resolution' },
+              },
+              trigger: null,
+            });
+          }
+          continue;
+        }
+
+        // Decode alert reasons
+        const reasons: string[] = [];
+        if (currentAlertFlags & 1) reasons.push('Temperature');
+        if (currentAlertFlags & 2) reasons.push('Humidity');
+        if (currentAlertFlags & 4) reasons.push('Dust');
+        if (currentAlertFlags & 8) reasons.push('Gas');
+
+        const now = Date.now();
+        
+        // New alert (first time)
+        if (!previousState) {
+          const message = `⚠️ ${reasons.join(', ')} level${reasons.length > 1 ? 's' : ''} outside safe range!`;
+          
+          // Add to in-app notifications
+          addNotification({
+            title: `${device.name} - Alert!`,
+            message,
+            time: 'Just now',
+            category: 'alert',
+            deviceId,
+          });
+
+          // Send push notification
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `🚨 ${device.name} - Alert!`,
+              body: message,
+              data: { deviceId, alertFlags: currentAlertFlags, type: 'first-alert' },
+              priority: Notifications.AndroidNotificationPriority.HIGH,
+            },
+            trigger: null,
+          });
+
+          // Save state
+          alertStatesRef.current.set(deviceId, {
+            deviceId,
+            alertFlags: currentAlertFlags,
+            firstAlertTime: now,
+            lastReminderTime: now,
+          });
+        }
+        // Existing alert - check if reminder is needed
+        else {
+          const timeSinceLastReminder = now - previousState.lastReminderTime;
+          
+          // Send reminder if it's been an hour and alert is still active
+          if (timeSinceLastReminder >= REMINDER_INTERVAL) {
+            const durationMinutes = Math.round((now - previousState.firstAlertTime) / 60000);
+            const message = `Still active: ${reasons.join(', ')} (${durationMinutes} min)`;
+            
+            // Add reminder to in-app notifications
+            addNotification({
+              title: `${device.name} - Reminder`,
+              message,
+              time: 'Just now',
+              category: 'alert',
+              deviceId,
+              isReminder: true,
+            });
+
+            // Send push reminder
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `🔔 ${device.name} - Reminder`,
+                body: message,
+                data: { deviceId, alertFlags: currentAlertFlags, type: 'reminder' },
+              },
+              trigger: null,
+            });
+
+            // Update last reminder time
+            previousState.lastReminderTime = now;
+          }
+
+          // Update alert flags if they changed (new sensors triggered)
+          if (previousState.alertFlags !== currentAlertFlags) {
+            previousState.alertFlags = currentAlertFlags;
+          }
+        }
+      }
+    };
+
+    // Check alerts every 10 seconds
+    const interval = setInterval(checkAlerts, 10000);
+    checkAlerts(); // Run immediately
+
+    return () => clearInterval(interval);
+  }, [devices, addNotification]);
+
+  // Request notification permissions on mount
+  useEffect(() => {
+    const requestPermissions = async () => {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        console.warn('Notification permissions not granted');
+      }
+    };
+
+    requestPermissions();
+  }, []);
+}

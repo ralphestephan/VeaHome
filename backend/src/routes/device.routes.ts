@@ -6,7 +6,9 @@ import {
   controlDevice, 
   learnSignal,
   getDeviceHistory,
-  removeDevice
+  removeDevice,
+  getDeviceThresholds,
+  setDeviceThresholds
 } from '../controllers/device.controller';
 import { authenticateToken } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -21,5 +23,7 @@ router.delete('/:homeId/devices/:deviceId', authenticateToken, removeDevice);
 router.put('/:homeId/devices/:deviceId/control', authenticateToken, validate(deviceSchemas.controlDevice), controlDevice);
 router.post('/:hubId/devices/:deviceId/learn', authenticateToken, validate(deviceSchemas.learnSignal), learnSignal);
 router.get('/:homeId/devices/:deviceId/history', authenticateToken, getDeviceHistory);
+router.get('/:homeId/devices/:deviceId/thresholds', authenticateToken, getDeviceThresholds);
+router.put('/:homeId/devices/:deviceId/thresholds', authenticateToken, setDeviceThresholds);
 
 export default router;

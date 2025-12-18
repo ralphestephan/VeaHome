@@ -14,6 +14,7 @@ import { createHub, getHubById } from '../repositories/hubsRepository';
 import { getRoomById } from '../repositories/roomsRepository';
 import { publishCommand } from '../services/mqttService';
 import { recordDeviceActivity } from '../services/telemetryService';
+import { getSmartMonitorConfig } from '../services/influxV1Service';
 import { randomUUID } from 'crypto';
 
 export async function listDevices(req: Request, res: Response) {
@@ -297,5 +298,101 @@ export async function removeDevice(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Delete device error:', error);
     return errorResponse(res, error.message || 'Failed to delete device', 500);
+  }
+}
+
+export async function getDeviceThresholds(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, deviceId } = req.params;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
+      return errorResponse(res, 'Device not found', 404);
+    }
+
+    if (device.type !== 'airguard') {
+      return errorResponse(res, 'Only AirGuard devices have thresholds', 400);
+    }
+
+    // Device ID is stored as numeric ID
+    const deviceNumericId = parseInt(device.id, 10);
+    if (isNaN(deviceNumericId)) {
+      return errorResponse(res, 'Invalid device ID', 400);
+    }
+
+    // Fetch thresholds from InfluxDB smartmonitor_config measurement
+    const config = await getSmartMonitorConfig(deviceNumericId);
+    
+    if (!config) {
+      // Return defaults if no config found
+      console.log(`[Thresholds] No config found for device ${deviceNumericId}, returning defaults`);
+      return successResponse(res, {
+        tempMin: 10,
+        tempMax: 35,
+        humMin: 20,
+        humMax: 80,
+        dustHigh: 400,
+        mq2High: 60,
+      });
+    }
+
+    console.log(`[Thresholds] Found config for device ${deviceNumericId}:`, config);
+    return successResponse(res, config);
+  } catch (error: any) {
+    console.error('Get device thresholds error:', error);
+    return errorResponse(res, error.message || 'Failed to get thresholds', 500);
+  }
+}
+
+export async function setDeviceThresholds(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, deviceId } = req.params;
+    const { tempMin, tempMax, humMin, humMax, dustHigh, mq2High } = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
+      return errorResponse(res, 'Device not found', 404);
+    }
+
+    if (device.type !== 'airguard') {
+      return errorResponse(res, 'Only AirGuard devices have thresholds', 400);
+    }
+
+    const deviceNumericId = parseInt(device.id, 10);
+    if (isNaN(deviceNumericId)) {
+      return errorResponse(res, 'Invalid device ID', 400);
+    }
+
+    // Publish threshold update to MQTT - device will update and republish to config topic
+    const topic = `vealive/smartmonitor/${deviceNumericId}/set/config`;
+    const payload = JSON.stringify({
+      tempMin,
+      tempMax,
+      humMin,
+      humMax,
+      dustHigh,
+      mq2High,
+    });
+
+    await publishCommand(topic, payload);
+    console.log(`[Thresholds] Published to ${topic}:`, payload);
+
+    return successResponse(res, { 
+      message: 'Thresholds updated',
+      thresholds: { tempMin, tempMax, humMin, humMax, dustHigh, mq2High },
+    });
+  } catch (error: any) {
+    console.error('Set device thresholds error:', error);
+    return errorResponse(res, error.message || 'Failed to set thresholds', 500);
   }
 }

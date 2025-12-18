@@ -138,15 +138,20 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
 }
 
 export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: string) {
-  // Query thresholds from smartmonitor_thresholds measurement
-  const baseSelect = 'SELECT LAST(tempMin) AS tempMin, LAST(tempMax) AS tempMax, LAST(humMin) AS humMin, LAST(humMax) AS humMax, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_thresholds';
+  // Query thresholds from smartmonitor_config measurement (ESP32 publishes config here)
+  const baseSelect = 'SELECT LAST(tempMin) AS tempMin, LAST(tempMax) AS tempMax, LAST(humMin) AS humMin, LAST(humMax) AS humMax, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_config';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       try {
+        console.log(`[InfluxDB] Querying thresholds: ${q}`);
         const result = await queryInfluxV1(q);
         const row = extractSingleRow(result);
-        if (row) return row;
-      } catch {
+        if (row) {
+          console.log(`[InfluxDB] Found thresholds for device ${deviceNumericId}:`, row);
+          return row;
+        }
+      } catch (err) {
+        console.warn(`[InfluxDB] Query failed:`, err);
         // Continue to next query on error
       }
     }
@@ -159,7 +164,10 @@ export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: strin
     baseSelect,
   ]);
 
-  if (!row) return null;
+  if (!row) {
+    console.log(`[InfluxDB] No thresholds found for device ${deviceNumericId}`);
+    return null;
+  }
 
   return {
     time: row.time,
@@ -173,3 +181,6 @@ export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: strin
     mq2High: row.mq2High,
   };
 }
+
+// Alias for authenticated routes
+export const getSmartMonitorConfig = getSmartMonitorThresholdsFromInflux;

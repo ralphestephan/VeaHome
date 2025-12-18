@@ -50,12 +50,13 @@ const mapRoom = (raw: any): Room => {
   return {
     id: String(raw.id),
     name: raw.name,
-    temperature: raw.temperature ?? 0,
-    humidity: raw.humidity ?? 0,
+    // Don't default to 0 - leave undefined if no data
+    temperature: raw.temperature,
+    humidity: raw.humidity,
     lights: raw.lights ?? 0,
     devices: [],
     scene: raw.scene ?? '',
-    power: raw.power ?? '0W',
+    power: raw.power,
     airQuality: raw.airQuality ?? raw.air_quality,
     pm25: raw.pm25,
     mq2: raw.mq2,
@@ -73,6 +74,13 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
   return baseRooms.map((room) => {
     const roomDevices = baseDevices.filter((d) => d.roomId === room.id);
     const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
+    
+    // Calculate room power consumption
+    // AirGuard: ~2W average (ESP32 + sensors)
+    const airguardPower = roomDevices.filter(d => d.type === 'airguard').length * 2;
+    const otherDevicePower = 0; // TODO: Add other device power calculations
+    const totalPower = airguardPower + otherDevicePower;
+    
     return {
       ...room,
       devices: roomDevices,
@@ -82,7 +90,9 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
       pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
       mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
       alert: airguard?.airQualityData?.alert ?? room.alert,
+      alertFlags: airguard?.airQualityData?.alertFlags ?? room.alertFlags,
       lights: roomDevices.filter((d) => d.type === 'light').length,
+      power: totalPower > 0 ? `${totalPower}W` : room.power,
     };
   });
 };

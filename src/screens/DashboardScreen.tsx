@@ -46,6 +46,7 @@ import { useHomeData } from '../hooks/useHomeData';
 import { useEnergyData } from '../hooks/useEnergyData';
 import { useRealtime } from '../hooks/useRealtime';
 import { useDeviceControl } from '../hooks/useDeviceControl';
+import { useAirguardAlerts } from '../hooks/useAirguardAlerts';
 import { useDemo } from '@/context/DemoContext';
 import type { Room, Device, Home } from '../types';
 import { getApiClient, HomeApi, PublicAirguardApi } from '../services/api';
@@ -88,6 +89,9 @@ export default function DashboardScreen() {
   // Use demo data if in demo mode
   const rooms: Room[] = isDemoMode ? demoRooms : homeRooms;
   const devices: Device[] = isDemoMode ? demoDevices : homeDevices;
+  
+  // Monitor AirGuard alerts and send notifications (only for real users)
+  useAirguardAlerts(isDemoMode ? [] : devices);
   
   const { energyData } = useEnergyData(homeId, 'day');
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();

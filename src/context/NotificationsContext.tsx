@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 
 export interface NotificationItem {
   id: string;
@@ -6,6 +7,8 @@ export interface NotificationItem {
   message: string;
   time: string;
   category: 'alert' | 'automation' | 'system';
+  deviceId?: string;
+  isReminder?: boolean;
 }
 
 interface NotificationsContextValue {
@@ -13,6 +16,7 @@ interface NotificationsContextValue {
   unreadCount: number;
   markAllRead: () => void;
   setNotifications: React.Dispatch<React.SetStateAction<NotificationItem[]>>;
+  addNotification: (notification: Omit<NotificationItem, 'id'>) => void;
 }
 
 const notificationsSeed: NotificationItem[] = [
@@ -63,10 +67,30 @@ const notificationsSeed: NotificationItem[] = [
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
 
 export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(notificationsSeed);
+  const { token } = useAuth();
+  const isDemoMode = token === 'DEMO_TOKEN';
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  // Load demo notifications only in demo mode
+  useEffect(() => {
+    if (isDemoMode) {
+      setNotifications(notificationsSeed);
+    } else {
+      // Real users start with empty notifications
+      setNotifications([]);
+    }
+  }, [isDemoMode]);
 
   const markAllRead = useCallback(() => {
     setNotifications([]);
+  }, []);
+
+  const addNotification = useCallback((notification: Omit<NotificationItem, 'id'>) => {
+    const newNotification: NotificationItem = {
+      ...notification,
+      id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    };
+    setNotifications((prev) => [newNotification, ...prev]);
   }, []);
 
   const value = useMemo(
@@ -75,8 +99,9 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
       unreadCount: notifications.length,
       markAllRead,
       setNotifications,
+      addNotification,
     }),
-    [notifications, markAllRead],
+    [notifications, markAllRead, addNotification],
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
