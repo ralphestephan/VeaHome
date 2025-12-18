@@ -512,18 +512,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
       String state = doc["state"].as<String>();
       state.toUpperCase();
       
-      if (state == "ON" || state == "1" || state == "TRUE") {
-        buzzerEnabled = true;
-        Serial.println("[MQTT] Buzzer => ON");
-      } else if (state == "OFF" || state == "0" || state == "FALSE") {
-        buzzerEnabled = false;
-        digitalWrite(BUZZER_PIN, LOW);
-        Serial.println("[MQTT] Buzzer => OFF (muted)");
-      }
+      bool newState = (state == "ON" || state == "1" || state == "TRUE");
       
-      prefs.putBool("buzzer", buzzerEnabled);
-      forceTelemetryPublish = true;
-      lastMuteState = !lastMuteState; // Force UI update
+      if (newState != buzzerEnabled) {
+        buzzerEnabled = newState;
+        
+        if (!buzzerEnabled) {
+          digitalWrite(BUZZER_PIN, LOW);
+          Serial.println("[MQTT] Buzzer => OFF (muted)");
+        } else {
+          Serial.println("[MQTT] Buzzer => ON");
+        }
+        
+        prefs.putBool("buzzer", buzzerEnabled);
+        drawMuteIcon(!buzzerEnabled);  // Update icon immediately
+        forceTelemetryPublish = true;
+      }
     }
     return;
   }

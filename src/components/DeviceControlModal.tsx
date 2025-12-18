@@ -104,6 +104,7 @@ export default function DeviceControlModal({
     buzzer?: boolean;
     isOnline?: boolean;
     alertFlags?: number;
+    rssi?: number;
   } | null>(null);
   
   // Threshold state for Airguard (min/max for temp & humidity)
@@ -181,6 +182,7 @@ export default function DeviceControlModal({
         buzzer: latest.buzzer === 1 || latest.buzzer === true,
         isOnline: status.online,
         alertFlags: latest.alertFlags ?? 0,
+        rssi: latest.rssi,
       });
     } catch (error) {
       console.warn('Failed to fetch airguard data:', error);
@@ -456,6 +458,22 @@ export default function DeviceControlModal({
     return `${Math.round(localValue)}`;
   };
 
+  // Calculate signal strength from RSSI
+  const getSignalStrength = (rssi: number | undefined): { strength: string; bars: number; color: string } => {
+    if (!rssi || rssi === 0) return { strength: 'N/A', bars: 0, color: colors.mutedForeground };
+    
+    // RSSI ranges: Excellent > -50, Good > -60, Fair > -70, Poor <= -70
+    if (rssi > -50) {
+      return { strength: 'Excellent', bars: 4, color: '#4CAF50' };
+    } else if (rssi > -60) {
+      return { strength: 'Good', bars: 3, color: colors.primary };
+    } else if (rssi > -70) {
+      return { strength: 'Fair', bars: 2, color: '#FFD166' };
+    } else {
+      return { strength: 'Poor', bars: 1, color: '#FF6B6B' };
+    }
+  };
+
   const getMinMax = () => {
     if (isClimateDevice) return { min: 16, max: 30 };
     return { min: 0, max: 100 };
@@ -505,22 +523,52 @@ export default function DeviceControlModal({
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
-                {/* Online/Offline Status */}
-                <View style={styles.connectionStatus}>
-                  {liveAirguardData?.isOnline ? (
-                    <>
-                      <Wifi size={14} color="#4CAF50" />
-                      <Text style={[styles.connectionStatusText, { color: '#4CAF50' }]}>
-                        Online
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff size={14} color={colors.mutedForeground} />
-                      <Text style={styles.connectionStatusText}>
-                        {liveAirguardData ? 'Offline' : 'Loading...'}
-                      </Text>
-                    </>
+                {/* Online/Offline Status & Signal Strength */}
+                <View style={styles.statusRow}>
+                  <View style={styles.connectionStatus}>
+                    {liveAirguardData?.isOnline ? (
+                      <>
+                        <Wifi size={14} color="#4CAF50" />
+                        <Text style={[styles.connectionStatusText, { color: '#4CAF50' }]}>
+                          Online
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff size={14} color={colors.mutedForeground} />
+                        <Text style={styles.connectionStatusText}>
+                          {liveAirguardData ? 'Offline' : 'Loading...'}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                  
+                  {/* Signal Strength Indicator */}
+                  {liveAirguardData?.rssi && (
+                    <View style={styles.signalStrengthContainer}>
+                      {(() => {
+                        const signal = getSignalStrength(liveAirguardData.rssi);
+                        return (
+                          <>
+                            <View style={styles.signalBars}>
+                              {[1, 2, 3, 4].map((bar) => (
+                                <View
+                                  key={bar}
+                                  style={[
+                                    styles.signalBar,
+                                    { height: bar * 4 },
+                                    bar <= signal.bars && { backgroundColor: signal.color },
+                                  ]}
+                                />
+                              ))}
+                            </View>
+                            <Text style={[styles.signalText, { color: signal.color }]}>
+                              {signal.strength}
+                            </Text>
+                          </>
+                        );
+                      })()}
+                    </View>
                   )}
                 </View>
 
@@ -1407,21 +1455,50 @@ const createStyles = (colors: any, shadows: any) =>
     airguardControl: {
       gap: spacing.lg,
     },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      marginBottom: spacing.xs,
+    },
     connectionStatus: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
       gap: spacing.xs,
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
       backgroundColor: colors.muted,
       borderRadius: borderRadius.md,
-      alignSelf: 'center',
     },
     connectionStatusText: {
       fontSize: fontSize.sm,
       fontWeight: '600',
       color: colors.mutedForeground,
+    },
+    signalStrengthContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+    },
+    signalBars: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 2,
+      height: 16,
+    },
+    signalBar: {
+      width: 4,
+      backgroundColor: colors.border,
+      borderRadius: 2,
+    },
+    signalText: {
+      fontSize: fontSize.xs,
+      fontWeight: '600',
     },
     airguardMetrics: {
       flexDirection: 'row',
