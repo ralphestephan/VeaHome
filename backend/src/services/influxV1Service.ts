@@ -138,8 +138,8 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
 }
 
 export async function getSmartMonitorThresholdsFromInflux(deviceNumericId: string) {
-  // Query thresholds from smartmonitor_config measurement (ESP32 publishes config here)
-  const baseSelect = 'SELECT LAST(tempMin) AS tempMin, LAST(tempMax) AS tempMax, LAST(humMin) AS humMin, LAST(humMax) AS humMax, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_config';
+  // Query thresholds from smartmonitor_thresholds measurement (Node-RED writes here)
+  const baseSelect = 'SELECT LAST(tempMin) AS tempMin, LAST(tempMax) AS tempMax, LAST(humMin) AS humMin, LAST(humMax) AS humMax, LAST(dust) AS dust, LAST(mq2) AS mq2, LAST(dustHigh) AS dustHigh, LAST(mq2High) AS mq2High, time FROM smartmonitor_thresholds';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       try {
