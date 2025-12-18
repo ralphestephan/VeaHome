@@ -173,12 +173,11 @@ export default function DeviceControlModal({
         airguardApi.getStatus(smartMonitorId),
       ]);
       
-      // Backend response has TRIPLE nesting: { success: true, data: { data: { data: {...} } } }
-      // This is because successResponse wraps it, then controller wraps it again
+      // Backend response: { success: true, data: { data: {...} } }
       const latestWrapper = latestRes.data?.data;
       const statusWrapper = statusRes.data?.data;
       
-      // Extract actual data from the inner wrapper
+      // Extract actual data from the wrapper
       const latest = latestWrapper?.data || latestWrapper;
       const status = statusWrapper?.data || statusWrapper;
       
@@ -191,7 +190,7 @@ export default function DeviceControlModal({
         return;
       }
       
-      // Map backend fields - backend returns temperature/humidity (not temp/hum)
+      // Map backend fields
       const newData = {
         temperature: latest.temperature,
         humidity: latest.humidity,

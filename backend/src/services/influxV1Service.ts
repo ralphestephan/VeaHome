@@ -93,7 +93,8 @@ export async function getSmartMonitorLatest(deviceNumericId: string) {
 export async function getSmartMonitorStatus(deviceNumericId: string) {
   // Use telemetry timestamp instead of separate status measurement
   // Device publishes telemetry every 2 seconds, so if last telemetry is recent, device is online
-  const baseSelect = 'SELECT time FROM smartmonitor_telemetry';
+  // Note: We use InfluxDB's internal timestamp, not the device's time field (which may be 1970)
+  const baseSelect = 'SELECT time, temp FROM smartmonitor_telemetry';
   const tryQueries = async (queries: string[]) => {
     for (const q of queries) {
       const result = await queryInfluxV1(q);
@@ -109,7 +110,7 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
     `${baseSelect} ORDER BY time DESC LIMIT 1`,
   ]);
 
-  if (!row) {
+  if (!row || !row.time) {
     return {
       time: null,
       online: false,
@@ -119,10 +120,15 @@ export async function getSmartMonitorStatus(deviceNumericId: string) {
 
   // Staleness check: if the last telemetry is older than 10 seconds, consider offline
   // (Device publishes every 2 seconds, so 10s = 5 missed publishes)
+  // Use InfluxDB's timestamp (which is always correct) not device time
   const staleMs = 10 * 1000; // 10 seconds
-  const lastTime = row.time ? new Date(row.time).getTime() : 0;
-  const isStale = Date.now() - lastTime > staleMs;
+  const lastTime = new Date(row.time).getTime();
+  const now = Date.now();
+  const age = now - lastTime;
+  const isStale = age > staleMs;
   const onlineValue = !isStale;
+
+  console.log(`[Status] Device ${deviceNumericId}: age=${age}ms, stale=${isStale}, online=${onlineValue}`);
 
   return {
     time: row.time,

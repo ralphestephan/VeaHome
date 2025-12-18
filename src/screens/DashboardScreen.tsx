@@ -100,7 +100,6 @@ export default function DashboardScreen() {
   const isEditSession = canEditLayout && isFloorPlanEditing;
   const floorPlanRef = useRef<InteractiveFloorPlanHandle>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const roomPreviewPosition = useRef(0);
   const { controlDevice } = useDeviceControl();
   const [quickActionLoading, setQuickActionLoading] = useState<null | 'lights' | 'locks' | 'scene'>(null);
   const { showToast } = useToast();
@@ -175,12 +174,6 @@ export default function DashboardScreen() {
     await refresh();
     setRefreshing(false);
   }, [refresh]);
-
-  const scrollToRoomPreview = () => {
-    if (!scrollRef.current) return;
-    const targetY = Math.max(roomPreviewPosition.current - spacing.xl, 0);
-    scrollRef.current.scrollTo({ y: targetY, animated: true });
-  };
 
   const handleRoomSelect = (roomId: string) => {
     userSelectedRoomRef.current = roomId;
@@ -373,16 +366,8 @@ export default function DashboardScreen() {
     return 'Good evening';
   };
 
-  // Track if user explicitly selected a room (to avoid auto-scrolling on data refresh)
+  // Track if user explicitly selected a room
   const userSelectedRoomRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    // Only scroll if user explicitly selected this room
-    if (!selectedRoomData || userSelectedRoomRef.current !== selectedRoom) return;
-    const timeout = setTimeout(scrollToRoomPreview, 150);
-    userSelectedRoomRef.current = null; // Reset after scrolling
-    return () => clearTimeout(timeout);
-  }, [selectedRoomData, selectedRoom]);
 
   const handleNotificationsPress = () => {
     navigation.navigate('Notifications');
@@ -604,28 +589,6 @@ export default function DashboardScreen() {
               onViewDetails={handleRoomViewDetails}
             />
           </Animated.View>
-
-          {/* Selected Room Preview */}
-          {selectedRoomData && (
-            <AnimatedPressable
-              onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoomData.id })}
-              style={styles.roomPreviewTouchable}
-              onLayout={(event: { nativeEvent: { layout: { y: number } } }) => {
-                roomPreviewPosition.current = event.nativeEvent.layout.y;
-              }}
-            >
-              <NeonCard glow="primary" style={styles.roomPreviewCard}>
-                <RoomCard
-                  room={selectedRoomData}
-                  onPress={() => navigation.navigate('RoomDetail', { roomId: selectedRoomData.id })}
-                />
-                <View style={styles.tapToEnterBadge}>
-                  <Text style={styles.tapToEnterText}>Tap to enter room</Text>
-                  <ChevronRight size={16} color={colors.primary} />
-                </View>
-              </NeonCard>
-            </AnimatedPressable>
-          )}
         </View>
 
         {/* Quick Actions */}
