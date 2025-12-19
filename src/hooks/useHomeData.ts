@@ -47,8 +47,22 @@ const mapDevice = (raw: any): Device => {
 };
 
 const mapRoom = (raw: any, sceneNameMap?: Map<string, string>): Room => {
-  const sceneId = raw.scene ?? '';
-  const sceneName = sceneId && sceneNameMap ? sceneNameMap.get(String(sceneId)) : undefined;
+  // Handle corrupted scene field - might be object instead of UUID
+  let sceneId = '';
+  let sceneName = undefined;
+  
+  if (raw.scene) {
+    if (typeof raw.scene === 'object' && raw.scene.id) {
+      // Corrupted: scene field contains full scene object
+      sceneId = String(raw.scene.id);
+      sceneName = raw.scene.name || undefined;
+      console.log('[mapRoom] Corrupted scene field detected:', { sceneId, sceneName });
+    } else if (typeof raw.scene === 'string') {
+      // Correct: scene field contains UUID
+      sceneId = raw.scene;
+      sceneName = sceneNameMap ? sceneNameMap.get(String(sceneId)) : undefined;
+    }
+  }
   
   return {
     id: String(raw.id),

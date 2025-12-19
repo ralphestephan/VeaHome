@@ -145,16 +145,20 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     if (!homeId) return;
 
     try {
+      console.log('[Assign Scene] Updating room with scene:', sceneId);
       // Update room with scene ID
       await homeApi.updateRoom(homeId, String(roomId), {
-        scene: sceneId || null,
+        scene: sceneId,
       });
       
-      // Update local state
+      // Update local state immediately
       const selectedScene = scenes.find(s => s.id === sceneId);
       setActiveSceneName(selectedScene?.name || '');
       setScenePickerVisible(false);
-      showToast(sceneId ? `Scene assigned to room` : 'Scene removed', { type: 'success' });
+      
+      showToast(sceneId ? `Scene assigned successfully` : 'Scene removed successfully', { type: 'success' });
+      
+      // Reload data from backend to ensure sync
       await loadRoomData();
     } catch (err) {
       console.error('Error assigning scene:', err);
@@ -350,14 +354,27 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       setRoom(nextRoom);
       setDevices(enrichedDevices);
       
-      // Load active scene name if room has a scene ID
+      // Load active scene name - handle both UUID and corrupted object
       if (baseRoom?.scene) {
         try {
+          let sceneIdToMatch = baseRoom.scene;
+          
+          // Check if scene is a corrupted object
+          if (typeof baseRoom.scene === 'object' && (baseRoom.scene as any).id) {
+            console.log('[Room Scene] Corrupted scene object detected:', baseRoom.scene);
+            sceneIdToMatch = (baseRoom.scene as any).id;
+            // If object has name, use it directly
+            if ((baseRoom.scene as any).name) {
+              setActiveSceneName((baseRoom.scene as any).name);
+              return; // Skip API call
+            }
+          }
+          
           const scenesRes = await scenesApi.listScenes(homeId);
           const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
-          console.log('[Room Scene] Room scene ID:', baseRoom.scene);
+          console.log('[Room Scene] Scene ID to match:', sceneIdToMatch);
           console.log('[Room Scene] Available scenes:', scenesData);
-          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(baseRoom.scene)) : null;
+          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(sceneIdToMatch)) : null;
           console.log('[Room Scene] Found scene:', activeScene);
           if (activeScene) {
             setActiveSceneName(activeScene.name);
