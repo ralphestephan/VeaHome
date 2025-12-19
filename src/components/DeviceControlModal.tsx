@@ -224,7 +224,9 @@ export default function DeviceControlModal({
       console.log('[Thresholds] Fetching for device:', smartMonitorId);
       const res = await airguardApi.getThresholds(smartMonitorId);
       console.log('[Thresholds] API response:', JSON.stringify(res, null, 2));
-      const data = res.data?.data;
+      
+      // Handle nested data structure: res.data = { data: { tempMin, tempMax, ... } }
+      const data = res.data?.data?.data || res.data?.data;
       console.log('[Thresholds] Extracted data:', JSON.stringify(data, null, 2));
       
       if (data && typeof data === 'object') {
