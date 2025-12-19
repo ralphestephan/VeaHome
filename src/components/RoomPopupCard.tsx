@@ -145,9 +145,9 @@ export default function RoomPopupCard({
               <View style={styles.imageContent}>
                 <View>
                   <Text style={styles.roomName}>{room.name}</Text>
-                  {room.scene && (
-                    <Text style={styles.roomScene}>{room.scene}</Text>
-                  )}
+                  <Text style={styles.roomScene}>
+                    {room.sceneName || (typeof room.scene === 'object' ? (room.scene as any)?.name : null) || 'No Scene'}
+                  </Text>
                 </View>
                 <View style={styles.deviceBadge}>
                   <Lightbulb size={12} color="#fff" />

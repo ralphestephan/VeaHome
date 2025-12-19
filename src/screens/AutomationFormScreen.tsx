@@ -19,12 +19,8 @@ import {
   Plus,
   ChevronDown,
   Thermometer,
-  Droplets,
-  Wind,
-  Lightbulb,
-  Power,
-  Fan as FanIcon,
   Clock,
+  Zap,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -35,6 +31,7 @@ import { getApiClient, AutomationsApi } from '../services/api';
 import { useHomeData } from '../hooks/useHomeData';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { Device } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProp = {
@@ -46,56 +43,152 @@ type RouteProp = {
   };
 };
 
-type TriggerType = 'sensor' | 'device_state' | 'time' | 'sunset' | 'sunrise';
-type TriggerLogic = 'AND' | 'OR';
+type TriggerType = 'sensor' | 'time';
+type TriggerOperator = 'AND' | 'OR';
 
 interface Trigger {
   id: string;
   type: TriggerType;
   deviceId?: string;
-  sensorType?: string;
+  property?: string;
   condition?: string;
   value?: any;
   at?: string;
+  operator?: TriggerOperator;
 }
 
 interface Action {
   id: string;
-  type: string;
   deviceId?: string;
+  action?: string;
+  property?: string;
   value?: any;
 }
 
-const TRIGGER_TYPES = [
-  { id: 'sensor', name: 'Sensor Value', icon: Thermometer },
-  { id: 'device_state', name: 'Device State', icon: Power },
-  { id: 'time', name: 'Time of Day', icon: Clock },
-];
+// Get device-specific trigger options based on device type
+const getDeviceTriggerOptions = (device: Device | null) => {
+  if (!device) return [];
+  
+  const options: Array<{id: string, name: string, conditions: Array<{id: string, name: string, needsValue?: boolean}>}> = [];
+  
+  switch (device.type) {
+    case 'airguard':
+      options.push({
+        id: 'airQuality',
+        name: 'Air Quality',
+        conditions: [
+          { id: 'is_good', name: 'Is Good' },
+          { id: 'is_bad', name: 'Is Bad' },
+        ]
+      });
+      options.push({
+        id: 'temperature',
+        name: 'Temperature',
+        conditions: [
+          { id: 'above', name: 'Above', needsValue: true },
+          { id: 'below', name: 'Below', needsValue: true },
+        ]
+      });
+      options.push({
+        id: 'humidity',
+        name: 'Humidity',
+        conditions: [
+          { id: 'above', name: 'Above', needsValue: true },
+          { id: 'below', name: 'Below', needsValue: true },
+        ]
+      });
+      options.push({
+        id: 'pm25',
+        name: 'PM2.5 (Dust)',
+        conditions: [
+          { id: 'above', name: 'Above', needsValue: true },
+          { id: 'below', name: 'Below', needsValue: true },
+        ]
+      });
+      options.push({
+        id: 'mq2',
+        name: 'Gas Level',
+        conditions: [
+          { id: 'above', name: 'Above', needsValue: true },
+          { id: 'below', name: 'Below', needsValue: true },
+        ]
+      });
+      break;
+      
+    case 'light':
+    case 'relay':
+    case 'ac':
+    case 'fan':
+    case 'thermostat':
+      options.push({
+        id: 'state',
+        name: 'Power State',
+        conditions: [
+          { id: 'is_on', name: 'Is ON' },
+          { id: 'is_off', name: 'Is OFF' },
+        ]
+      });
+      break;
+      
+    case 'sensor':
+      options.push({
+        id: 'value',
+        name: 'Sensor Value',
+        conditions: [
+          { id: 'above', name: 'Above', needsValue: true },
+          { id: 'below', name: 'Below', needsValue: true },
+          { id: 'equals', name: 'Equals', needsValue: true },
+        ]
+      });
+      break;
+  }
+  
+  return options;
+};
 
-const SENSOR_TYPES = [
-  { id: 'temperature', name: 'Temperature', unit: '°C' },
-  { id: 'humidity', name: 'Humidity', unit: '%' },
-  { id: 'aqi', name: 'Air Quality', unit: 'AQI' },
-  { id: 'pm25', name: 'PM2.5', unit: 'μg/m³' },
-  { id: 'mq2', name: 'Gas Level', unit: 'ppm' },
-];
-
-const CONDITIONS = [
-  { id: 'above', name: 'Above', symbol: '>' },
-  { id: 'below', name: 'Below', symbol: '<' },
-  { id: 'equals', name: 'Equals', symbol: '=' },
-];
-
-const DEVICE_STATE_CONDITIONS = [
-  { id: 'is_on', name: 'Is ON' },
-  { id: 'is_off', name: 'Is OFF' },
-];
-
-const ACTION_TYPES = [
-  { id: 'device_on', name: 'Turn Device ON', icon: Power },
-  { id: 'device_off', name: 'Turn Device OFF', icon: Power },
-  { id: 'set_value', name: 'Set Value', icon: Thermometer },
-];
+// Get device-specific actions based on device type and capabilities
+const getDeviceActionOptions = (device: Device | null) => {
+  if (!device) return [];
+  
+  const actions: Array<{id: string, name: string, needsValue?: boolean, valueType?: string}> = [];
+  
+  switch (device.type) {
+    case 'airguard':
+      actions.push(
+        { id: 'mute_buzzer', name: 'Mute Buzzer' },
+        { id: 'unmute_buzzer', name: 'Unmute Buzzer' },
+        { id: 'set_thresholds', name: 'Set Thresholds', needsValue: true, valueType: 'thresholds' },
+      );
+      break;
+      
+    case 'light':
+    case 'relay':
+      actions.push(
+        { id: 'turn_on', name: 'Turn ON' },
+        { id: 'turn_off', name: 'Turn OFF' },
+      );
+      break;
+      
+    case 'ac':
+    case 'thermostat':
+      actions.push(
+        { id: 'turn_on', name: 'Turn ON' },
+        { id: 'turn_off', name: 'Turn OFF' },
+        { id: 'set_temperature', name: 'Set Temperature', needsValue: true, valueType: 'number' },
+      );
+      break;
+      
+    case 'fan':
+      actions.push(
+        { id: 'turn_on', name: 'Turn ON' },
+        { id: 'turn_off', name: 'Turn OFF' },
+        { id: 'set_speed', name: 'Set Speed', needsValue: true, valueType: 'number' },
+      );
+      break;
+  }
+  
+  return actions;
+};
 
 export default function AutomationFormScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -104,17 +197,15 @@ export default function AutomationFormScreen() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { user, token } = useAuth();
   const { automationId, homeId } = route.params || { homeId: user?.homeId || '' };
-  const { devices, rooms } = useHomeData(homeId);
+  const { devices } = useHomeData(homeId);
 
   const [loading, setLoading] = useState(false);
   const [automationName, setAutomationName] = useState('');
   const [enabled, setEnabled] = useState(true);
   
   const [triggers, setTriggers] = useState<Trigger[]>([]);
-  const [triggerLogic, setTriggerLogic] = useState<TriggerLogic>('AND');
   const [actions, setActions] = useState<Action[]>([]);
 
-  // Device picker modal states
   const [devicePickerVisible, setDevicePickerVisible] = useState(false);
   const [devicePickerFor, setDevicePickerFor] = useState<{ type: 'trigger' | 'action', id: string } | null>(null);
 
@@ -136,19 +227,14 @@ export default function AutomationFormScreen() {
         setAutomationName(automation.name);
         setEnabled(automation.enabled !== false);
         
-        // Parse triggers (support multiple)
         if (automation.triggers && Array.isArray(automation.triggers)) {
           setTriggers(automation.triggers.map((t: any, idx: number) => ({
             id: `trigger_${idx}`,
+            operator: idx < automation.triggers.length - 1 ? (t.operator || 'AND') : undefined,
             ...t,
           })));
-          setTriggerLogic(automation.triggerLogic || 'AND');
-        } else if (automation.trigger) {
-          // Legacy single trigger support
-          setTriggers([{ id: 'trigger_0', ...automation.trigger }]);
         }
         
-        // Parse actions
         if (Array.isArray(automation.actions)) {
           setActions(automation.actions.map((a: any, idx: number) => ({
             id: `action_${idx}`,
@@ -167,9 +253,7 @@ export default function AutomationFormScreen() {
     setTriggers([...triggers, {
       id: `trigger_${Date.now()}`,
       type: 'sensor',
-      sensorType: 'temperature',
-      condition: 'above',
-      value: 30,
+      operator: 'AND',
     }]);
   };
 
@@ -184,7 +268,6 @@ export default function AutomationFormScreen() {
   const addAction = () => {
     setActions([...actions, {
       id: `action_${Date.now()}`,
-      type: 'device_on',
     }]);
   };
 
@@ -206,8 +289,11 @@ export default function AutomationFormScreen() {
     
     if (devicePickerFor.type === 'trigger') {
       updateTrigger(devicePickerFor.id, 'deviceId', deviceId);
+      updateTrigger(devicePickerFor.id, 'property', undefined);
+      updateTrigger(devicePickerFor.id, 'condition', undefined);
     } else {
       updateAction(devicePickerFor.id, 'deviceId', deviceId);
+      updateAction(devicePickerFor.id, 'action', undefined);
     }
     
     setDevicePickerVisible(false);
@@ -230,12 +316,37 @@ export default function AutomationFormScreen() {
       return;
     }
 
+    for (const trigger of triggers) {
+      if (trigger.type === 'sensor' && !trigger.deviceId) {
+        Alert.alert('Error', 'Please select a device for all triggers');
+        return;
+      }
+      if (trigger.type === 'sensor' && !trigger.property) {
+        Alert.alert('Error', 'Please select what to monitor for all triggers');
+        return;
+      }
+      if (trigger.type === 'sensor' && !trigger.condition) {
+        Alert.alert('Error', 'Please select a condition for all triggers');
+        return;
+      }
+    }
+
+    for (const action of actions) {
+      if (!action.deviceId) {
+        Alert.alert('Error', 'Please select a device for all actions');
+        return;
+      }
+      if (!action.action) {
+        Alert.alert('Error', 'Please select an action');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const payload = {
         name: automationName.trim(),
         triggers: triggers.map(({ id, ...rest }) => rest),
-        triggerLogic,
         actions: actions.map(({ id, ...rest }) => rest),
         enabled,
       };
@@ -282,148 +393,147 @@ export default function AutomationFormScreen() {
     );
   };
 
-  const renderTriggerCard = (trigger: Trigger) => {
-    const triggerType = TRIGGER_TYPES.find(t => t.id === trigger.type);
+  const renderTriggerCard = (trigger: Trigger, index: number) => {
     const selectedDevice = trigger.deviceId ? devices.find(d => d.id === trigger.deviceId) : null;
-    const selectedSensor = trigger.sensorType ? SENSOR_TYPES.find(s => s.id === trigger.sensorType) : null;
-    const selectedCondition = trigger.condition ? CONDITIONS.find(c => c.id === trigger.condition) : null;
+    const triggerOptions = getDeviceTriggerOptions(selectedDevice);
+    const selectedProperty = triggerOptions.find(opt => opt.id === trigger.property);
+    const selectedCondition = selectedProperty?.conditions.find(c => c.id === trigger.condition);
+    const needsValue = selectedCondition?.needsValue || false;
+    const isLastTrigger = index === triggers.length - 1;
 
     return (
-      <View key={trigger.id} style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>When</Text>
-          <TouchableOpacity onPress={() => removeTrigger(trigger.id)}>
-            <Trash2 size={18} color={colors.destructive} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Trigger Type Selector */}
-        <Text style={styles.label}>Trigger Type</Text>
-        <View style={styles.chipGroup}>
-          {TRIGGER_TYPES.map(type => (
-            <TouchableOpacity
-              key={type.id}
-              style={[styles.chip, trigger.type === type.id && styles.chipActive]}
-              onPress={() => updateTrigger(trigger.id, 'type', type.id)}
-            >
-              <Text style={[styles.chipText, trigger.type === type.id && styles.chipTextActive]}>
-                {type.name}
-              </Text>
+      <View key={trigger.id}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>When</Text>
+            <TouchableOpacity onPress={() => removeTrigger(trigger.id)}>
+              <Trash2 size={18} color={colors.destructive} />
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
 
-        {/* Sensor Trigger */}
-        {trigger.type === 'sensor' && (
-          <>
-            <Text style={styles.label}>Select Device</Text>
-            <TouchableOpacity
-              style={styles.picker}
-              onPress={() => openDevicePicker('trigger', trigger.id)}
-            >
-              <Text style={styles.pickerText}>
-                {selectedDevice ? selectedDevice.name : 'Choose device...'}
-              </Text>
-              <ChevronDown size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
+          {trigger.type === 'sensor' && (
+            <>
+              <Text style={styles.label}>Select Device</Text>
+              <TouchableOpacity
+                style={styles.picker}
+                onPress={() => openDevicePicker('trigger', trigger.id)}
+              >
+                <Text style={[styles.pickerText, !selectedDevice && styles.pickerPlaceholder]}>
+                  {selectedDevice ? selectedDevice.name : 'Choose device...'}
+                </Text>
+                <ChevronDown size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
 
-            <Text style={styles.label}>Sensor Type</Text>
-            <View style={styles.chipGroup}>
-              {SENSOR_TYPES.map(sensor => (
-                <TouchableOpacity
-                  key={sensor.id}
-                  style={[styles.chip, trigger.sensorType === sensor.id && styles.chipActive]}
-                  onPress={() => updateTrigger(trigger.id, 'sensorType', sensor.id)}
-                >
-                  <Text style={[styles.chipText, trigger.sensorType === sensor.id && styles.chipTextActive]}>
-                    {sensor.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {selectedDevice && triggerOptions.length > 0 && (
+                <>
+                  <Text style={styles.label}>Monitor</Text>
+                  <View style={styles.chipGroup}>
+                    {triggerOptions.map(opt => (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[styles.chip, trigger.property === opt.id && styles.chipActive]}
+                        onPress={() => {
+                          updateTrigger(trigger.id, 'property', opt.id);
+                          updateTrigger(trigger.id, 'condition', undefined);
+                          updateTrigger(trigger.id, 'value', undefined);
+                        }}
+                      >
+                        <Text style={[styles.chipText, trigger.property === opt.id && styles.chipTextActive]}>
+                          {opt.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
 
-            <Text style={styles.label}>Condition</Text>
-            <View style={styles.conditionRow}>
-              <View style={styles.conditionPicker}>
-                {CONDITIONS.map(cond => (
-                  <TouchableOpacity
-                    key={cond.id}
-                    style={[styles.conditionChip, trigger.condition === cond.id && styles.conditionChipActive]}
-                    onPress={() => updateTrigger(trigger.id, 'condition', cond.id)}
-                  >
-                    <Text style={[styles.conditionText, trigger.condition === cond.id && styles.conditionTextActive]}>
-                      {cond.symbol} {cond.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {selectedProperty && (
+                <>
+                  <Text style={styles.label}>Condition</Text>
+                  <View style={styles.chipGroup}>
+                    {selectedProperty.conditions.map(cond => (
+                      <TouchableOpacity
+                        key={cond.id}
+                        style={[styles.chip, trigger.condition === cond.id && styles.chipActive]}
+                        onPress={() => {
+                          updateTrigger(trigger.id, 'condition', cond.id);
+                          if (!cond.needsValue) {
+                            updateTrigger(trigger.id, 'value', undefined);
+                          }
+                        }}
+                      >
+                        <Text style={[styles.chipText, trigger.condition === cond.id && styles.chipTextActive]}>
+                          {cond.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {needsValue && trigger.condition && (
+                <>
+                  <Text style={styles.label}>Value</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={trigger.value?.toString() || ''}
+                    onChangeText={(text) => updateTrigger(trigger.id, 'value', parseFloat(text) || 0)}
+                    keyboardType="numeric"
+                    placeholder={`Enter ${selectedProperty?.name.toLowerCase()} value`}
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {trigger.type === 'time' && (
+            <>
+              <Text style={styles.label}>Time (HH:MM)</Text>
               <TextInput
-                style={styles.valueInput}
-                value={trigger.value?.toString() || ''}
-                onChangeText={(text) => updateTrigger(trigger.id, 'value', parseFloat(text) || 0)}
-                keyboardType="numeric"
-                placeholder="Value"
+                style={styles.input}
+                value={trigger.at || '08:00'}
+                onChangeText={(text) => updateTrigger(trigger.id, 'at', text)}
+                placeholder="HH:MM"
                 placeholderTextColor={colors.mutedForeground}
               />
-              {selectedSensor && (
-                <Text style={styles.unit}>{selectedSensor.unit}</Text>
-              )}
+            </>
+          )}
+        </View>
+
+        {!isLastTrigger && (
+          <View style={styles.operatorRow}>
+            <View style={styles.operatorLine} />
+            <View style={styles.operatorToggle}>
+              <TouchableOpacity
+                style={[styles.operatorButton, trigger.operator === 'AND' && styles.operatorButtonActive]}
+                onPress={() => updateTrigger(trigger.id, 'operator', 'AND')}
+              >
+                <Text style={[styles.operatorButtonText, trigger.operator === 'AND' && styles.operatorButtonTextActive]}>
+                  AND
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.operatorButton, trigger.operator === 'OR' && styles.operatorButtonActive]}
+                onPress={() => updateTrigger(trigger.id, 'operator', 'OR')}
+              >
+                <Text style={[styles.operatorButtonText, trigger.operator === 'OR' && styles.operatorButtonTextActive]}>
+                  OR
+                </Text>
+              </TouchableOpacity>
             </View>
-          </>
-        )}
-
-        {/* Device State Trigger */}
-        {trigger.type === 'device_state' && (
-          <>
-            <Text style={styles.label}>Select Device</Text>
-            <TouchableOpacity
-              style={styles.picker}
-              onPress={() => openDevicePicker('trigger', trigger.id)}
-            >
-              <Text style={styles.pickerText}>
-                {selectedDevice ? selectedDevice.name : 'Choose device...'}
-              </Text>
-              <ChevronDown size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
-
-            <Text style={styles.label}>State</Text>
-            <View style={styles.chipGroup}>
-              {DEVICE_STATE_CONDITIONS.map(state => (
-                <TouchableOpacity
-                  key={state.id}
-                  style={[styles.chip, trigger.condition === state.id && styles.chipActive]}
-                  onPress={() => updateTrigger(trigger.id, 'condition', state.id)}
-                >
-                  <Text style={[styles.chipText, trigger.condition === state.id && styles.chipTextActive]}>
-                    {state.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Time Trigger */}
-        {trigger.type === 'time' && (
-          <>
-            <Text style={styles.label}>Time</Text>
-            <TextInput
-              style={styles.input}
-              value={trigger.at || '08:00'}
-              onChangeText={(text) => updateTrigger(trigger.id, 'at', text)}
-              placeholder="HH:MM"
-              placeholderTextColor={colors.mutedForeground}
-            />
-          </>
+            <View style={styles.operatorLine} />
+          </View>
         )}
       </View>
     );
   };
 
   const renderActionCard = (action: Action) => {
-    const actionType = ACTION_TYPES.find(at => at.id === action.type);
     const selectedDevice = action.deviceId ? devices.find(d => d.id === action.deviceId) : null;
-    const needsValue = action.type === 'set_value';
+    const actionOptions = getDeviceActionOptions(selectedDevice);
+    const selectedAction = actionOptions.find(a => a.id === action.action);
+    const needsValue = selectedAction?.needsValue || false;
 
     return (
       <View key={action.id} style={styles.card}>
@@ -434,43 +544,65 @@ export default function AutomationFormScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.label}>Action Type</Text>
-        <View style={styles.chipGroup}>
-          {ACTION_TYPES.map(type => (
-            <TouchableOpacity
-              key={type.id}
-              style={[styles.chip, action.type === type.id && styles.chipActive]}
-              onPress={() => updateAction(action.id, 'type', type.id)}
-            >
-              <Text style={[styles.chipText, action.type === type.id && styles.chipTextActive]}>
-                {type.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         <Text style={styles.label}>Select Device</Text>
         <TouchableOpacity
           style={styles.picker}
           onPress={() => openDevicePicker('action', action.id)}
         >
-          <Text style={styles.pickerText}>
+          <Text style={[styles.pickerText, !selectedDevice && styles.pickerPlaceholder]}>
             {selectedDevice ? selectedDevice.name : 'Choose device...'}
           </Text>
           <ChevronDown size={20} color={colors.mutedForeground} />
         </TouchableOpacity>
 
-        {needsValue && (
+        {selectedDevice && actionOptions.length > 0 && (
+          <>
+            <Text style={styles.label}>Action</Text>
+            <View style={styles.chipGroup}>
+              {actionOptions.map(act => (
+                <TouchableOpacity
+                  key={act.id}
+                  style={[styles.chip, action.action === act.id && styles.chipActive]}
+                  onPress={() => {
+                    updateAction(action.id, 'action', act.id);
+                    if (!act.needsValue) {
+                      updateAction(action.id, 'value', undefined);
+                    }
+                  }}
+                >
+                  <Text style={[styles.chipText, action.action === act.id && styles.chipTextActive]}>
+                    {act.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {needsValue && action.action && (
           <>
             <Text style={styles.label}>Value</Text>
-            <TextInput
-              style={styles.input}
-              value={action.value?.toString() || ''}
-              onChangeText={(text) => updateAction(action.id, 'value', parseFloat(text) || 0)}
-              keyboardType="numeric"
-              placeholder="Enter value"
-              placeholderTextColor={colors.mutedForeground}
-            />
+            {selectedAction?.valueType === 'thresholds' ? (
+              <View style={styles.thresholdsInput}>
+                <Text style={styles.helperText}>Enter threshold values (temperature, humidity, etc.)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={action.value?.toString() || ''}
+                  onChangeText={(text) => updateAction(action.id, 'value', text)}
+                  placeholder="e.g., temp:30,humidity:70"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+            ) : (
+              <TextInput
+                style={styles.input}
+                value={action.value?.toString() || ''}
+                onChangeText={(text) => updateAction(action.id, 'value', parseFloat(text) || 0)}
+                keyboardType="numeric"
+                placeholder="Enter value"
+                placeholderTextColor={colors.mutedForeground}
+              />
+            )}
           </>
         )}
       </View>
@@ -509,19 +641,17 @@ export default function AutomationFormScreen() {
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Name Input */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Automation Name</Text>
           <TextInput
             style={styles.input}
             value={automationName}
             onChangeText={setAutomationName}
-            placeholder="e.g., Turn on AC when hot"
+            placeholder="e.g., Turn on AC when air quality is bad"
             placeholderTextColor={colors.mutedForeground}
           />
         </View>
 
-        {/* Enabled Toggle */}
         <View style={styles.section}>
           <View style={styles.toggleRow}>
             <Text style={styles.sectionTitle}>Enabled</Text>
@@ -533,39 +663,13 @@ export default function AutomationFormScreen() {
           </View>
         </View>
 
-        {/* Triggers Section */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Triggers</Text>
-            {triggers.length > 1 && (
-              <View style={styles.logicToggle}>
-                <TouchableOpacity
-                  style={[styles.logicButton, triggerLogic === 'AND' && styles.logicButtonActive]}
-                  onPress={() => setTriggerLogic('AND')}
-                >
-                  <Text style={[styles.logicButtonText, triggerLogic === 'AND' && styles.logicButtonTextActive]}>
-                    AND
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.logicButton, triggerLogic === 'OR' && styles.logicButtonActive]}
-                  onPress={() => setTriggerLogic('OR')}
-                >
-                  <Text style={[styles.logicButtonText, triggerLogic === 'OR' && styles.logicButtonTextActive]}>
-                    OR
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          <Text style={styles.sectionTitle}>Triggers</Text>
           <Text style={styles.sectionDescription}>
-            {triggers.length > 1 
-              ? `All conditions must be met (${triggerLogic}) to trigger this automation`
-              : 'Add conditions that will trigger this automation'
-            }
+            Add conditions with individual AND/OR logic between each
           </Text>
 
-          {triggers.map(renderTriggerCard)}
+          {triggers.map((trigger, index) => renderTriggerCard(trigger, index))}
 
           <TouchableOpacity style={styles.addButton} onPress={addTrigger}>
             <Plus size={20} color={colors.primary} />
@@ -573,11 +677,10 @@ export default function AutomationFormScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Actions Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions</Text>
           <Text style={styles.sectionDescription}>
-            What should happen when the triggers are met
+            What should happen when triggers are met
           </Text>
 
           {actions.map(renderActionCard)}
@@ -588,7 +691,6 @@ export default function AutomationFormScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
@@ -607,7 +709,6 @@ export default function AutomationFormScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Device Picker Modal */}
       <Modal
         visible={devicePickerVisible}
         transparent
@@ -629,7 +730,7 @@ export default function AutomationFormScreen() {
                   style={styles.deviceItem}
                   onPress={() => selectDevice(device.id)}
                 >
-                  <Lightbulb size={20} color={colors.primary} />
+                  <Zap size={20} color={colors.primary} />
                   <View style={styles.deviceInfo}>
                     <Text style={styles.deviceName}>{device.name}</Text>
                     <Text style={styles.deviceType}>{device.type}</Text>
@@ -670,12 +771,6 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) =>
     section: {
       marginBottom: spacing.xl,
     },
-    sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: spacing.sm,
-    },
     sectionTitle: {
       fontSize: fontSize.lg,
       fontWeight: '700',
@@ -700,30 +795,6 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-    },
-    logicToggle: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    logicButton: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-    },
-    logicButtonActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    logicButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: '600',
-      color: colors.mutedForeground,
-    },
-    logicButtonTextActive: {
-      color: '#fff',
     },
     card: {
       backgroundColor: colors.card,
@@ -790,51 +861,52 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) =>
       fontSize: fontSize.md,
       color: colors.foreground,
     },
-    conditionRow: {
+    pickerPlaceholder: {
+      color: colors.mutedForeground,
+    },
+    operatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
+      marginVertical: spacing.md,
+      gap: spacing.md,
     },
-    conditionPicker: {
+    operatorLine: {
       flex: 1,
-      gap: spacing.sm,
+      height: 1,
+      backgroundColor: colors.border,
     },
-    conditionChip: {
+    operatorToggle: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.md,
+      padding: 2,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    operatorButton: {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderRadius: borderRadius.sm,
     },
-    conditionChipActive: {
+    operatorButtonActive: {
       backgroundColor: colors.primary,
-      borderColor: colors.primary,
     },
-    conditionText: {
+    operatorButtonText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-      textAlign: 'center',
-    },
-    conditionTextActive: {
-      color: '#fff',
       fontWeight: '600',
-    },
-    valueInput: {
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.lg,
-      padding: spacing.md,
-      fontSize: fontSize.md,
-      color: colors.foreground,
-      width: 80,
-      textAlign: 'center',
-    },
-    unit: {
-      fontSize: fontSize.sm,
       color: colors.mutedForeground,
-      width: 60,
+    },
+    operatorButtonTextActive: {
+      color: '#fff',
+    },
+    thresholdsInput: {
+      gap: spacing.sm,
+    },
+    helperText: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      fontStyle: 'italic',
     },
     addButton: {
       flexDirection: 'row',
