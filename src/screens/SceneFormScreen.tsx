@@ -8,6 +8,9 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Switch,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -25,6 +28,19 @@ import {
   UtensilsCrossed,
   CheckCircle,
   ChevronRight,
+  Home,
+  Globe,
+  Check,
+  ChevronDown,
+  Thermometer,
+  Zap,
+  Wind,
+  Fan,
+  Lock,
+  Camera,
+  Tv,
+  Speaker,
+  ShieldCheck,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -32,10 +48,11 @@ import Header from '../components/Header';
 import CreationHero from '../components/CreationHero';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { getApiClient, ScenesApi, HubApi, HomeApi } from '../services/api';
+import { getApiClient, ScenesApi } from '../services/api';
 import { useHomeData } from '../hooks/useHomeData';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { Device } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProp = {
@@ -59,6 +76,33 @@ const SCENE_ICONS = [
   { id: 'lightbulb', name: 'Lights', icon: Lightbulb },
 ];
 
+const DEVICE_TYPE_ICONS: Record<string, any> = {
+  light: Lightbulb,
+  ac: Thermometer,
+  thermostat: Thermometer,
+  airguard: Wind,
+  fan: Fan,
+  lock: Lock,
+  camera: Camera,
+  tv: Tv,
+  speaker: Speaker,
+  sensor: Zap,
+  blind: ShieldCheck,
+  shutter: ShieldCheck,
+};
+
+type SceneScope = 'home' | 'rooms';
+type DeviceTypeRule = {
+  type: string;
+  mode: 'all' | 'specific'; // all devices of this type, or specific devices
+  deviceIds?: string[]; // only when mode is 'specific'
+  state: {
+    isActive?: boolean;
+    value?: any;
+    buzzer?: boolean; // for airguard
+  };
+};
+
 export default function SceneFormScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp>();
@@ -66,13 +110,20 @@ export default function SceneFormScreen() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { user, token } = useAuth();
   const { sceneId, homeId } = route.params || { homeId: user?.homeId || '' };
-  const { devices } = useHomeData(homeId);
+  const { devices, rooms } = useHomeData(homeId);
 
   const [loading, setLoading] = useState(false);
   const [sceneName, setSceneName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState<string>('lightbulb');
-  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
-  const [deviceStates, setDeviceStates] = useState<Record<string, any>>({});
+  const [scope, setScope] = useState<SceneScope>('home');
+  const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(new Set());
+  const [deviceTypeRules, setDeviceTypeRules] = useState<DeviceTypeRule[]>([]);
+  
+  // Modal states
+  const [roomPickerVisible, setRoomPickerVisible] = useState(false);
+  const [deviceTypePickerVisible, setDeviceTypePickerVisible] = useState(false);
+  const [devicePickerVisible, setDevicePickerVisible] = useState(false);
+  const [currentDeviceType, setCurrentDeviceType] = useState<string | null>(null);
 
   const client = getApiClient(async () => token);
   const scenesApi = ScenesApi(client);
@@ -94,12 +145,16 @@ export default function SceneFormScreen() {
       if (scene) {
         setSceneName(scene.name);
         setSelectedIcon(scene.icon || 'lightbulb');
-        // Backend returns device_states, not deviceStates
-        const states = scene.device_states || scene.deviceStates || {};
-        if (Object.keys(states).length > 0) {
-          setDeviceStates(states);
-          const deviceIds = Object.keys(states);
-          setSelectedDevices(new Set(deviceIds));
+        
+        // Parse new structure
+        if (scene.scope) {
+          setScope(scene.scope);
+        }
+        if (scene.roomIds && Array.isArray(scene.roomIds)) {
+          setSelectedRoomIds(new Set(scene.roomIds));
+        }
+        if (scene.deviceTypeRules && Array.isArray(scene.deviceTypeRules)) {
+          setDeviceTypeRules(scene.deviceTypeRules);
         }
       }
     } catch (e) {
@@ -109,45 +164,72 @@ export default function SceneFormScreen() {
     }
   };
 
-  const toggleDevice = (deviceId: string) => {
-    const newSelected = new Set(selectedDevices);
-    if (newSelected.has(deviceId)) {
-      newSelected.delete(deviceId);
-      const newStates = { ...deviceStates };
-      delete newStates[deviceId];
-      setDeviceStates(newStates);
-    } else {
-      newSelected.add(deviceId);
-      const device = devices.find(d => d.id === deviceId);
-      
-      // Initialize state based on device type
-      if (device?.type === 'airguard') {
-        setDeviceStates({
-          ...deviceStates,
-          [deviceId]: {
-            buzzer: true, // Default unmuted (buzzer ON)
-          },
-        });
-      } else {
-        setDeviceStates({
-          ...deviceStates,
-          [deviceId]: {
-            isActive: device?.isActive || false,
-            value: device?.value || undefined,
-          },
-        });
-      }
+  const availableDeviceTypes = useMemo(() => {
+    const types = new Set<string>();
+    devices.forEach(d => types.add(d.type));
+    return Array.from(types).sort();
+  }, [devices]);
+
+  const addDeviceType = (type: string) => {
+    if (deviceTypeRules.find(r => r.type === type)) {
+      Alert.alert('Already Added', `${type} is already in this scene`);
+      return;
     }
-    setSelectedDevices(newSelected);
+    
+    setDeviceTypeRules([
+      ...deviceTypeRules,
+      {
+        type,
+        mode: 'all',
+        state: {
+          isActive: type === 'airguard' ? undefined : false,
+          buzzer: type === 'airguard' ? true : undefined,
+        },
+      },
+    ]);
+    setDeviceTypePickerVisible(false);
   };
 
-  const updateDeviceState = (deviceId: string, field: string, value: any) => {
-    setDeviceStates({
-      ...deviceStates,
-      [deviceId]: {
-        ...deviceStates[deviceId],
-        [field]: value,
-      },
+  const removeDeviceType = (type: string) => {
+    setDeviceTypeRules(deviceTypeRules.filter(r => r.type !== type));
+  };
+
+  const updateDeviceTypeRule = (type: string, updates: Partial<DeviceTypeRule>) => {
+    setDeviceTypeRules(deviceTypeRules.map(r => 
+      r.type === type ? { ...r, ...updates } : r
+    ));
+  };
+
+  const toggleRoomSelection = (roomId: string) => {
+    const newSet = new Set(selectedRoomIds);
+    if (newSet.has(roomId)) {
+      newSet.delete(roomId);
+    } else {
+      newSet.add(roomId);
+    }
+    setSelectedRoomIds(newSet);
+  };
+
+  const openDevicePicker = (type: string) => {
+    setCurrentDeviceType(type);
+    setDevicePickerVisible(true);
+  };
+
+  const toggleDeviceInRule = (deviceId: string) => {
+    if (!currentDeviceType) return;
+    
+    const rule = deviceTypeRules.find(r => r.type === currentDeviceType);
+    if (!rule) return;
+
+    const currentIds = new Set(rule.deviceIds || []);
+    if (currentIds.has(deviceId)) {
+      currentIds.delete(deviceId);
+    } else {
+      currentIds.add(deviceId);
+    }
+
+    updateDeviceTypeRule(currentDeviceType, {
+      deviceIds: Array.from(currentIds),
     });
   };
 
@@ -156,9 +238,23 @@ export default function SceneFormScreen() {
       Alert.alert('Error', 'Please enter scene name');
       return;
     }
-    if (selectedDevices.size === 0) {
-      Alert.alert('Error', 'Please select at least one device');
+    
+    if (scope === 'rooms' && selectedRoomIds.size === 0) {
+      Alert.alert('Error', 'Please select at least one room for room-level scene');
       return;
+    }
+    
+    if (deviceTypeRules.length === 0) {
+      Alert.alert('Error', 'Please add at least one device type');
+      return;
+    }
+
+    // Validate specific device selections
+    for (const rule of deviceTypeRules) {
+      if (rule.mode === 'specific' && (!rule.deviceIds || rule.deviceIds.length === 0)) {
+        Alert.alert('Error', `Please select specific devices for ${rule.type} or change to "All devices"`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -166,8 +262,9 @@ export default function SceneFormScreen() {
       const payload = {
         name: sceneName,
         icon: selectedIcon,
-        deviceStates,
-        devices: Array.from(selectedDevices),
+        scope,
+        roomIds: scope === 'rooms' ? Array.from(selectedRoomIds) : undefined,
+        deviceTypeRules,
       };
 
       if (sceneId) {
@@ -179,6 +276,7 @@ export default function SceneFormScreen() {
       }
       navigation.goBack();
     } catch (e: any) {
+      console.error('Save scene error:', e);
       Alert.alert('Error', e?.response?.data?.message || 'Failed to save scene');
     } finally {
       setLoading(false);
@@ -213,6 +311,19 @@ export default function SceneFormScreen() {
     );
   };
 
+  const filteredDevicesForType = useMemo(() => {
+    if (!currentDeviceType) return [];
+    
+    let filtered = devices.filter(d => d.type === currentDeviceType);
+    
+    // If room-level scene, only show devices in selected rooms
+    if (scope === 'rooms' && selectedRoomIds.size > 0) {
+      filtered = filtered.filter(d => d.roomId && selectedRoomIds.has(String(d.roomId)));
+    }
+    
+    return filtered;
+  }, [devices, currentDeviceType, scope, selectedRoomIds]);
+
   if (loading && sceneId) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -229,10 +340,10 @@ export default function SceneFormScreen() {
     );
   }
 
-  const selectedCount = selectedDevices.size;
-  const heroMeta = selectedCount
-    ? `${selectedCount} device${selectedCount === 1 ? '' : 's'} included`
-    : 'Select at least one device';
+  const ruleCount = deviceTypeRules.length;
+  const heroMeta = scope === 'home' 
+    ? `Home-wide • ${ruleCount} device type${ruleCount === 1 ? '' : 's'}`
+    : `${selectedRoomIds.size} room${selectedRoomIds.size === 1 ? '' : 's'} • ${ruleCount} device type${ruleCount === 1 ? '' : 's'}`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -240,59 +351,45 @@ export default function SceneFormScreen() {
         title={sceneId ? 'Edit Scene' : 'Create Scene'}
         showBack
         showSettings={false}
-      />
-      <CreationHero
-        eyebrow={sceneId ? 'Scene details' : 'New scene'}
-        title={sceneId ? 'Edit Scene' : 'Create Scene'}
-        description="Group lighting, climate, and utility states into a single tap experience."
-        meta={heroMeta}
-        actionSlot={sceneId ? (
-          <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
-            <Trash2 size={18} color={colors.destructive || '#ef4444'} />
+        rightContent={sceneId ? (
+          <TouchableOpacity onPress={handleDelete}>
+            <Trash2 size={24} color={colors.destructive} />
           </TouchableOpacity>
         ) : undefined}
       />
       
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <CreationHero
+          eyebrow={sceneId ? 'Scene details' : 'New scene'}
+          title={sceneId ? 'Edit Scene' : 'Create Scene'}
+          description="Configure device states across your home or specific rooms with flexible device selection."
+          meta={heroMeta}
+        />
+
         {/* Scene Name */}
         <View style={styles.section}>
-          <Text style={styles.label}>Scene Name</Text>
+          <Text style={styles.sectionTitle}>Scene Name</Text>
           <TextInput
             style={styles.input}
             value={sceneName}
             onChangeText={setSceneName}
-            placeholder="e.g., Morning Routine"
+            placeholder="e.g., Good Night, Movie Time"
             placeholderTextColor={colors.mutedForeground}
           />
         </View>
 
         {/* Icon Selection */}
         <View style={styles.section}>
-          <Text style={styles.label}>Icon</Text>
+          <Text style={styles.sectionTitle}>Icon</Text>
           <View style={styles.iconGrid}>
-            {SCENE_ICONS.map(({ id, name, icon: Icon }) => (
+            {SCENE_ICONS.map(({ id, name, icon: IconComponent }) => (
               <TouchableOpacity
                 key={id}
-                style={[
-                  styles.iconCard,
-                  selectedIcon === id && styles.iconCardSelected,
-                ]}
+                style={[styles.iconButton, selectedIcon === id && styles.iconButtonActive]}
                 onPress={() => setSelectedIcon(id)}
               >
-                <Icon
-                  size={24}
-                  color={selectedIcon === id ? 'white' : colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.iconName,
-                    selectedIcon === id && styles.iconNameSelected,
-                  ]}
-                >
+                <IconComponent size={24} color={selectedIcon === id ? '#fff' : colors.mutedForeground} />
+                <Text style={[styles.iconButtonText, selectedIcon === id && styles.iconButtonTextActive]}>
                   {name}
                 </Text>
               </TouchableOpacity>
@@ -300,199 +397,168 @@ export default function SceneFormScreen() {
           </View>
         </View>
 
-        {/* Device Selection */}
+        {/* Scope Selection */}
         <View style={styles.section}>
-          <Text style={styles.label}>Select Devices ({selectedDevices.size} selected)</Text>
-          
-          {/* Quick Select by Type */}
-          <View style={styles.quickSelectContainer}>
-            <Text style={styles.quickSelectLabel}>Quick select:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickSelectScroll}>
-              {['light', 'airguard', 'relay', 'thermostat', 'ac', 'fan'].map((type) => {
-                const devicesOfType = devices.filter(d => d.type === type);
-                if (devicesOfType.length === 0) return null;
-                
-                const allSelected = devicesOfType.every(d => selectedDevices.has(d.id));
-                const someSelected = devicesOfType.some(d => selectedDevices.has(d.id));
-                
-                return (
+          <Text style={styles.sectionTitle}>Scene Scope</Text>
+          <View style={styles.scopeToggle}>
+            <TouchableOpacity
+              style={[styles.scopeButton, scope === 'home' && styles.scopeButtonActive]}
+              onPress={() => setScope('home')}
+            >
+              <Globe size={20} color={scope === 'home' ? '#fff' : colors.mutedForeground} />
+              <Text style={[styles.scopeButtonText, scope === 'home' && styles.scopeButtonTextActive]}>
+                Entire Home
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.scopeButton, scope === 'rooms' && styles.scopeButtonActive]}
+              onPress={() => setScope('rooms')}
+            >
+              <Home size={20} color={scope === 'rooms' ? '#fff' : colors.mutedForeground} />
+              <Text style={[styles.scopeButtonText, scope === 'rooms' && styles.scopeButtonTextActive]}>
+                Specific Rooms
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Room Selection (only for room-level scenes) */}
+        {scope === 'rooms' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Select Rooms</Text>
+            <TouchableOpacity
+              style={styles.picker}
+              onPress={() => setRoomPickerVisible(true)}
+            >
+              <Text style={[styles.pickerText, selectedRoomIds.size === 0 && styles.pickerPlaceholder]}>
+                {selectedRoomIds.size === 0 
+                  ? 'Choose rooms...' 
+                  : `${selectedRoomIds.size} room${selectedRoomIds.size === 1 ? '' : 's'} selected`}
+              </Text>
+              <ChevronDown size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Device Type Rules */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Device Types</Text>
+            <TouchableOpacity
+              style={styles.addTypeButton}
+              onPress={() => setDeviceTypePickerVisible(true)}
+            >
+              <Text style={styles.addTypeButtonText}>+ Add Type</Text>
+            </TouchableOpacity>
+          </View>
+
+          {deviceTypeRules.map((rule) => {
+            const Icon = DEVICE_TYPE_ICONS[rule.type] || Zap;
+            const devicesOfType = devices.filter(d => d.type === rule.type);
+            const selectedCount = rule.deviceIds?.length || devicesOfType.length;
+            
+            return (
+              <View key={rule.type} style={styles.ruleCard}>
+                <View style={styles.ruleHeader}>
+                  <View style={styles.ruleHeaderLeft}>
+                    <Icon size={20} color={colors.primary} />
+                    <Text style={styles.ruleType}>{rule.type}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeDeviceType(rule.type)}>
+                    <Trash2 size={18} color={colors.destructive} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Mode Toggle: All vs Specific */}
+                <View style={styles.modeToggle}>
                   <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.quickSelectButton,
-                      allSelected && styles.quickSelectButtonActive,
-                      someSelected && !allSelected && styles.quickSelectButtonPartial,
-                    ]}
-                    onPress={() => {
-                      if (allSelected) {
-                        // Deselect all of this type
-                        const newSelected = new Set(selectedDevices);
-                        const newStates = { ...deviceStates };
-                        devicesOfType.forEach(d => {
-                          newSelected.delete(d.id);
-                          delete newStates[d.id];
-                        });
-                        setSelectedDevices(newSelected);
-                        setDeviceStates(newStates);
-                      } else {
-                        // Select all of this type
-                        const newSelected = new Set(selectedDevices);
-                        const newStates = { ...deviceStates };
-                        devicesOfType.forEach(d => {
-                          newSelected.add(d.id);
-                          if (!newStates[d.id]) {
-                            newStates[d.id] = d.type === 'airguard' 
-                              ? { buzzer: true }
-                              : { isActive: true, value: d.value };
-                          }
-                        });
-                        setSelectedDevices(newSelected);
-                        setDeviceStates(newStates);
-                      }
-                    }}
+                    style={[styles.modeButton, rule.mode === 'all' && styles.modeButtonActive]}
+                    onPress={() => updateDeviceTypeRule(rule.type, { mode: 'all', deviceIds: [] })}
                   >
-                    <Text style={[
-                      styles.quickSelectButtonText,
-                      (allSelected || someSelected) && styles.quickSelectButtonTextActive,
-                    ]}>
-                      {allSelected ? '✓ ' : someSelected ? '◐ ' : ''}
-                      {type === 'airguard' ? 'AirGuards' : 
-                       type === 'light' ? 'Lights' :
-                       type === 'relay' ? 'Relays' :
-                       type === 'thermostat' ? 'Thermostats' :
-                       type === 'ac' ? 'AC Units' :
-                       type === 'fan' ? 'Fans' : type}
-                      {' '}({devicesOfType.length})
+                    <Text style={[styles.modeButtonText, rule.mode === 'all' && styles.modeButtonTextActive]}>
+                      All Devices
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <View style={styles.devicesList}>
-            {devices.map((device) => {
-              const isSelected = selectedDevices.has(device.id);
-              const deviceState = deviceStates[device.id] || {};
-
-              return (
-                <View key={device.id} style={styles.deviceItem}>
                   <TouchableOpacity
-                    style={styles.deviceHeader}
-                    onPress={() => toggleDevice(device.id)}
+                    style={[styles.modeButton, rule.mode === 'specific' && styles.modeButtonActive]}
+                    onPress={() => updateDeviceTypeRule(rule.type, { mode: 'specific' })}
                   >
-                    <View style={styles.deviceInfo}>
-                      <View
-                        style={[
-                          styles.checkbox,
-                          isSelected && styles.checkboxSelected,
-                        ]}
-                      >
-                        {isSelected && (
-                          <CheckCircle size={16} color="white" />
-                        )}
-                      </View>
-                      <Text style={styles.deviceName}>{device.name}</Text>
-                      <Text style={styles.deviceType}>{device.type}</Text>
-                    </View>
-                    <ChevronRight
-                      size={16}
-                      color={colors.mutedForeground}
-                    />
+                    <Text style={[styles.modeButtonText, rule.mode === 'specific' && styles.modeButtonTextActive]}>
+                      Specific
+                    </Text>
                   </TouchableOpacity>
-
-                  {isSelected && (
-                    <View style={styles.deviceConfig}>
-                      {device.type === 'airguard' ? (
-                        <>
-                          {/* AirGuard: Mute/Unmute control */}
-                          <View style={styles.configRow}>
-                            <Text style={styles.configLabel}>Buzzer</Text>
-                            <TouchableOpacity
-                              style={[
-                                styles.toggleButton,
-                                deviceState.buzzer !== false && styles.toggleButtonActive,
-                              ]}
-                              onPress={() =>
-                                updateDeviceState(device.id, 'buzzer', deviceState.buzzer === false)
-                              }
-                            >
-                              <Text
-                                style={[
-                                  styles.toggleText,
-                                  deviceState.buzzer !== false && styles.toggleTextActive,
-                                ]}
-                              >
-                                {deviceState.buzzer === false ? 'MUTED' : 'UNMUTED'}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </>
-                      ) : (
-                        <>
-                          {/* Regular devices: On/Off control */}
-                          <View style={styles.configRow}>
-                            <Text style={styles.configLabel}>State</Text>
-                            <TouchableOpacity
-                              style={[
-                                styles.toggleButton,
-                                deviceState.isActive && styles.toggleButtonActive,
-                              ]}
-                              onPress={() =>
-                                updateDeviceState(device.id, 'isActive', !deviceState.isActive)
-                              }
-                            >
-                              <Text
-                                style={[
-                                  styles.toggleText,
-                                  deviceState.isActive && styles.toggleTextActive,
-                                ]}
-                              >
-                                {deviceState.isActive ? 'ON' : 'OFF'}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {(device.type === 'light' || device.value !== undefined) && (
-                            <View style={styles.configRow}>
-                              <Text style={styles.configLabel}>Value</Text>
-                              <TextInput
-                                style={styles.valueInput}
-                                value={deviceState.value?.toString() || ''}
-                                onChangeText={(text) =>
-                                  updateDeviceState(device.id, 'value', Number(text))
-                                }
-                                placeholder={device.value?.toString() || '0'}
-                                keyboardType="numeric"
-                                placeholderTextColor={colors.mutedForeground}
-                              />
-                            </View>
-                          )}
-                        </>
-                      )}
-                    </View>
-                  )}
                 </View>
-              );
-            })}
 
-            {devices.length === 0 && (
-              <Text style={styles.emptyText}>No devices available</Text>
-            )}
-          </View>
+                {rule.mode === 'specific' && (
+                  <TouchableOpacity
+                    style={styles.devicePickerButton}
+                    onPress={() => openDevicePicker(rule.type)}
+                  >
+                    <Text style={styles.devicePickerButtonText}>
+                      {selectedCount === 0 ? 'Select devices...' : `${selectedCount} device${selectedCount === 1 ? '' : 's'} selected`}
+                    </Text>
+                    <ChevronRight size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+
+                {/* State Configuration */}
+                {rule.type === 'airguard' ? (
+                  <View style={styles.stateConfig}>
+                    <View style={styles.stateRow}>
+                      <Text style={styles.stateLabel}>Buzzer</Text>
+                      <Switch
+                        value={rule.state.buzzer !== false}
+                        onValueChange={(val) => updateDeviceTypeRule(rule.type, { 
+                          state: { ...rule.state, buzzer: val } 
+                        })}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.stateConfig}>
+                    <View style={styles.stateRow}>
+                      <Text style={styles.stateLabel}>Power</Text>
+                      <Switch
+                        value={rule.state.isActive !== false}
+                        onValueChange={(val) => updateDeviceTypeRule(rule.type, { 
+                          state: { ...rule.state, isActive: val } 
+                        })}
+                        trackColor={{ false: colors.border, true: colors.primary }}
+                      />
+                    </View>
+                    {(rule.type === 'ac' || rule.type === 'thermostat') && (
+                      <View style={styles.stateRow}>
+                        <Text style={styles.stateLabel}>Temperature (°C)</Text>
+                        <TextInput
+                          style={styles.valueInput}
+                          value={rule.state.value?.toString() || '22'}
+                          onChangeText={(text) => updateDeviceTypeRule(rule.type, { 
+                            state: { ...rule.state, value: parseFloat(text) || 22 } 
+                          })}
+                          keyboardType="numeric"
+                          placeholderTextColor={colors.mutedForeground}
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
 
         {/* Save Button */}
         <TouchableOpacity
-          style={[styles.saveButton, loading && styles.buttonDisabled]}
+          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator size="small" color="white" />
+            <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Save size={20} color="white" />
+              <Save size={20} color="#fff" />
               <Text style={styles.saveButtonText}>
                 {sceneId ? 'Update Scene' : 'Create Scene'}
               </Text>
@@ -500,229 +566,447 @@ export default function SceneFormScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Room Picker Modal */}
+      <Modal
+        visible={roomPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRoomPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Rooms</Text>
+              <TouchableOpacity onPress={() => setRoomPickerVisible(false)}>
+                <X size={24} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={rooms}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.roomItem}
+                  onPress={() => toggleRoomSelection(item.id)}
+                >
+                  <Text style={styles.roomName}>{item.name}</Text>
+                  {selectedRoomIds.has(item.id) && (
+                    <CheckCircle size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Device Type Picker Modal */}
+      <Modal
+        visible={deviceTypePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDeviceTypePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Device Type</Text>
+              <TouchableOpacity onPress={() => setDeviceTypePickerVisible(false)}>
+                <X size={24} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={availableDeviceTypes}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => {
+                const Icon = DEVICE_TYPE_ICONS[item] || Zap;
+                const alreadyAdded = deviceTypeRules.find(r => r.type === item);
+                return (
+                  <TouchableOpacity
+                    style={[styles.typeItem, alreadyAdded && styles.typeItemDisabled]}
+                    onPress={() => addDeviceType(item)}
+                    disabled={!!alreadyAdded}
+                  >
+                    <Icon size={20} color={alreadyAdded ? colors.mutedForeground : colors.primary} />
+                    <Text style={[styles.typeName, alreadyAdded && styles.typeNameDisabled]}>
+                      {item}
+                    </Text>
+                    {alreadyAdded && <Check size={16} color={colors.mutedForeground} />}
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Device Picker Modal (for specific device selection) */}
+      <Modal
+        visible={devicePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDevicePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select {currentDeviceType} Devices</Text>
+              <TouchableOpacity onPress={() => setDevicePickerVisible(false)}>
+                <X size={24} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={filteredDevicesForType}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const rule = deviceTypeRules.find(r => r.type === currentDeviceType);
+                const isSelected = rule?.deviceIds?.includes(item.id);
+                return (
+                  <TouchableOpacity
+                    style={styles.deviceItem}
+                    onPress={() => toggleDeviceInRule(item.id)}
+                  >
+                    <View style={styles.deviceInfo}>
+                      <Text style={styles.deviceName}>{item.name}</Text>
+                      <Text style={styles.deviceRoom}>
+                        {rooms.find(r => r.id === item.roomId)?.name || 'Unknown room'}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <CheckCircle size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              contentContainerStyle={styles.modalList}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-  },
-  deleteButton: {
-    padding: spacing.sm,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  label: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-    marginBottom: spacing.sm,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    color: colors.foreground,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  iconCard: {
-    width: '30%',
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  iconCardSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  iconName: {
-    fontSize: 10,
-    color: colors.foreground,
-    textAlign: 'center',
-  },
-  iconNameSelected: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  quickSelectContainer: {
-    marginBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  quickSelectLabel: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-    marginBottom: spacing.xs,
-  },
-  quickSelectScroll: {
-    flexGrow: 0,
-  },
-  quickSelectButton: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    marginRight: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickSelectButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  quickSelectButtonPartial: {
-    backgroundColor: colors.primary + '40',
-    borderColor: colors.primary,
-  },
-  quickSelectButtonText: {
-    fontSize: fontSize.sm,
-    color: colors.foreground,
-    fontWeight: '500',
-  },
-  quickSelectButtonTextActive: {
-    color: 'white',
-  },
-  devicesList: {
-    gap: spacing.md,
-  },
-  deviceItem: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  deviceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  deviceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: borderRadius.sm,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  deviceName: {
-    fontSize: 14,
-    color: colors.foreground,
-    fontWeight: '600',
-  },
-  deviceType: {
-    fontSize: 10,
-    color: colors.mutedForeground,
-    marginLeft: spacing.xs,
-  },
-  deviceConfig: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.sm,
-  },
-  configRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  configLabel: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  toggleButton: {
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  toggleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  toggleText: {
-    fontSize: 12,
-    color: colors.foreground,
-    fontWeight: '600',
-  },
-  toggleTextActive: {
-    color: 'white',
-  },
-  valueInput: {
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.md,
-    padding: spacing.sm,
-    width: 80,
-    textAlign: 'center',
-    color: colors.foreground,
-    fontSize: 12,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.mutedForeground,
-    fontSize: 12,
-    padding: spacing.xl,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-});
-
+const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: spacing.xxl,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    loadingText: {
+      fontSize: fontSize.md,
+      color: colors.mutedForeground,
+    },
+    section: {
+      paddingHorizontal: spacing.lg,
+      marginBottom: spacing.xl,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
+      color: colors.foreground,
+      marginBottom: spacing.md,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    iconGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.md,
+    },
+    iconButton: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      minWidth: 70,
+    },
+    iconButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    iconButtonText: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+    },
+    iconButtonTextActive: {
+      color: '#fff',
+      fontWeight: '600',
+    },
+    scopeToggle: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    scopeButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+    },
+    scopeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    scopeButtonText: {
+      fontSize: fontSize.md,
+      color: colors.mutedForeground,
+      fontWeight: '600',
+    },
+    scopeButtonTextActive: {
+      color: '#fff',
+    },
+    picker: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+    },
+    pickerText: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    pickerPlaceholder: {
+      color: colors.mutedForeground,
+    },
+    addTypeButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.md,
+    },
+    addTypeButtonText: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: '#fff',
+    },
+    ruleCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    ruleHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    ruleHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    ruleType: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.foreground,
+      textTransform: 'capitalize',
+    },
+    modeToggle: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      padding: 2,
+    },
+    modeButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      alignItems: 'center',
+      borderRadius: borderRadius.sm,
+    },
+    modeButtonActive: {
+      backgroundColor: colors.primary,
+    },
+    modeButtonText: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: colors.mutedForeground,
+    },
+    modeButtonTextActive: {
+      color: '#fff',
+    },
+    devicePickerButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      marginBottom: spacing.md,
+    },
+    devicePickerButtonText: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+    },
+    stateConfig: {
+      gap: spacing.md,
+    },
+    stateRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+    },
+    stateLabel: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    valueInput: {
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      minWidth: 60,
+      textAlign: 'center',
+    },
+    saveButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.primary,
+      padding: spacing.lg,
+      borderRadius: borderRadius.lg,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.lg,
+    },
+    saveButtonDisabled: {
+      opacity: 0.6,
+    },
+    saveButtonText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: borderRadius.xxl,
+      borderTopRightRadius: borderRadius.xxl,
+      maxHeight: '70%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    modalList: {
+      padding: spacing.lg,
+    },
+    roomItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.lg,
+      marginBottom: spacing.sm,
+    },
+    roomName: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    typeItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.lg,
+      marginBottom: spacing.sm,
+    },
+    typeItemDisabled: {
+      opacity: 0.5,
+    },
+    typeName: {
+      flex: 1,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      textTransform: 'capitalize',
+    },
+    typeNameDisabled: {
+      color: colors.mutedForeground,
+    },
+    deviceItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.lg,
+      marginBottom: spacing.sm,
+    },
+    deviceInfo: {
+      flex: 1,
+    },
+    deviceName: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    deviceRoom: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+  });

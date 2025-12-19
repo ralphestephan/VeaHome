@@ -13,8 +13,8 @@ export async function getSceneById(id: string): Promise<Scene | null> {
 
 export async function saveScene(scene: Partial<Scene> & { home_id: string; name: string }) {
   const { rows } = await query(
-    `INSERT INTO scenes (home_id, name, icon, description, is_active, device_states, devices)
-     VALUES ($1, $2, $3, $4, COALESCE($5, false), $6, $7)
+    `INSERT INTO scenes (home_id, name, icon, description, is_active, device_states, devices, scope, room_ids, device_type_rules)
+     VALUES ($1, $2, $3, $4, COALESCE($5, false), $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       scene.home_id,
@@ -24,6 +24,9 @@ export async function saveScene(scene: Partial<Scene> & { home_id: string; name:
       scene.is_active ?? false,
       JSON.stringify(scene.device_states || {}),
       JSON.stringify(scene.devices || []),
+      scene.scope || 'home',
+      scene.room_ids || null,
+      JSON.stringify(scene.device_type_rules || []),
     ]
   );
   return rows[0];
@@ -38,6 +41,9 @@ export async function updateScene(id: string, updates: Partial<Scene>) {
        is_active = COALESCE($5, is_active),
        device_states = COALESCE($6, device_states),
        devices = COALESCE($7, devices),
+       scope = COALESCE($8, scope),
+       room_ids = COALESCE($9, room_ids),
+       device_type_rules = COALESCE($10, device_type_rules),
        updated_at = CURRENT_TIMESTAMP
      WHERE id = $1`,
     [
@@ -48,6 +54,9 @@ export async function updateScene(id: string, updates: Partial<Scene>) {
       updates.is_active ?? null,
       updates.device_states ? JSON.stringify(updates.device_states) : null,
       updates.devices ? JSON.stringify(updates.devices) : null,
+      updates.scope || null,
+      updates.room_ids || null,
+      updates.device_type_rules ? JSON.stringify(updates.device_type_rules) : null,
     ]
   );
 }

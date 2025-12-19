@@ -11,7 +11,7 @@ import {
   setSceneActive,
 } from '../repositories/automationsRepository';
 import { ensureHomeAccess } from './helpers/homeAccess';
-import { updateDevice, getDeviceWithHub } from '../repositories/devicesRepository';
+import { updateDevice, getDeviceWithHub, getDevicesByHomeId } from '../repositories/devicesRepository';
 import { publishCommand } from '../services/mqttService';
 import { recordDeviceActivity } from '../services/telemetryService';
 import { triggerNodeRedFlow } from '../services/nodeRedService';
@@ -38,7 +38,7 @@ export async function createScene(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, icon, description, deviceStates, devices } = req.body;
+    const { name, icon, description, deviceStates, devices, scope, roomIds, deviceTypeRules } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
@@ -47,14 +47,31 @@ export async function createScene(req: Request, res: Response) {
       return errorResponse(res, 'Scene name is required', 400);
     }
 
-    const scene = await saveScene({
+    // Support both old format (deviceStates) and new format (deviceTypeRules)
+    const sceneData: any = {
       home_id: home.id,
       name: name.trim(),
       icon: icon || 'sunset',
       description: description || '',
-      device_states: sanitizeDeviceStates(deviceStates),
-      devices: Array.isArray(devices) ? devices : [],
-    });
+    };
+
+    if (deviceTypeRules && Array.isArray(deviceTypeRules)) {
+      // New hierarchical format
+      sceneData.scope = scope || 'home';
+      sceneData.room_ids = scope === 'rooms' && Array.isArray(roomIds) ? roomIds : null;
+      sceneData.device_type_rules = deviceTypeRules;
+      sceneData.device_states = {}; // Keep for backwards compatibility
+      sceneData.devices = [];
+    } else {
+      // Old format - backwards compatibility
+      sceneData.device_states = sanitizeDeviceStates(deviceStates);
+      sceneData.devices = Array.isArray(devices) ? devices : [];
+      sceneData.scope = 'home';
+      sceneData.room_ids = null;
+      sceneData.device_type_rules = [];
+    }
+
+    const scene = await saveScene(sceneData);
 
     return successResponse(res, { message: 'Scene created successfully', scene }, 201);
   } catch (error: any) {
@@ -68,7 +85,7 @@ export async function updateScene(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId, sceneId } = req.params;
-    const { name, icon, description, deviceStates, devices } = req.body;
+    const { name, icon, description, deviceStates, devices, scope, roomIds, deviceTypeRules } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
@@ -78,13 +95,22 @@ export async function updateScene(req: Request, res: Response) {
       return errorResponse(res, 'Scene not found', 404);
     }
 
-    await updateSceneRecord(sceneId, {
-      name: name?.trim() || undefined,
-      icon,
-      description,
-      device_states: deviceStates ? sanitizeDeviceStates(deviceStates) : undefined,
-      devices: Array.isArray(devices) ? devices : undefined,
-    });
+    const updates: any = {};
+    if (name !== undefined) updates.name = name.trim();
+    if (icon !== undefined) updates.icon = icon;
+    if (description !== undefined) updates.description = description;
+
+    // Support both old and new formats
+    if (deviceTypeRules !== undefined) {
+      updates.device_type_rules = deviceTypeRules;
+      updates.scope = scope || 'home';
+      updates.room_ids = scope === 'rooms' && Array.isArray(roomIds) ? roomIds : null;
+    } else if (deviceStates !== undefined) {
+      updates.device_states = sanitizeDeviceStates(deviceStates);
+      if (devices !== undefined) updates.devices = Array.isArray(devices) ? devices : [];
+    }
+
+    await updateSceneRecord(sceneId, updates);
 
     const updatedScene = await getSceneById(sceneId);
     return successResponse(res, {
@@ -139,57 +165,46 @@ export async function activateScene(req: Request, res: Response) {
     await deactivateScenes(home.id);
     await setSceneActive(sceneId, home.id);
 
-    const deviceStates = sanitizeDeviceStates(scene.device_states);
-    await Promise.all(
-      Object.entries(deviceStates).map(async ([deviceId, rawState]) => {
-        const normalized = normalizeDeviceState(rawState as Record<string, unknown>);
-        if (!normalized) return;
+    // Check if scene uses new hierarchical format
+    const deviceTypeRules = scene.device_type_rules || [];
+    
+    if (deviceTypeRules.length > 0) {
+      // New format: apply rules based on device types and scope
+      const allDevices = await getDevicesByHomeId(home.id);
+      const targetDevices = resolveTargetDevices(allDevices, scene);
 
-        const device = await getDeviceWithHub(deviceId);
-        if (!device || device.home_id !== home.id) return;
-
-        await updateDevice(deviceId, normalized.update);
-
-        // Handle AirGuard buzzer control via MQTT
-        if (device.type === 'airguard' && normalized.command.action?.startsWith('BUZZER_')) {
-          // Get the numeric SmartMonitor ID from device metadata or signalMappings
-          const metadata = device.metadata as any;
-          const signalMappings = device.signal_mappings as any;
-          const smartMonitorId = metadata?.smartMonitorId || 
-                                signalMappings?.smartMonitorId || 
-                                signalMappings?.smartmonitorId;
+      await Promise.all(
+        deviceTypeRules.map(async (rule: any) => {
+          const devicesToControl = targetDevices.filter((d: any) => d.type === rule.type);
           
-          if (!smartMonitorId) {
-            console.warn(`[Scene] No smartMonitorId found for AirGuard device ${device.id}`);
-            return;
+          // If specific mode, filter to only selected devices
+          if (rule.mode === 'specific' && rule.deviceIds && rule.deviceIds.length > 0) {
+            const selectedIds = new Set(rule.deviceIds);
+            devicesToControl.filter((d: any) => selectedIds.has(d.id));
           }
-          
-          const buzzerState = normalized.command.action === 'BUZZER_ON' ? 'ON' : 'OFF';
-          const topic = `vealive/smartmonitor/${smartMonitorId}/command/buzzer`;
-          publishCommand(topic, { state: buzzerState });
-          console.log(`[Scene] Published to ${topic}: ${buzzerState}`);
-        } else {
-          // Regular device MQTT control
-          const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
-          if (normalized.command && mqttTopic) {
-            publishCommand(`${mqttTopic}/devices/${deviceId}/control`, {
-              ...normalized.command,
-              sceneId,
-            });
-          }
-        }
 
-        await recordDeviceActivity({
-          homeId: home.id,
-          roomId: device.room_id,
-          deviceId,
-          category: device.category,
-          value: typeof normalized.update.value === 'number' ? normalized.update.value : undefined,
-          isActive: typeof normalized.update.isActive === 'boolean' ? normalized.update.isActive : undefined,
-          source: 'scene',
-        });
-      })
-    );
+          await Promise.all(
+            devicesToControl.map((device: any) =>
+              applyStateToDevice(device, rule.state, home.id, sceneId)
+            )
+          );
+        })
+      );
+    } else {
+      // Old format: apply device_states directly
+      const deviceStates = sanitizeDeviceStates(scene.device_states);
+      await Promise.all(
+        Object.entries(deviceStates).map(async ([deviceId, rawState]) => {
+          const normalized = normalizeDeviceState(rawState as Record<string, unknown>);
+          if (!normalized) return;
+
+          const device = await getDeviceWithHub(deviceId);
+          if (!device || device.home_id !== home.id) return;
+
+          await applyStateToDevice(device, normalized.update, home.id, sceneId, normalized.command);
+        })
+      );
+    }
 
     await notifySceneActivation(home.id, sceneId);
 
@@ -201,6 +216,72 @@ export async function activateScene(req: Request, res: Response) {
     console.error('Activate scene error:', error);
     return errorResponse(res, error.message || 'Failed to activate scene', 500);
   }
+}
+
+// Resolve which devices should be controlled based on scene scope and room selection
+function resolveTargetDevices(allDevices: any[], scene: any) {
+  const scope = scene.scope || 'home';
+  
+  if (scope === 'home') {
+    // Home-wide: all devices
+    return allDevices;
+  } else if (scope === 'rooms') {
+    // Room-specific: only devices in selected rooms
+    const roomIds = scene.room_ids || [];
+    if (!Array.isArray(roomIds) || roomIds.length === 0) {
+      return allDevices; // Fallback to all if no rooms specified
+    }
+    const roomIdSet = new Set(roomIds.map(String));
+    return allDevices.filter(d => d.room_id && roomIdSet.has(String(d.room_id)));
+  }
+  
+  return allDevices;
+}
+
+// Apply state to a single device
+async function applyStateToDevice(device: any, state: any, homeId: string, sceneId: string, existingCommand?: any) {
+  const normalized = existingCommand ? { update: state, command: existingCommand } : normalizeDeviceState(state);
+  if (!normalized) return;
+
+  await updateDevice(device.id, normalized.update);
+
+  // Handle AirGuard buzzer control via MQTT
+  if (device.type === 'airguard' && normalized.command.action?.startsWith('BUZZER_')) {
+    const metadata = device.metadata as any;
+    const signalMappings = device.signal_mappings as any;
+    const smartMonitorId = metadata?.smartMonitorId || 
+                          signalMappings?.smartMonitorId || 
+                          signalMappings?.smartmonitorId;
+    
+    if (!smartMonitorId) {
+      console.warn(`[Scene] No smartMonitorId found for AirGuard device ${device.id}`);
+      return;
+    }
+    
+    const buzzerState = normalized.command.action === 'BUZZER_ON' ? 'ON' : 'OFF';
+    const topic = `vealive/smartmonitor/${smartMonitorId}/command/buzzer`;
+    publishCommand(topic, { state: buzzerState });
+    console.log(`[Scene] Published to ${topic}: ${buzzerState}`);
+  } else {
+    // Regular device MQTT control
+    const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
+    if (normalized.command && mqttTopic) {
+      publishCommand(`${mqttTopic}/devices/${device.id}/control`, {
+        ...normalized.command,
+        sceneId,
+      });
+    }
+  }
+
+  await recordDeviceActivity({
+    homeId,
+    roomId: device.room_id,
+    deviceId: device.id,
+    category: device.category,
+    value: typeof normalized.update.value === 'number' ? normalized.update.value : undefined,
+    isActive: typeof normalized.update.isActive === 'boolean' ? normalized.update.isActive : undefined,
+    source: 'scene',
+  });
 }
 
 function sanitizeDeviceStates(states: any) {

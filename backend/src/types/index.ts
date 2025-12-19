@@ -73,6 +73,9 @@ export interface Scene {
   is_active: boolean;
   device_states: any;
   devices?: string[];
+  scope?: 'home' | 'rooms';
+  room_ids?: string[] | null;
+  device_type_rules?: any[];
   created_at: Date;
   updated_at: Date;
 }
