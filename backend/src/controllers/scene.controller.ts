@@ -152,15 +152,11 @@ export async function activateScene(req: Request, res: Response) {
 
         // Handle AirGuard buzzer control via MQTT
         if (device.type === 'airguard' && normalized.command.action?.startsWith('BUZZER_')) {
-          const smartMonitorId = device.metadata?.smartMonitorId || 1;
+          const smartMonitorId = device.id; // Use device ID directly
           const buzzerState = normalized.command.action === 'BUZZER_ON' ? 'ON' : 'OFF';
-          publishCommand(`vealive/smartmonitor/${smartMonitorId}/control`, {
-            command: 'SET_BUZZER',
-            state: buzzerState,
-            timestamp: normalized.command.timestamp,
-            source: 'scene',
-          });
-          console.log(`[Scene] Set AirGuard ${smartMonitorId} buzzer to ${buzzerState}`);
+          const topic = `vealive/smartmonitor/${smartMonitorId}/command/buzzer`;
+          publishCommand(topic, { state: buzzerState });
+          console.log(`[Scene] Published to ${topic}: ${buzzerState}`);
         } else {
           // Regular device MQTT control
           const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;
