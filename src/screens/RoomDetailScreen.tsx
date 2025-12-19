@@ -726,7 +726,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                   <View style={styles.heroBadges}>
                     <View style={styles.heroBadge}>
                       <Sparkles size={12} color={colors.neonCyan} />
-                      <Text style={styles.heroBadgeText}>{room.sceneName || room.scene || 'No Scene'}</Text>
+                      <Text style={styles.heroBadgeText}>{activeSceneName || 'No Scene'}</Text>
                     </View>
                     {hasRoomAlert && (
                       <StatusBadge variant="warning" size="sm" label={`Alert: ${alertReasons.join(', ')}`} />
@@ -752,7 +752,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                 <View style={styles.heroBadges}>
                   <View style={styles.heroBadge}>
                     <Sparkles size={12} color={colors.neonCyan} />
-                    <Text style={styles.heroBadgeText}>{room.sceneName || room.scene || 'No Scene'}</Text>
+                    <Text style={styles.heroBadgeText}>{activeSceneName || 'No Scene'}</Text>
                   </View>
                   {hasRoomAlert && (
                     <StatusBadge variant="warning" size="sm" label={`Alert: ${alertReasons.join(', ')}`} />
