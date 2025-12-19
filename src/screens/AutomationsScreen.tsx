@@ -135,7 +135,7 @@ export default function AutomationsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {automations.map((a) => {
+          {automations.filter(a => a.name && a.name !== 'New Automation').map((a) => {
             const IconComponent = getAutomationIcon(a);
             return (
               <TouchableOpacity
