@@ -67,11 +67,29 @@ export default function AutomationsScreen() {
     navigation.navigate('AutomationForm', { homeId, automationId: automation.id });
   };
 
-  const handleToggleAutomation = (id: string) => {
+  const handleToggleAutomation = async (id: string, currentEnabled: boolean) => {
     if (isDemoMode) {
       setAutomations(prev => prev.map(a => 
         a.id === id ? { ...a, enabled: !a.enabled } : a
       ));
+      return;
+    }
+    if (!homeId) return;
+    
+    try {
+      // Optimistically update UI
+      setAutomations(prev => prev.map(a => 
+        a.id === id ? { ...a, enabled: !currentEnabled } : a
+      ));
+      
+      // Update on backend
+      await automationsApi.updateAutomation(homeId, id, { enabled: !currentEnabled });
+    } catch (e) {
+      // Revert on error
+      setAutomations(prev => prev.map(a => 
+        a.id === id ? { ...a, enabled: currentEnabled } : a
+      ));
+      Alert.alert('Error', 'Failed to toggle automation');
     }
   };
 
@@ -136,15 +154,14 @@ export default function AutomationsScreen() {
                     </Text>
                   </View>
                   <View style={styles.cardActions}>
-                    {isDemoMode ? (
-                      <Switch
-                        value={a.enabled}
-                        onValueChange={() => handleToggleAutomation(a.id)}
-                        trackColor={{ false: colors.muted, true: colors.primary + '60' }}
-                        thumbColor={a.enabled ? colors.primary : colors.mutedForeground}
-                      />
-                    ) : (
-                      <TouchableOpacity onPress={() => handleDelete(a.id)}>
+                    <Switch
+                      value={a.enabled}
+                      onValueChange={() => handleToggleAutomation(a.id, a.enabled)}
+                      trackColor={{ false: colors.muted, true: colors.primary + '60' }}
+                      thumbColor={a.enabled ? colors.primary : colors.mutedForeground}
+                    />
+                    {!isDemoMode && (
+                      <TouchableOpacity onPress={() => handleDelete(a.id)} style={{ marginLeft: spacing.sm }}>
                         <Trash2 size={18} color={colors.mutedForeground} />
                       </TouchableOpacity>
                     )}
@@ -209,7 +226,12 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       backgroundColor: `${colors.primary}20`,
     },
     titleWrap: { flex: 1 },
-    cardActions: { marginLeft: spacing.sm },
+    cardActions: { 
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginLeft: spacing.sm,
+    },
     cardTitle: { color: colors.foreground, fontWeight: '600', fontSize: fontSize.md },
     cardSubtitle: { color: colors.mutedForeground, fontSize: fontSize.sm, marginTop: 2 },
     actionsText: { 

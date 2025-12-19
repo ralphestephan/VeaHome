@@ -303,6 +303,73 @@ export default function SceneFormScreen() {
         {/* Device Selection */}
         <View style={styles.section}>
           <Text style={styles.label}>Select Devices ({selectedDevices.size} selected)</Text>
+          
+          {/* Quick Select by Type */}
+          <View style={styles.quickSelectContainer}>
+            <Text style={styles.quickSelectLabel}>Quick select:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickSelectScroll}>
+              {['light', 'airguard', 'relay', 'thermostat', 'ac', 'fan'].map((type) => {
+                const devicesOfType = devices.filter(d => d.type === type);
+                if (devicesOfType.length === 0) return null;
+                
+                const allSelected = devicesOfType.every(d => selectedDevices.has(d.id));
+                const someSelected = devicesOfType.some(d => selectedDevices.has(d.id));
+                
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.quickSelectButton,
+                      allSelected && styles.quickSelectButtonActive,
+                      someSelected && !allSelected && styles.quickSelectButtonPartial,
+                    ]}
+                    onPress={() => {
+                      if (allSelected) {
+                        // Deselect all of this type
+                        const newSelected = new Set(selectedDevices);
+                        const newStates = { ...deviceStates };
+                        devicesOfType.forEach(d => {
+                          newSelected.delete(d.id);
+                          delete newStates[d.id];
+                        });
+                        setSelectedDevices(newSelected);
+                        setDeviceStates(newStates);
+                      } else {
+                        // Select all of this type
+                        const newSelected = new Set(selectedDevices);
+                        const newStates = { ...deviceStates };
+                        devicesOfType.forEach(d => {
+                          newSelected.add(d.id);
+                          if (!newStates[d.id]) {
+                            newStates[d.id] = d.type === 'airguard' 
+                              ? { buzzer: true }
+                              : { isActive: true, value: d.value };
+                          }
+                        });
+                        setSelectedDevices(newSelected);
+                        setDeviceStates(newStates);
+                      }
+                    }}
+                  >
+                    <Text style={[
+                      styles.quickSelectButtonText,
+                      (allSelected || someSelected) && styles.quickSelectButtonTextActive,
+                    ]}>
+                      {allSelected ? '✓ ' : someSelected ? '◐ ' : ''}
+                      {type === 'airguard' ? 'AirGuards' : 
+                       type === 'light' ? 'Lights' :
+                       type === 'relay' ? 'Relays' :
+                       type === 'thermostat' ? 'Thermostats' :
+                       type === 'ac' ? 'AC Units' :
+                       type === 'fan' ? 'Fans' : type}
+                      {' '}({devicesOfType.length})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
           <View style={styles.devicesList}>
             {devices.map((device) => {
               const isSelected = selectedDevices.has(device.id);
@@ -507,6 +574,43 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
   iconNameSelected: {
     color: 'white',
     fontWeight: '600',
+  },
+  quickSelectContainer: {
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  quickSelectLabel: {
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+    marginBottom: spacing.xs,
+  },
+  quickSelectScroll: {
+    flexGrow: 0,
+  },
+  quickSelectButton: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickSelectButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  quickSelectButtonPartial: {
+    backgroundColor: colors.primary + '40',
+    borderColor: colors.primary,
+  },
+  quickSelectButtonText: {
+    fontSize: fontSize.sm,
+    color: colors.foreground,
+    fontWeight: '500',
+  },
+  quickSelectButtonTextActive: {
+    color: 'white',
   },
   devicesList: {
     gap: spacing.md,

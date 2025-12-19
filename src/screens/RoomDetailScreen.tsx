@@ -355,7 +355,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         try {
           const scenesRes = await scenesApi.listScenes(homeId);
           const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
-          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => s.id === baseRoom.scene) : null;
+          console.log('[Room Scene] Room scene ID:', baseRoom.scene);
+          console.log('[Room Scene] Available scenes:', scenesData);
+          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(baseRoom.scene)) : null;
+          console.log('[Room Scene] Found scene:', activeScene);
           if (activeScene) {
             setActiveSceneName(activeScene.name);
           } else {
@@ -363,6 +366,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           }
         } catch (err) {
           console.log('Error loading scene name:', err);
+          setActiveSceneName('');
         }
       } else {
         setActiveSceneName('');
