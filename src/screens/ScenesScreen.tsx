@@ -100,6 +100,10 @@ interface Scene {
   isActive: boolean;
   time?: string;
   description?: string;
+  deviceCount?: number;
+  device_states?: any;
+  deviceStates?: any;
+  schedule?: string;
 }
 
 interface AutomationPreview {

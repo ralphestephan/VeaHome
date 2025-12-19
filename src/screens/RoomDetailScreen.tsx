@@ -1544,7 +1544,7 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => Styl
     color: colors.foreground,
   },
   modalClose: {
-    fontSize: fontSize['2xl'],
+    fontSize: fontSize.xxl,
     color: colors.mutedForeground,
     fontWeight: fontWeight.medium,
   },
