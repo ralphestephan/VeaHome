@@ -114,6 +114,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
   const homeApi = useMemo(() => HomeApi(client), [client]);
   const hubApi = useMemo(() => HubApi(client), [client]);
   const publicAirguardApi = useMemo(() => PublicAirguardApi(client), [client]);
+  const scenesApi = useMemo(() => ScenesApi(client), [client]);
 
   const devicesRef = useRef<Device[]>([]);
   const roomsRef = useRef<Room[]>([]);
@@ -238,7 +239,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const [roomsRes, devicesRes, scenesRes] = await Promise.all([
             homeApi.getRooms(effectiveHomeId).catch(() => ({ data: [] })),
             hubApi.listDevices(effectiveHomeId).catch(() => ({ data: [] })),
-            ScenesApi(token).listScenes(effectiveHomeId).catch(() => ({ data: [] })),
+            scenesApi.listScenes(effectiveHomeId).catch(() => ({ data: [] })),
           ]);
 
           const rawRooms = unwrap<any[]>(roomsRes, 'rooms');
