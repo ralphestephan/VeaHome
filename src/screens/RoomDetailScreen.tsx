@@ -146,10 +146,22 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
     try {
       console.log('[Assign Scene] Updating room with scene:', sceneId);
-      // Update room with scene ID
-      await homeApi.updateRoom(homeId, String(roomId), {
-        scene: sceneId,
-      });
+      
+      // Try with null first, fallback to empty string if backend rejects null
+      let payload: any = { scene: sceneId };
+      
+      try {
+        await homeApi.updateRoom(homeId, String(roomId), payload);
+      } catch (validationError: any) {
+        // If null is rejected (400 error), try with empty string
+        if (validationError?.response?.status === 400 && sceneId === null) {
+          console.log('[Assign Scene] Backend rejected null, trying empty string');
+          payload = { scene: '' };
+          await homeApi.updateRoom(homeId, String(roomId), payload);
+        } else {
+          throw validationError;
+        }
+      }
       
       // Update local state immediately
       const selectedScene = scenes.find(s => s.id === sceneId);
@@ -160,9 +172,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       
       // Reload data from backend to ensure sync
       await loadRoomData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error assigning scene:', err);
-      showToast('Failed to assign scene', { type: 'error' });
+      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to assign scene';
+      showToast(errorMsg, { type: 'error' });
     }
   };
 
