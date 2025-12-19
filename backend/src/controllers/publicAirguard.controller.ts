@@ -95,11 +95,16 @@ export async function getSmartMonitorThresholds(req: Request, res: Response) {
   try {
     const { id } = req.params;
     
+    console.log(`[Thresholds] Fetching for SmartMonitor ID: ${id}`);
+    
     // Try to get thresholds from InfluxDB (if device has published them)
     const thresholds = await getSmartMonitorThresholdsFromInflux(String(id));
     
+    console.log(`[Thresholds] InfluxDB result for device ${id}:`, thresholds);
+    
     if (!thresholds) {
       // Return default thresholds if none stored
+      console.log(`[Thresholds] No data found, returning defaults`);
       return successResponse(res, {
         data: {
           tempMin: 18,
@@ -113,18 +118,20 @@ export async function getSmartMonitorThresholds(req: Request, res: Response) {
       });
     }
 
-    return successResponse(res, {
-      data: {
-        time: thresholds.time,
-        tempMin: thresholds.tempMin ?? 18,
-        tempMax: thresholds.tempMax ?? 30,
-        humMin: thresholds.humMin ?? 30,
-        humMax: thresholds.humMax ?? 70,
-        dustHigh: thresholds.dustHigh ?? thresholds.dust ?? 400,
-        mq2High: thresholds.mq2High ?? thresholds.mq2 ?? 60,
-        isDefault: false,
-      },
-    });
+    const responseData = {
+      time: thresholds.time,
+      tempMin: thresholds.tempMin ?? 18,
+      tempMax: thresholds.tempMax ?? 30,
+      humMin: thresholds.humMin ?? 30,
+      humMax: thresholds.humMax ?? 70,
+      dustHigh: thresholds.dustHigh ?? thresholds.dust ?? 400,
+      mq2High: thresholds.mq2High ?? thresholds.mq2 ?? 60,
+      isDefault: false,
+    };
+    
+    console.log(`[Thresholds] Returning data for device ${id}:`, responseData);
+
+    return successResponse(res, { data: responseData });
   } catch (error: any) {
     console.error('getSmartMonitorThresholds error:', error);
     return errorResponse(res, error.message || 'Failed to query thresholds', 500);
