@@ -189,7 +189,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     if (!homeId || isDemoMode) return;
     try {
       const scenesRes = await scenesApi.listScenes(homeId);
-      const scenesData = scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data || [];
+      const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
       setScenes(Array.isArray(scenesData) ? scenesData : []);
     } catch (err) {
       console.log('Error loading scenes:', err);
@@ -353,7 +353,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       if (baseRoom?.scene) {
         try {
           const scenesRes = await scenesApi.listScenes(homeId);
-          const scenesData = scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data || [];
+          const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
           const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => s.id === baseRoom.scene) : null;
           if (activeScene) {
             setActiveSceneName(activeScene.name);
