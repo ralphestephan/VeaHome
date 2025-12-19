@@ -50,6 +50,7 @@ import DeviceControlModal from '../components/DeviceControlModal';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
+import { useHomeData } from '../hooks/useHomeData';
 import { getApiClient, HomeApi, HubApi, PublicAirguardApi, ScenesApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useTheme } from '../context/ThemeContext';
@@ -83,6 +84,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const demo = useDemo();
   const isDemoMode = token === 'DEMO_TOKEN';
   const homeId = user?.homeId;
+  const { refresh: refreshHomeData } = useHomeData(homeId || '');
   const [room, setRoom] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,6 +181,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       console.log('[Assign Scene] Reloading room data...');
       // Reload data from backend to ensure sync
       await loadRoomData();
+      // Also refresh the global home data so popup shows updated scene
+      await refreshHomeData();
       console.log('[Assign Scene] Reload complete. New activeSceneName:', activeSceneName);
     } catch (err: any) {
       console.error('[Assign Scene] Error:', err);

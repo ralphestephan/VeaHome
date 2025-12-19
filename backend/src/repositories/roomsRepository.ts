@@ -51,9 +51,9 @@ export async function updateRoom(id: string, updates: Partial<RoomInput>) {
     fields.push(`image = $${fields.length + 1}`);
     values.push(updates.image);
   }
-  if (updates.scene) {
+  if ('scene' in updates) {
     fields.push(`scene = $${fields.length + 1}`);
-    values.push(updates.scene);
+    values.push(updates.scene || null);
   }
   if (updates.layoutPath) {
     fields.push(`layout_path = $${fields.length + 1}`);
