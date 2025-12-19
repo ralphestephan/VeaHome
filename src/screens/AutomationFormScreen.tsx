@@ -21,6 +21,9 @@ import {
   Thermometer,
   Clock,
   Zap,
+  Droplets,
+  Wind,
+  Flame,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -256,7 +259,11 @@ export default function AutomationFormScreen() {
   };
 
   const updateTrigger = (id: string, field: string, value: any) => {
-    setTriggers(triggers.map(t => t.id === id ? { ...t, [field]: value } : t));
+    setTriggers(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const updateTriggerMultiple = (id: string, updates: Record<string, any>) => {
+    setTriggers(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   };
 
   const removeTrigger = (id: string) => {
@@ -270,7 +277,11 @@ export default function AutomationFormScreen() {
   };
 
   const updateAction = (id: string, field: string, value: any) => {
-    setActions(actions.map(a => a.id === id ? { ...a, [field]: value } : a));
+    setActions(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
+  };
+
+  const updateActionMultiple = (id: string, updates: Record<string, any>) => {
+    setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
   };
 
   const removeAction = (id: string) => {
@@ -436,9 +447,11 @@ export default function AutomationFormScreen() {
                         key={opt.id}
                         style={[styles.chip, trigger.property === opt.id && styles.chipActive]}
                         onPress={() => {
-                          updateTrigger(trigger.id, 'property', opt.id);
-                          updateTrigger(trigger.id, 'condition', undefined);
-                          updateTrigger(trigger.id, 'value', undefined);
+                          updateTriggerMultiple(trigger.id, {
+                            property: opt.id,
+                            condition: undefined,
+                            value: undefined
+                          });
                         }}
                       >
                         <Text style={[styles.chipText, trigger.property === opt.id && styles.chipTextActive]}>
@@ -567,10 +580,10 @@ export default function AutomationFormScreen() {
                   key={act.id}
                   style={[styles.chip, action.action === act.id && styles.chipActive]}
                   onPress={() => {
-                    updateAction(action.id, 'action', act.id);
-                    if (!act.needsValue) {
-                      updateAction(action.id, 'value', undefined);
-                    }
+                    updateActionMultiple(action.id, {
+                      action: act.id,
+                      value: act.needsValue ? undefined : action.value
+                    });
                   }}
                 >
                   <Text style={[styles.chipText, action.action === act.id && styles.chipTextActive]}>
@@ -584,27 +597,129 @@ export default function AutomationFormScreen() {
 
         {needsValue && action.action && (
           <>
-            <Text style={styles.label}>Value</Text>
             {selectedAction?.valueType === 'thresholds' ? (
-              <View style={styles.thresholdsInput}>
-                <Text style={styles.helperText}>Enter threshold values (temperature, humidity, etc.)</Text>
+              <View style={styles.thresholdContainer}>
+                <Text style={styles.label}>Alert Thresholds</Text>
+                <Text style={styles.helperText}>Set min/max values that will trigger alerts</Text>
+                
+                {/* Temperature */}
+                <View style={styles.thresholdRow}>
+                  <Thermometer size={18} color={colors.primary} />
+                  <Text style={styles.thresholdLabel}>Temperature (°C)</Text>
+                </View>
+                <View style={styles.minMaxRow}>
+                  <View style={styles.minMaxInput}>
+                    <Text style={styles.minMaxLabel}>Min</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={action.value?.tempMin?.toString() || ''}
+                      onChangeText={(text) => updateAction(action.id, 'value', {
+                        ...(action.value || {}),
+                        tempMin: parseFloat(text) || 0
+                      })}
+                      keyboardType="numeric"
+                      placeholder="10"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                  <View style={styles.minMaxInput}>
+                    <Text style={styles.minMaxLabel}>Max</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={action.value?.tempMax?.toString() || ''}
+                      onChangeText={(text) => updateAction(action.id, 'value', {
+                        ...(action.value || {}),
+                        tempMax: parseFloat(text) || 0
+                      })}
+                      keyboardType="numeric"
+                      placeholder="35"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                </View>
+
+                {/* Humidity */}
+                <View style={styles.thresholdRow}>
+                  <Droplets size={18} color={colors.primary} />
+                  <Text style={styles.thresholdLabel}>Humidity (%)</Text>
+                </View>
+                <View style={styles.minMaxRow}>
+                  <View style={styles.minMaxInput}>
+                    <Text style={styles.minMaxLabel}>Min</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={action.value?.humMin?.toString() || ''}
+                      onChangeText={(text) => updateAction(action.id, 'value', {
+                        ...(action.value || {}),
+                        humMin: parseFloat(text) || 0
+                      })}
+                      keyboardType="numeric"
+                      placeholder="20"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                  <View style={styles.minMaxInput}>
+                    <Text style={styles.minMaxLabel}>Max</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={action.value?.humMax?.toString() || ''}
+                      onChangeText={(text) => updateAction(action.id, 'value', {
+                        ...(action.value || {}),
+                        humMax: parseFloat(text) || 0
+                      })}
+                      keyboardType="numeric"
+                      placeholder="80"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
+                  </View>
+                </View>
+
+                {/* Dust (PM2.5) */}
+                <View style={styles.thresholdRow}>
+                  <Wind size={18} color={colors.primary} />
+                  <Text style={styles.thresholdLabel}>Dust/PM2.5 (µg/m³)</Text>
+                </View>
                 <TextInput
                   style={styles.input}
-                  value={action.value?.toString() || ''}
-                  onChangeText={(text) => updateAction(action.id, 'value', text)}
-                  placeholder="e.g., temp:30,humidity:70"
+                  value={action.value?.dustHigh?.toString() || ''}
+                  onChangeText={(text) => updateAction(action.id, 'value', {
+                    ...(action.value || {}),
+                    dustHigh: parseFloat(text) || 0
+                  })}
+                  keyboardType="numeric"
+                  placeholder="Max: 100"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+
+                {/* Gas (MQ2) */}
+                <View style={styles.thresholdRow}>
+                  <Flame size={18} color={colors.primary} />
+                  <Text style={styles.thresholdLabel}>Gas Level (MQ2)</Text>
+                </View>
+                <TextInput
+                  style={styles.input}
+                  value={action.value?.mq2High?.toString() || ''}
+                  onChangeText={(text) => updateAction(action.id, 'value', {
+                    ...(action.value || {}),
+                    mq2High: parseFloat(text) || 0
+                  })}
+                  keyboardType="numeric"
+                  placeholder="Max: 300"
                   placeholderTextColor={colors.mutedForeground}
                 />
               </View>
             ) : (
-              <TextInput
-                style={styles.input}
-                value={action.value?.toString() || ''}
-                onChangeText={(text) => updateAction(action.id, 'value', parseFloat(text) || 0)}
-                keyboardType="numeric"
-                placeholder="Enter value"
-                placeholderTextColor={colors.mutedForeground}
-              />
+              <>
+                <Text style={styles.label}>Value</Text>
+                <TextInput
+                  style={styles.input}
+                  value={action.value?.toString() || ''}
+                  onChangeText={(text) => updateAction(action.id, 'value', parseFloat(text) || 0)}
+                  keyboardType="numeric"
+                  placeholder="Enter value"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </>
             )}
           </>
         )}
@@ -910,6 +1025,34 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) =>
       fontSize: fontSize.xs,
       color: colors.mutedForeground,
       fontStyle: 'italic',
+    },
+    thresholdContainer: {
+      gap: spacing.md,
+      marginTop: spacing.md,
+    },
+    thresholdRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    thresholdLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: colors.foreground,
+    },
+    minMaxRow: {
+      flexDirection: 'row',
+      gap: spacing.md,
+      marginTop: spacing.sm,
+    },
+    minMaxInput: {
+      flex: 1,
+    },
+    minMaxLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginBottom: spacing.xs,
     },
     addButton: {
       flexDirection: 'row',

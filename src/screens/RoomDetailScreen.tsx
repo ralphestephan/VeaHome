@@ -147,6 +147,11 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     try {
       console.log('[Assign Scene] Updating room with scene:', sceneId);
       
+      // Update local state IMMEDIATELY before API call
+      const selectedScene = scenes.find(s => s.id === sceneId);
+      setActiveSceneName(selectedScene?.name || '');
+      setScenePickerVisible(false);
+      
       // Try with null first, fallback to empty string if backend rejects null
       let payload: any = { scene: sceneId };
       
@@ -163,11 +168,6 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         }
       }
       
-      // Update local state immediately
-      const selectedScene = scenes.find(s => s.id === sceneId);
-      setActiveSceneName(selectedScene?.name || '');
-      setScenePickerVisible(false);
-      
       showToast(sceneId ? `Scene assigned successfully` : 'Scene removed successfully', { type: 'success' });
       
       // Reload data from backend to ensure sync
@@ -176,6 +176,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       console.error('Error assigning scene:', err);
       const errorMsg = err?.response?.data?.message || err?.message || 'Failed to assign scene';
       showToast(errorMsg, { type: 'error' });
+      // Revert on error
+      await loadRoomData();
     }
   };
 
