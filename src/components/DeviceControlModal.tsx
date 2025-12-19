@@ -221,20 +221,25 @@ export default function DeviceControlModal({
     if (!smartMonitorId) return;
     
     try {
+      console.log('[Thresholds] Fetching for device:', smartMonitorId);
       const res = await airguardApi.getThresholds(smartMonitorId);
       console.log('[Thresholds] API response:', JSON.stringify(res, null, 2));
       const data = res.data?.data;
       console.log('[Thresholds] Extracted data:', JSON.stringify(data, null, 2));
       
-      if (data) {
-        // Use API values directly, only fallback if explicitly null/undefined
+      if (data && typeof data === 'object') {
+        // Check if we actually got real data or just defaults
+        const hasRealData = data.time || data.isDefault === false;
+        console.log('[Thresholds] Has real data?', hasRealData, 'Data:', data);
+        
+        // Backend returns: tempMin, tempMax, humMin, humMax, dustHigh, mq2High
         const newThresholds = {
-          tempHigh: data.tempMax ?? data.tempHigh ?? 35,
-          tempLow: data.tempMin ?? data.tempLow ?? 10,
-          humidityHigh: data.humMax ?? data.humidityHigh ?? 80,
-          humidityLow: data.humMin ?? data.humidityLow ?? 20,
-          dustHigh: data.dustHigh ?? data.dust ?? 400,
-          mq2High: data.mq2High ?? data.mq2 ?? 60,
+          tempHigh: data.tempMax ?? 35,
+          tempLow: data.tempMin ?? 10,
+          humidityHigh: data.humMax ?? 80,
+          humidityLow: data.humMin ?? 20,
+          dustHigh: data.dustHigh ?? 400,
+          mq2High: data.mq2High ?? 60,
         };
         console.log('[Thresholds] Applied:', newThresholds);
         setThresholds(newThresholds);
@@ -247,7 +252,7 @@ export default function DeviceControlModal({
           mq2High: String(newThresholds.mq2High),
         });
       } else {
-        console.warn('[Thresholds] No data in response, using defaults');
+        console.warn('[Thresholds] No data in response or invalid format, using defaults');
       }
     } catch (error) {
       console.error('[Thresholds] Failed to fetch:', error);
@@ -553,9 +558,33 @@ export default function DeviceControlModal({
 
             {/* Main Control Area */}
             {isAirguard ? (
-              <View style={styles.airguardControl}>
-                {/* Signal Strength Indicator - Only show when online with signal */}
-                {liveAirguardData?.rssi && liveAirguardData?.isOnline !== false && (
+              <ScrollView 
+                style={styles.airguardScrollView}
+                contentContainerStyle={styles.airguardScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.airguardControl}>
+                  {/* Online/Offline Status Badge */}
+                  <View style={styles.statusBadgeContainer}>
+                    <View style={[
+                      styles.statusBadge,
+                      liveAirguardData?.isOnline ? styles.statusOnline : styles.statusOffline
+                    ]}>
+                      <View style={[
+                        styles.statusDot,
+                        liveAirguardData?.isOnline ? styles.dotOnline : styles.dotOffline
+                      ]} />
+                      <Text style={[
+                        styles.statusText,
+                        liveAirguardData?.isOnline ? styles.statusTextOnline : styles.statusTextOffline
+                      ]}>
+                        {liveAirguardData?.isOnline ? 'Online' : 'Offline'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Signal Strength Indicator - Only show when online with signal */}
+                  {liveAirguardData?.rssi && liveAirguardData?.isOnline !== false && (
                   <View style={styles.statusRow}>
                     <View style={styles.signalStrengthContainer}>
                       {(() => {
@@ -884,7 +913,8 @@ export default function DeviceControlModal({
                     </>
                   );
                 })()}
-              </View>
+                </View>
+              </ScrollView>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
                 {/* Circular Dial */}
