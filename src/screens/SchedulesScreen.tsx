@@ -42,7 +42,8 @@ export default function SchedulesScreen() {
 
   const loadSchedules = async () => {
     if (isDemoMode) {
-      setSchedules(demoSchedules);
+      // Show empty state in demo mode
+      setSchedules([]);
       setLoading(false);
       return;
     }

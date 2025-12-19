@@ -263,11 +263,8 @@ export default function ScenesScreen() {
     }
 
     if (!homeId) {
-      // Fallback to mock data
-      setScenes([
-        { id: "1", name: "Morning Routine", icon: "weather-sunset-up", devices: 12, isActive: false, time: "6:00 AM", description: "Wake up gently" },
-        { id: "2", name: "Evening Relax", icon: "weather-night", devices: 8, isActive: true, description: "Wind down" },
-      ]);
+      // No home ID - show empty state
+      setScenes([]);
       setLoading(false);
       return;
     }
@@ -452,7 +449,7 @@ export default function ScenesScreen() {
                     <View style={styles.activeSceneContent}>
                       <Text style={styles.activeSceneName}>{scene.name}</Text>
                       <Text style={styles.activeSceneDetails}>
-                        {scene.devices} devices active • {scene.description}
+                        {scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices active • {scene.description || 'Custom scene'}
                       </Text>
                     </View>
                   </View>
@@ -502,7 +499,7 @@ export default function ScenesScreen() {
             <View style={styles.statIcon}>
               <Clock size={20} color={colors.primary} />
             </View>
-            <Text style={styles.statValue}>3</Text>
+            <Text style={styles.statValue}>{scenes.filter(s => s.schedule).length}</Text>
             <Text style={styles.statLabel}>Scheduled</Text>
           </View>
         </View>
@@ -525,7 +522,7 @@ export default function ScenesScreen() {
                 </View>
                 <Text style={styles.sceneCardName}>{scene.name}</Text>
                 <View style={styles.sceneCardDetails}>
-                  <Text style={styles.sceneCardDevices}>{scene.devices} devices</Text>
+                  <Text style={styles.sceneCardDevices}>{scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices</Text>
                   {scene.time && (
                     <>
                       <Text style={styles.sceneCardSeparator}> • </Text>
