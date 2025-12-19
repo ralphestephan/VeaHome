@@ -116,7 +116,6 @@ const getDeviceTriggerOptions = (device: Device | null) => {
       break;
       
     case 'light':
-    case 'relay':
     case 'ac':
     case 'fan':
     case 'thermostat':
@@ -162,7 +161,6 @@ const getDeviceActionOptions = (device: Device | null) => {
       break;
       
     case 'light':
-    case 'relay':
       actions.push(
         { id: 'turn_on', name: 'Turn ON' },
         { id: 'turn_off', name: 'Turn OFF' },
@@ -288,12 +286,17 @@ export default function AutomationFormScreen() {
     if (!devicePickerFor) return;
     
     if (devicePickerFor.type === 'trigger') {
-      updateTrigger(devicePickerFor.id, 'deviceId', deviceId);
-      updateTrigger(devicePickerFor.id, 'property', undefined);
-      updateTrigger(devicePickerFor.id, 'condition', undefined);
+      setTriggers(triggers.map(t => 
+        t.id === devicePickerFor.id 
+          ? { ...t, deviceId, property: undefined, condition: undefined, value: undefined } 
+          : t
+      ));
     } else {
-      updateAction(devicePickerFor.id, 'deviceId', deviceId);
-      updateAction(devicePickerFor.id, 'action', undefined);
+      setActions(actions.map(a => 
+        a.id === devicePickerFor.id 
+          ? { ...a, deviceId, action: undefined, property: undefined, value: undefined } 
+          : a
+      ));
     }
     
     setDevicePickerVisible(false);
@@ -395,7 +398,7 @@ export default function AutomationFormScreen() {
 
   const renderTriggerCard = (trigger: Trigger, index: number) => {
     const selectedDevice = trigger.deviceId ? devices.find(d => d.id === trigger.deviceId) : null;
-    const triggerOptions = getDeviceTriggerOptions(selectedDevice);
+    const triggerOptions = getDeviceTriggerOptions(selectedDevice || null);
     const selectedProperty = triggerOptions.find(opt => opt.id === trigger.property);
     const selectedCondition = selectedProperty?.conditions.find(c => c.id === trigger.condition);
     const needsValue = selectedCondition?.needsValue || false;
@@ -531,7 +534,7 @@ export default function AutomationFormScreen() {
 
   const renderActionCard = (action: Action) => {
     const selectedDevice = action.deviceId ? devices.find(d => d.id === action.deviceId) : null;
-    const actionOptions = getDeviceActionOptions(selectedDevice);
+    const actionOptions = getDeviceActionOptions(selectedDevice || null);
     const selectedAction = actionOptions.find(a => a.id === action.action);
     const needsValue = selectedAction?.needsValue || false;
 
@@ -631,7 +634,7 @@ export default function AutomationFormScreen() {
         title={automationId ? 'Edit Automation' : 'Create Automation'}
         showBack
         showSettings={false}
-        rightComponent={
+        rightContent={
           automationId ? (
             <TouchableOpacity onPress={handleDelete}>
               <Trash2 size={24} color={colors.destructive} />

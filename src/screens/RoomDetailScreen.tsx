@@ -371,15 +371,15 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       if (baseRoom?.scene) {
         try {
           let sceneIdToMatch = baseRoom.scene;
+          let sceneNameFromObject = null;
           
           // Check if scene is a corrupted object
           if (typeof baseRoom.scene === 'object' && (baseRoom.scene as any).id) {
             console.log('[Room Scene] Corrupted scene object detected:', baseRoom.scene);
             sceneIdToMatch = (baseRoom.scene as any).id;
-            // If object has name, use it directly
+            // If object has name, extract it
             if ((baseRoom.scene as any).name) {
-              setActiveSceneName((baseRoom.scene as any).name);
-              return; // Skip API call
+              sceneNameFromObject = (baseRoom.scene as any).name;
             }
           }
           
@@ -391,6 +391,9 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           console.log('[Room Scene] Found scene:', activeScene);
           if (activeScene) {
             setActiveSceneName(activeScene.name);
+          } else if (sceneNameFromObject) {
+            // Fallback to name from corrupted object if scene not found in list
+            setActiveSceneName(sceneNameFromObject);
           } else {
             setActiveSceneName('');
           }
