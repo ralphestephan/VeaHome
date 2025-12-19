@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useDemo } from '../context/DemoContext';
 import { useNavigation } from '@react-navigation/native';
+import { useHomeData } from '../hooks/useHomeData';
 import { getApiClient, ScenesApi, AutomationsApi } from '../services/api';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -193,6 +194,7 @@ export default function ScenesScreen() {
   const { scenes: demoScenes, activateScene: demoActivateScene } = useDemo();
   const homeId = user?.homeId;
   const isDemoMode = token === 'DEMO_TOKEN';
+  const { devices } = useHomeData(homeId || '');
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [loading, setLoading] = useState(true);
   const [automations, setAutomations] = useState<AutomationPreview[]>([]);

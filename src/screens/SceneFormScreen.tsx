@@ -87,7 +87,10 @@ export default function SceneFormScreen() {
     try {
       setLoading(true);
       const response = await scenesApi.listScenes(homeId);
-      const scene = (response.data || []).find((s: any) => s.id === sceneId);
+      const raw = (response as any)?.data;
+      const payload = raw?.data?.scenes ?? raw?.scenes ?? raw?.data ?? raw;
+      const scenesList = Array.isArray(payload) ? payload : [];
+      const scene = scenesList.find((s: any) => s.id === sceneId);
       if (scene) {
         setSceneName(scene.name);
         setSelectedIcon(scene.icon || 'lightbulb');
