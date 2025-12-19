@@ -10,6 +10,8 @@ import {
   Dimensions,
   RefreshControl,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +32,8 @@ import {
   Settings,
   Sparkles,
   Trash2,
+  CheckCircle,
+  UserX,
 } from 'lucide-react-native';
 import { 
   spacing, 
@@ -88,6 +92,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const { controlDevice, toggleDevice, setValue } = useDeviceControl();
   const { showToast } = useToast();
   const [activeSceneName, setActiveSceneName] = useState<string>('');
+  const [scenes, setScenes] = useState<any[]>([]);
+  const [scenePickerVisible, setScenePickerVisible] = useState(false);
 
   const [selectedDevice, setSelectedDevice] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -130,6 +136,31 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     );
   };
 
+  const assignSceneToRoom = async (sceneId: string | null) => {
+    if (isDemoMode) {
+      setScenePickerVisible(false);
+      return;
+    }
+    if (!homeId) return;
+
+    try {
+      // Update room with scene ID
+      await homeApi.updateRoom(homeId, String(roomId), {
+        sceneId: sceneId || null,
+      });
+      
+      // Update local state
+      const selectedScene = scenes.find(s => s.id === sceneId);
+      setActiveSceneName(selectedScene?.name || '');
+      setScenePickerVisible(false);
+      showToast(sceneId ? `Scene assigned to room` : 'Scene removed', { type: 'success' });
+      await loadRoomData();
+    } catch (err) {
+      console.error('Error assigning scene:', err);
+      showToast('Failed to assign scene', { type: 'error' });
+    }
+  };
+
   // Hero animation on mount
   useEffect(() => {
     if (!loading && room) {
@@ -151,7 +182,20 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     loadRoomData();
+    if (homeId) loadScenes();
   }, [roomId, homeId]);
+
+  const loadScenes = async () => {
+    if (!homeId || isDemoMode) return;
+    try {
+      const scenesRes = await scenesApi.listScenes(homeId);
+      const scenesData = scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data || [];
+      setScenes(Array.isArray(scenesData) ? scenesData : []);
+    } catch (err) {
+      console.log('Error loading scenes:', err);
+      setScenes([]);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -763,11 +807,17 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                   <Play size={20} color={colors.primary} />
                 </View>
                 <View style={styles.sceneText}>
-                  <Text style={styles.sceneName}>{room.activeScene || activeSceneName || 'No Scene Active'}</Text>
+                  <Text style={styles.sceneName}>{activeSceneName || 'No Scene Active'}</Text>
                   <Text style={styles.sceneDetail}>Tap to manage scenes</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.sceneButton}>
+              <TouchableOpacity 
+                style={styles.sceneButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setScenePickerVisible(true);
+                }}
+              >
                 <Settings size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
             </NeonCard>
@@ -936,6 +986,63 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         {/* Bottom spacing */}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Scene Picker Modal */}
+      <Modal
+        visible={scenePickerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setScenePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign Scene to Room</Text>
+              <TouchableOpacity onPress={() => setScenePickerVisible(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sceneList}>
+              {/* Remove Scene Option */}
+              <TouchableOpacity
+                style={[styles.sceneOption, !activeSceneName && styles.sceneOptionActive]}
+                onPress={() => assignSceneToRoom(null)}
+              >
+                <View style={styles.sceneOptionIcon}>
+                  <UserX size={20} color={colors.mutedForeground} />
+                </View>
+                <Text style={styles.sceneOptionText}>No Scene</Text>
+                {!activeSceneName && (
+                  <CheckCircle size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+
+              {/* Available Scenes */}
+              {scenes.map((scene) => (
+                <TouchableOpacity
+                  key={scene.id}
+                  style={[styles.sceneOption, activeSceneName === scene.name && styles.sceneOptionActive]}
+                  onPress={() => assignSceneToRoom(scene.id)}
+                >
+                  <View style={styles.sceneOptionIcon}>
+                    <Play size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.sceneOptionInfo}>
+                    <Text style={styles.sceneOptionText}>{scene.name}</Text>
+                    <Text style={styles.sceneOptionSubtext}>
+                      {Object.keys(scene.device_states || scene.deviceStates || {}).length} devices
+                    </Text>
+                  </View>
+                  {activeSceneName === scene.name && (
+                    <CheckCircle size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {selectedDevice && (
         <DeviceControlModal
@@ -1374,5 +1481,75 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => Styl
     fontSize: fontSize.md,
     color: colors.mutedForeground,
     textAlign: 'center',
+  },
+  
+  // Scene Picker Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '70%',
+    paddingBottom: spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.foreground,
+  },
+  modalClose: {
+    fontSize: fontSize['2xl'],
+    color: colors.mutedForeground,
+    fontWeight: fontWeight.medium,
+  },
+  sceneList: {
+    padding: spacing.lg,
+  },
+  sceneOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.muted,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  sceneOptionActive: {
+    backgroundColor: colors.primary + '20',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  sceneOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sceneOptionInfo: {
+    flex: 1,
+  },
+  sceneOptionText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.foreground,
+  },
+  sceneOptionSubtext: {
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+    marginTop: 2,
   },
 });

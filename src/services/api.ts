@@ -79,6 +79,7 @@ export const HomeApi = (client: AxiosInstance) => ({
   getRooms: (homeId: string) => client.get(`/homes/${homeId}/rooms`),
   createRoom: (homeId: string, payload: any) => client.post(`/homes/${homeId}/rooms`, payload),
   getRoom: (homeId: string, roomId: string) => client.get(`/homes/${homeId}/rooms/${roomId}`),
+  updateRoom: (homeId: string, roomId: string, payload: any) => client.put(`/homes/${homeId}/rooms/${roomId}`, payload),
   deleteRoom: (homeId: string, roomId: string) => client.delete(`/homes/${homeId}/rooms/${roomId}`),
   updateRoomLayout: (homeId: string, layout: any) => client.put(`/homes/${homeId}/layout`, { layout }),
   getEnergy: (homeId: string, range?: 'day' | 'week' | 'month') => {
