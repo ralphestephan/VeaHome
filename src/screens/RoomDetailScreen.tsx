@@ -146,7 +146,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     try {
       // Update room with scene ID
       await homeApi.updateRoom(homeId, String(roomId), {
-        sceneId: sceneId || null,
+        scene: sceneId || null,
       });
       
       // Update local state
@@ -350,15 +350,15 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       setDevices(enrichedDevices);
       
       // Load active scene name if room has a scene ID
-      if (baseRoom?.sceneId || baseRoom?.scene_id) {
+      if (baseRoom?.scene) {
         try {
           const scenesRes = await scenesApi.listScenes(homeId);
-          const scenesData = scenesRes?.data?.data || scenesRes?.data || [];
-          const activeScene = scenesData.find((s: any) => 
-            s.id === (baseRoom.sceneId || baseRoom.scene_id)
-          );
+          const scenesData = scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data || [];
+          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => s.id === baseRoom.scene) : null;
           if (activeScene) {
             setActiveSceneName(activeScene.name);
+          } else {
+            setActiveSceneName('');
           }
         } catch (err) {
           console.log('Error loading scene name:', err);
