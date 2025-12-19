@@ -267,8 +267,11 @@ export const useHomeData = (homeId: string | null | undefined) => {
               sceneNameMap.set(String(scene.id), scene.name);
             }
           });
+          console.log('[useHomeData] Scene name map:', Array.from(sceneNameMap.entries()));
+          console.log('[useHomeData] Raw rooms before mapping:', rawRooms.map((r: any) => ({ id: r.id, name: r.name, scene: r.scene })));
 
           const mappedRooms = (rawRooms || []).map((r: any) => mapRoom(r, sceneNameMap));
+          console.log('[useHomeData] Mapped rooms:', mappedRooms.map(r => ({ id: r.id, name: r.name, scene: r.scene, sceneName: r.sceneName })));
           const mappedDevices = (rawDevices || []).map(mapDevice);
           const enrichedDevices = await enrichAirguards(mappedDevices);
           const roomsWithDevices = applyDevicesToRooms(mappedRooms, enrichedDevices);

@@ -145,24 +145,30 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     if (!homeId) return;
 
     try {
-      console.log('[Assign Scene] Updating room with scene:', sceneId);
+      console.log('[Assign Scene] Starting - sceneId:', sceneId);
+      console.log('[Assign Scene] Available scenes:', scenes.map(s => ({ id: s.id, name: s.name })));
       
       // Update local state IMMEDIATELY before API call
       const selectedScene = scenes.find(s => s.id === sceneId);
+      console.log('[Assign Scene] Selected scene:', selectedScene);
       setActiveSceneName(selectedScene?.name || '');
       setScenePickerVisible(false);
       
       // Try with null first, fallback to empty string if backend rejects null
       let payload: any = { scene: sceneId };
+      console.log('[Assign Scene] Sending payload:', payload);
       
       try {
-        await homeApi.updateRoom(homeId, String(roomId), payload);
+        const response = await homeApi.updateRoom(homeId, String(roomId), payload);
+        console.log('[Assign Scene] API response:', response);
       } catch (validationError: any) {
+        console.log('[Assign Scene] Validation error:', validationError?.response?.status, validationError?.message);
         // If null is rejected (400 error), try with empty string
         if (validationError?.response?.status === 400 && sceneId === null) {
           console.log('[Assign Scene] Backend rejected null, trying empty string');
           payload = { scene: '' };
-          await homeApi.updateRoom(homeId, String(roomId), payload);
+          const retryResponse = await homeApi.updateRoom(homeId, String(roomId), payload);
+          console.log('[Assign Scene] Retry response:', retryResponse);
         } else {
           throw validationError;
         }
@@ -170,10 +176,12 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       
       showToast(sceneId ? `Scene assigned successfully` : 'Scene removed successfully', { type: 'success' });
       
+      console.log('[Assign Scene] Reloading room data...');
       // Reload data from backend to ensure sync
       await loadRoomData();
+      console.log('[Assign Scene] Reload complete. New activeSceneName:', activeSceneName);
     } catch (err: any) {
-      console.error('Error assigning scene:', err);
+      console.error('[Assign Scene] Error:', err);
       const errorMsg = err?.response?.data?.message || err?.message || 'Failed to assign scene';
       showToast(errorMsg, { type: 'error' });
       // Revert on error
