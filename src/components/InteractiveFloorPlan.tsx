@@ -131,6 +131,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
           lights: room.lights,
           power: room.power,
           scene: room.scene,
+          sceneName: room.sceneName,
           image: room.image,
         } as RoomData;
       })
@@ -494,7 +495,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
               />
               <View style={styles.roomHeroContent}>
                 <View>
-                  <Text style={styles.roomScene}>{roomData.scene || 'Custom scene'}</Text>
+                  <Text style={styles.roomScene}>{roomData.sceneName || 'No Scene'}</Text>
                   <Text style={styles.roomName}>{roomData.name}</Text>
                 </View>
                 <View style={styles.roomColorTag}>

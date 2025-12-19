@@ -3,6 +3,7 @@ export interface RoomData {
   name: string;
   image: string;
   scene: string;
+  sceneName?: string;
   temperature: number;
   humidity: number;
   lights: number;
