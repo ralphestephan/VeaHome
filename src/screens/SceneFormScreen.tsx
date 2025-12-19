@@ -90,10 +90,12 @@ export default function SceneFormScreen() {
       const scene = (response.data || []).find((s: any) => s.id === sceneId);
       if (scene) {
         setSceneName(scene.name);
-        setSelectedIcon(scene.icon);
-        if (scene.deviceStates) {
-          setDeviceStates(scene.deviceStates);
-          const deviceIds = Object.keys(scene.deviceStates);
+        setSelectedIcon(scene.icon || 'lightbulb');
+        // Backend returns device_states, not deviceStates
+        const states = scene.device_states || scene.deviceStates || {};
+        if (Object.keys(states).length > 0) {
+          setDeviceStates(states);
+          const deviceIds = Object.keys(states);
           setSelectedDevices(new Set(deviceIds));
         }
       }

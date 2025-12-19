@@ -45,7 +45,7 @@ import DeviceControlModal from '../components/DeviceControlModal';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
-import { getApiClient, HomeApi, HubApi, PublicAirguardApi } from '../services/api';
+import { getApiClient, HomeApi, HubApi, PublicAirguardApi, ScenesApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useTheme } from '../context/ThemeContext';
 import { decodeAlertFlags } from '../components/AirguardAlertBanner';
@@ -87,6 +87,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const [autoClimate, setAutoClimate] = useState(true);
   const { controlDevice, toggleDevice, setValue } = useDeviceControl();
   const { showToast } = useToast();
+  const [activeSceneName, setActiveSceneName] = useState<string>('');
 
   const [selectedDevice, setSelectedDevice] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -95,6 +96,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const homeApi = HomeApi(client);
   const hubApi = HubApi(client);
   const airguardApi = PublicAirguardApi(client);
+  const scenesApi = ScenesApi(client);
 
   const handleDeleteRoom = () => {
     if (isDemoMode) return;
@@ -302,6 +304,25 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
       setRoom(nextRoom);
       setDevices(enrichedDevices);
+      
+      // Load active scene name if room has a scene ID
+      if (baseRoom?.sceneId || baseRoom?.scene_id) {
+        try {
+          const scenesRes = await scenesApi.listScenes(homeId);
+          const scenesData = scenesRes?.data?.data || scenesRes?.data || [];
+          const activeScene = scenesData.find((s: any) => 
+            s.id === (baseRoom.sceneId || baseRoom.scene_id)
+          );
+          if (activeScene) {
+            setActiveSceneName(activeScene.name);
+          }
+        } catch (err) {
+          console.log('Error loading scene name:', err);
+        }
+      } else {
+        setActiveSceneName('');
+      }
+      
       const thermostat = enrichedDevices.find(
         (device: any) => device.type === 'thermostat' || device.type === 'ac'
       );
@@ -742,8 +763,8 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                   <Play size={20} color={colors.primary} />
                 </View>
                 <View style={styles.sceneText}>
-                  <Text style={styles.sceneName}>{room.activeScene || 'No Scene Active'}</Text>
-                  <Text style={styles.sceneDetail}>Tap to select a scene for this room</Text>
+                  <Text style={styles.sceneName}>{room.activeScene || activeSceneName || 'No Scene Active'}</Text>
+                  <Text style={styles.sceneDetail}>Tap to manage scenes</Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.sceneButton}>

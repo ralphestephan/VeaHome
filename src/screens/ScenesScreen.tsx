@@ -522,7 +522,16 @@ export default function ScenesScreen() {
                 </View>
                 <Text style={styles.sceneCardName}>{scene.name}</Text>
                 <View style={styles.sceneCardDetails}>
-                  <Text style={styles.sceneCardDevices}>{scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices</Text>
+                  <Text style={styles.sceneCardDevices}>{(() => {
+                    const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
+                    const count = deviceIds.length;
+                    if (count === 0) return 'No devices';
+                    if (count === 1) {
+                      const device = devices?.find(d => d.id === deviceIds[0]);
+                      return device?.name || '1 device';
+                    }
+                    return `${count} devices`;
+                  })()}</Text>
                   {scene.time && (
                     <>
                       <Text style={styles.sceneCardSeparator}> • </Text>
@@ -553,7 +562,16 @@ export default function ScenesScreen() {
                 <View style={styles.sceneListContent}>
                   <Text style={styles.sceneListName}>{scene.name}</Text>
                   <Text style={styles.sceneListDescription}>
-                    {scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices • {scene.description || 'No description'}
+                    {(() => {
+                      const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
+                      const count = deviceIds.length;
+                      if (count === 0) return 'No devices configured';
+                      if (count === 1) {
+                        const device = devices?.find(d => d.id === deviceIds[0]);
+                        return device?.name || '1 device';
+                      }
+                      return `${count} devices`;
+                    })()}
                   </Text>
                 </View>
                 {scene.time && (
