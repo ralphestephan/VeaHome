@@ -16,6 +16,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -30,7 +32,7 @@ export function useAirguardAlerts(devices: Device[]) {
       const airguards = devices.filter(d => d.type === 'airguard');
       
       for (const device of airguards) {
-        const currentAlertFlags = device.airQualityData?.alertFlags ?? 0;
+        const currentAlertFlags = device.airQualityData?.alert ? 1 : 0;
         const deviceId = device.id;
         const previousState = alertStatesRef.current.get(deviceId);
 

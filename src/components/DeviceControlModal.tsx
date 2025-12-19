@@ -1864,4 +1864,50 @@ const createStyles = (colors: any, shadows: any) =>
       fontWeight: '700',
       color: '#fff',
     },
+    airguardScrollView: {
+      flex: 1,
+    },
+    airguardScrollContent: {
+      padding: 16,
+    },
+    statusBadgeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    statusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+    },
+    statusOnline: {
+      backgroundColor: 'rgba(0, 229, 160, 0.15)',
+    },
+    statusOffline: {
+      backgroundColor: 'rgba(107, 114, 128, 0.15)',
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 6,
+    },
+    dotOnline: {
+      backgroundColor: '#00E5A0',
+    },
+    dotOffline: {
+      backgroundColor: '#6B7280',
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    statusTextOnline: {
+      color: '#00E5A0',
+    },
+    statusTextOffline: {
+      color: '#6B7280',
+    },
   });

@@ -449,7 +449,7 @@ export default function AutomationFormScreen() {
           </View>
 
           {actions.map((action) => {
-            const actionType = ACTION_TYPES.find(at => at.type === action.type);
+            const actionType = ACTION_TYPES.find(at => at.id === action.type);
             const needsDevice = action.type === 'device_on' || action.type === 'device_off';
             const selectedDevice = needsDevice ? devices.find(d => d.id === action.deviceId) : null;
 

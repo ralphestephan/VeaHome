@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
-import { getApiClient, HomeApi, HubApi, PublicAirguardApi } from '../services/api';
+import { getApiClient, HomeApi, HubApi, PublicAirguardApi, ScenesApi } from '../services/api';
 import { Room, Device } from '../types';
 import { initialDemoDevices, initialDemoRooms } from '../context/DemoContext';
 
@@ -46,7 +46,10 @@ const mapDevice = (raw: any): Device => {
   } as Device;
 };
 
-const mapRoom = (raw: any): Room => {
+const mapRoom = (raw: any, sceneNameMap?: Map<string, string>): Room => {
+  const sceneId = raw.scene ?? '';
+  const sceneName = sceneId && sceneNameMap ? sceneNameMap.get(String(sceneId)) : undefined;
+  
   return {
     id: String(raw.id),
     name: raw.name,
@@ -55,7 +58,8 @@ const mapRoom = (raw: any): Room => {
     humidity: raw.humidity,
     lights: raw.lights ?? 0,
     devices: [],
-    scene: raw.scene ?? '',
+    scene: sceneId,
+    sceneName: sceneName,
     power: raw.power,
     airQuality: raw.airQuality ?? raw.air_quality,
     pm25: raw.pm25,
@@ -231,15 +235,25 @@ export const useHomeData = (homeId: string | null | undefined) => {
         setError(null);
         const net = await NetInfo.fetch();
         if (net.isConnected) {
-          const [roomsRes, devicesRes] = await Promise.all([
+          const [roomsRes, devicesRes, scenesRes] = await Promise.all([
             homeApi.getRooms(effectiveHomeId).catch(() => ({ data: [] })),
             hubApi.listDevices(effectiveHomeId).catch(() => ({ data: [] })),
+            ScenesApi(token).listScenes(effectiveHomeId).catch(() => ({ data: [] })),
           ]);
 
           const rawRooms = unwrap<any[]>(roomsRes, 'rooms');
           const rawDevices = unwrap<any[]>(devicesRes, 'devices');
+          const rawScenes = unwrap<any[]>(scenesRes, 'scenes');
 
-          const mappedRooms = (rawRooms || []).map(mapRoom);
+          // Build scene ID -> name map
+          const sceneNameMap = new Map<string, string>();
+          (rawScenes || []).forEach((scene: any) => {
+            if (scene.id && scene.name) {
+              sceneNameMap.set(String(scene.id), scene.name);
+            }
+          });
+
+          const mappedRooms = (rawRooms || []).map((r: any) => mapRoom(r, sceneNameMap));
           const mappedDevices = (rawDevices || []).map(mapDevice);
           const enrichedDevices = await enrichAirguards(mappedDevices);
           const roomsWithDevices = applyDevicesToRooms(mappedRooms, enrichedDevices);

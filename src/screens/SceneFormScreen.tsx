@@ -26,7 +26,7 @@ import {
   CheckCircle,
   ChevronRight,
 } from 'lucide-react-native';
-import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
+import { spacing, borderRadius, fontSize, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import CreationHero from '../components/CreationHero';

@@ -69,6 +69,7 @@ export interface Room {
   lights: number;
   devices: Device[];
   scene: string;
+  sceneName?: string;
   power: string;
   airQuality?: number;
   pm25?: number;
