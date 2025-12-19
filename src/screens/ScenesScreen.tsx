@@ -553,7 +553,7 @@ export default function ScenesScreen() {
                 <View style={styles.sceneListContent}>
                   <Text style={styles.sceneListName}>{scene.name}</Text>
                   <Text style={styles.sceneListDescription}>
-                    {scene.devices} devices • {scene.description || 'No description'}
+                    {scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices • {scene.description || 'No description'}
                   </Text>
                 </View>
                 {scene.time && (

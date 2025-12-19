@@ -731,24 +731,26 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           <SectionHeader 
             title="Active Scene" 
             action={{
-              label: 'Change',
+              label: 'Scenes',
               onPress: () => navigation.navigate('Dashboard', { screen: 'Scenes' }),
             }}
           />
-          <NeonCard glow="primary" style={styles.sceneCard}>
-            <View style={styles.sceneInfo}>
-              <View style={styles.sceneIcon}>
-                <Play size={20} color={colors.primary} />
+          <TouchableOpacity onPress={() => navigation.navigate('Dashboard', { screen: 'Scenes' })}>
+            <NeonCard glow="primary" style={styles.sceneCard}>
+              <View style={styles.sceneInfo}>
+                <View style={styles.sceneIcon}>
+                  <Play size={20} color={colors.primary} />
+                </View>
+                <View style={styles.sceneText}>
+                  <Text style={styles.sceneName}>{room.activeScene || 'No Scene Active'}</Text>
+                  <Text style={styles.sceneDetail}>Tap to select a scene for this room</Text>
+                </View>
               </View>
-              <View style={styles.sceneText}>
-                <Text style={styles.sceneName}>{room.scene || 'No Scene Active'}</Text>
-                <Text style={styles.sceneDetail}>{room.lights || 0} lights • Climate auto</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.sceneButton}>
-              <Settings size={18} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </NeonCard>
+              <TouchableOpacity style={styles.sceneButton}>
+                <Settings size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </NeonCard>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Controls */}
