@@ -34,6 +34,7 @@ import {
   Trash2,
   CheckCircle,
   UserX,
+  Plus,
 } from 'lucide-react-native';
 import { 
   spacing, 
@@ -791,38 +792,52 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           </View>
         )}
 
-        {/* Scene Controls */}
-        <View style={styles.section}>
-          <SectionHeader 
-            title="Active Scene" 
-            action={{
-              label: 'Scenes',
-              onPress: () => navigation.navigate('Dashboard', { screen: 'Scenes' }),
-            }}
-          />
-          <TouchableOpacity onPress={() => navigation.navigate('Dashboard', { screen: 'Scenes' })}>
-            <NeonCard glow="primary" style={styles.sceneCard}>
-              <View style={styles.sceneInfo}>
-                <View style={styles.sceneIcon}>
-                  <Play size={20} color={colors.primary} />
+        {/* Scene Controls - Only show if scene is assigned */}
+        {activeSceneName && (
+          <View style={styles.section}>
+            <SectionHeader 
+              title="Active Scene" 
+              action={{
+                label: 'Scenes',
+                onPress: () => navigation.navigate('Dashboard', { screen: 'Scenes' }),
+              }}
+            />
+            <TouchableOpacity onPress={() => navigation.navigate('Dashboard', { screen: 'Scenes' })}>
+              <NeonCard glow="primary" style={styles.sceneCard}>
+                <View style={styles.sceneInfo}>
+                  <View style={styles.sceneIcon}>
+                    <Play size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.sceneText}>
+                    <Text style={styles.sceneName}>{activeSceneName}</Text>
+                    <Text style={styles.sceneDetail}>Tap to manage scenes</Text>
+                  </View>
                 </View>
-                <View style={styles.sceneText}>
-                  <Text style={styles.sceneName}>{activeSceneName || 'No Scene Active'}</Text>
-                  <Text style={styles.sceneDetail}>Tap to manage scenes</Text>
-                </View>
-              </View>
-              <TouchableOpacity 
-                style={styles.sceneButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setScenePickerVisible(true);
-                }}
-              >
-                <Settings size={18} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            </NeonCard>
-          </TouchableOpacity>
-        </View>
+                <TouchableOpacity 
+                  style={styles.sceneButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setScenePickerVisible(true);
+                  }}
+                >
+                  <Settings size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </NeonCard>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Add Scene Button - Only show if no scene assigned and not in demo mode */}
+        {!activeSceneName && !isDemoMode && (
+          <View style={styles.section}>
+            <TouchableOpacity onPress={() => setScenePickerVisible(true)}>
+              <NeonCard style={styles.addSceneCard}>
+                <Plus size={20} color={colors.primary} />
+                <Text style={styles.addSceneText}>Assign Scene to Room</Text>
+              </NeonCard>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Quick Controls */}
         <View style={styles.section}>
@@ -1250,6 +1265,21 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => Styl
     backgroundColor: colors.muted,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  addSceneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  addSceneText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.primary,
   },
   
   // Section
