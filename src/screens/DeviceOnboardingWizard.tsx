@@ -33,7 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
-import { provisionAirguardWithUI } from '../services/wifiProvisioning';
+import { provisionAirguardWithUI, isWifiProvisioningAvailable } from '../services/wifiProvisioning';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -291,6 +291,27 @@ export default function DeviceOnboardingWizard() {
     }
     if (!deviceWifiPassword.trim()) {
       Alert.alert('Error', 'Please enter your WiFi password');
+      return;
+    }
+    
+    // Check if WiFi provisioning is available
+    if (!isWifiProvisioningAvailable()) {
+      Alert.alert(
+        'Manual Configuration Required',
+        'Automatic WiFi provisioning is not available on this device.\n\n' +
+        'Please follow these steps:\n' +
+        '1. Connect to "SmartMonitor_Setup" WiFi network\n' +
+        '2. Open browser and go to 192.168.4.1\n' +
+        '3. Enter your WiFi credentials\n' +
+        '4. Return to this app when done',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'I\'ve Done This', 
+            onPress: () => setStep('ready')
+          }
+        ]
+      );
       return;
     }
     

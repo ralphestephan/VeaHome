@@ -36,6 +36,11 @@ export const getApiClient = (getToken?: () => Promise<string | null>): AxiosInst
     });
 
     apiClient.interceptors.request.use(async (config) => {
+      console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
+      if (config.data) {
+        console.log('[API] Request data:', JSON.stringify(config.data).substring(0, 200));
+      }
+      
       if (tokenProvider) {
         const token = await tokenProvider();
         if (token) {
@@ -45,6 +50,22 @@ export const getApiClient = (getToken?: () => Promise<string | null>): AxiosInst
       }
       return config;
     });
+
+    apiClient.interceptors.response.use(
+      (response) => {
+        console.log(`[API] ${response.status} ${response.config.url}`);
+        return response;
+      },
+      (error) => {
+        if (error.response) {
+          console.error(`[API] Error ${error.response.status} ${error.config?.url}`);
+          console.error('[API] Error data:', error.response.data);
+        } else {
+          console.error(`[API] Network error: ${error.message}`);
+        }
+        return Promise.reject(error);
+      }
+    );
   }
   return apiClient;
 };

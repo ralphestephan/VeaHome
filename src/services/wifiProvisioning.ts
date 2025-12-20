@@ -16,7 +16,6 @@
  */
 
 import { Platform, PermissionsAndroid, Alert } from 'react-native';
-import WifiManager from 'react-native-wifi-reborn';
 
 interface ProvisioningResult {
   success: boolean;
@@ -30,12 +29,35 @@ const DEVICE_AP_IP = '192.168.4.1';
 const PROVISIONING_ENDPOINT = '/api/provision';
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
 
+// Dynamic import to handle library not being available
+let WifiManager: any = null;
+
+try {
+  WifiManager = require('react-native-wifi-reborn').default;
+} catch (error) {
+  console.log('[WiFi Provisioning] Library not available:', error);
+}
+
+/**
+ * Check if WiFi provisioning is available on this platform
+ */
+export function isWifiProvisioningAvailable(): boolean {
+  // WiFi provisioning only works on Android
+  // iOS doesn't allow programmatic WiFi control
+  return Platform.OS === 'android' && WifiManager !== null;
+}
+
 /**
  * Request WiFi permissions on Android
  */
 async function requestWifiPermissions(): Promise<boolean> {
   if (Platform.OS !== 'android') {
-    return true; // iOS handles permissions differently
+    return false; // iOS doesn't support this
+  }
+
+  if (!WifiManager) {
+    Alert.alert('Error', 'WiFi provisioning is not available on this device');
+    return false;
   }
 
   try {
@@ -60,6 +82,8 @@ async function requestWifiPermissions(): Promise<boolean> {
  * Scan for available WiFi networks
  */
 async function scanNetworks(): Promise<string[]> {
+  if (!WifiManager) return [];
+  
   try {
     const networks = await WifiManager.loadWifiList();
     return networks.map((network: any) => network.SSID);
@@ -73,6 +97,8 @@ async function scanNetworks(): Promise<string[]> {
  * Check if device AP is available
  */
 async function isDeviceAPAvailable(): Promise<boolean> {
+  if (!WifiManager) return false;
+  
   try {
     const networks = await scanNetworks();
     return networks.some(ssid => ssid.startsWith(DEVICE_AP_PREFIX));
@@ -86,6 +112,8 @@ async function isDeviceAPAvailable(): Promise<boolean> {
  * Connect to device AP
  */
 async function connectToDeviceAP(): Promise<boolean> {
+  if (!WifiManager) return false;
+  
   try {
     console.log('[WiFiProvisioning] Connecting to device AP...');
     
@@ -111,7 +139,7 @@ async function connectToDeviceAP(): Promise<boolean> {
 
     // Verify connection
     const currentSSID = await WifiManager.getCurrentWifiSSID();
-    const isConnected = currentSSID.startsWith(DEVICE_AP_PREFIX);
+    const isConnected = currentSSID && currentSSID.startsWith(DEVICE_AP_PREFIX);
     
     console.log('[WiFiProvisioning] Current SSID:', currentSSID);
     console.log('[WiFiProvisioning] Connected:', isConnected);
@@ -225,6 +253,14 @@ export async function provisionAirguard(
   try {
     console.log('[WiFiProvisioning] Starting provisioning for:', deviceName);
 
+    // Check if WiFi provisioning is available
+    if (!isWifiProvisioningAvailable()) {
+      return {
+        success: false,
+        error: 'WiFi provisioning is not available on this platform. Please configure the device manually.',
+      };
+    }
+
     // Step 1: Request permissions
     const hasPermissions = await requestWifiPermissions();
     if (!hasPermissions) {
@@ -235,8 +271,13 @@ export async function provisionAirguard(
     }
 
     // Step 2: Save current WiFi for restoration
-    const originalSSID = await WifiManager.getCurrentWifiSSID();
-    console.log('[WiFiProvisioning] Original SSID:', originalSSID);
+    let originalSSID = '';
+    try {
+      originalSSID = await WifiManager.getCurrentWifiSSID();
+      console.log('[WiFiProvisioning] Original SSID:', originalSSID);
+    } catch (error) {
+      console.log('[WiFiProvisioning] Could not get current SSID:', error);
+    }
 
     // Step 3: Check if device AP is available
     const apAvailable = await isDeviceAPAvailable();
