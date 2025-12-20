@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { 
   listHomes, 
   createHome, 
-  getHome, 
+  getHome,
+  deleteHome,
   getRooms, 
   getRoom, 
   createRoomHandler,
@@ -21,6 +22,7 @@ const router = Router();
 router.get('/', authenticateToken, listHomes);
 router.post('/', authenticateToken, createHome);
 router.get('/:homeId', authenticateToken, getHome);
+router.delete('/:homeId', authenticateToken, deleteHome);
 router.get('/:homeId/rooms', authenticateToken, getRooms);
 router.post('/:homeId/rooms', authenticateToken, validate(homeSchemas.createRoom), createRoomHandler);
 router.get('/:homeId/rooms/:roomId', authenticateToken, getRoom);

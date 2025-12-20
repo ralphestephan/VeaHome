@@ -28,3 +28,8 @@ export async function updateHomeLayout(homeId: string, layout: Record<string, un
 export async function saveModel3dUrl(homeId: string, model3dUrl: string | null) {
   await query('UPDATE homes SET model3d_url = $2 WHERE id = $1', [homeId, model3dUrl]);
 }
+
+export async function deleteHome(homeId: string) {
+  // Cascade delete will handle rooms, devices, scenes, etc.
+  await query('DELETE FROM homes WHERE id = $1', [homeId]);
+}

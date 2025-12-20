@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -34,16 +35,18 @@ import {
   MessageCircle, 
   Star,
   QrCode,
-  LogOut
+  LogOut,
+  UserPlus,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { getApiClient, HomeApi } from '../services/api';
 
 
 export default function SettingsScreen() {
-  const { logout } = useAuth();
+  const { logout, user, token } = useAuth();
   const navigation = useNavigation<any>();
   const { colors, gradients, shadows, mode, setMode } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
@@ -56,9 +59,44 @@ export default function SettingsScreen() {
   const [vibration, setVibration] = useState(true);
   const [cloudSync, setCloudSync] = useState(true);
   const [autoBackup, setAutoBackup] = useState(true);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleDeleteHome = () => {
+    Alert.alert(
+      'Delete Home',
+      'Are you sure you want to delete this home? This will permanently delete all rooms, devices, scenes, and automations. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeleteLoading(true);
+              const client = getApiClient(async () => token);
+              const homeApi = HomeApi(client);
+              await homeApi.deleteHome(user?.homeId || '');
+              Alert.alert('Success', 'Home deleted successfully', [
+                { text: 'OK', onPress: () => logout() }
+              ]);
+            } catch (error: any) {
+              console.error('Delete home error:', error);
+              Alert.alert('Error', error.response?.data?.message || 'Failed to delete home');
+            } finally {
+              setDeleteLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleInviteUser = () => {
+    Alert.alert('Invite User', 'User invitation feature coming soon! You\'ll be able to share access to your home with family members.');
   };
 
   const handleAddHub = () => {
@@ -413,6 +451,20 @@ export default function SettingsScreen() {
         {/* Security */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Security & Privacy</Text>
+          <TouchableOpacity style={styles.settingItem} onPress={handleInviteUser}>
+            <View style={styles.settingIcon}>
+              <UserPlus size={20} color={colors.primary} />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingLabel}>Invite User</Text>
+              <Text style={styles.settingValue}>Share home access</Text>
+            </View>
+            <ChevronRight
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.settingItem} onPress={handleSecuritySettings}>
             <View style={styles.settingIcon}>
               <Shield size={20} color={colors.primary} />
@@ -494,6 +546,32 @@ export default function SettingsScreen() {
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Rate App</Text>
               <Text style={styles.settingValue}>Share your feedback</Text>
+            </View>
+            <ChevronRight
+              size={20}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger Zone */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.destructive }]}>Danger Zone</Text>
+          <TouchableOpacity 
+            style={[styles.settingItem, deleteLoading && styles.settingItemDisabled]} 
+            onPress={handleDeleteHome}
+            disabled={deleteLoading}
+          >
+            <View style={styles.settingIcon}>
+              {deleteLoading ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : (
+                <Trash2 size={20} color={colors.destructive} />
+              )}
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Delete Home</Text>
+              <Text style={styles.settingValue}>Permanently delete this home</Text>
             </View>
             <ChevronRight
               size={20}
@@ -602,6 +680,9 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       marginBottom: spacing.sm,
       gap: spacing.md,
       ...shadows.sm,
+    },
+    settingItemDisabled: {
+      opacity: 0.5,
     },
     settingIcon: {
       width: 40,

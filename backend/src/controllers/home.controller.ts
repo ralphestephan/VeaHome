@@ -6,6 +6,7 @@ import {
   createHome as createHomeRecord,
   getHomeById,
   updateHomeLayout as saveHomeLayout,
+  deleteHome as deleteHomeRecord,
 } from '../repositories/homesRepository';
 import {
   getRoomsByHomeId,
@@ -273,7 +274,32 @@ export async function getRoomEnergy(req: Request, res: Response) {
     return successResponse(res, { energyData, source: 'mock' });
   } catch (error: any) {
     console.error('Get room energy error:', error);
-    return errorResponse(res, error.message || 'Failed to get room energy data', 500);
+    return errorResponse(res, error.message || 'Failed to get room energy', 500);
+  }
+}
+
+export async function deleteHome(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId } = req.params;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    // Verify user is the owner
+    if (home.owner_id !== userId) {
+      return errorResponse(res, 'Only the home owner can delete the home', 403);
+    }
+
+    await deleteHomeRecord(homeId);
+
+    return successResponse(res, {
+      message: 'Home deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('Delete home error:', error);
+    return errorResponse(res, error.message || 'Failed to delete home', 500);
   }
 }
 

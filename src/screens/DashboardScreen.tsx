@@ -285,13 +285,42 @@ export default function DashboardScreen() {
 
   const handleSceneActivate = async () => {
     setQuickActionLoading('scene');
-    if (isDemoMode) {
-      activateScene('s2'); // Activate "Evening Relax" scene
-    }
-    setTimeout(() => {
+    try {
+      if (isDemoMode) {
+        activateScene('s2'); // Activate "Evening Relax" scene
+        setTimeout(() => {
+          setQuickActionLoading(null);
+          showToast('Evening scene activated', { type: 'success' });
+        }, 500);
+      } else {
+        // Find first available scene (prefer one with "evening" or "night" in name)
+        const client = getApiClient(async () => token);
+        const scenesApi = (await import('../services/api')).ScenesApi(client);
+        const response = await scenesApi.listScenes(homeId);
+        const scenes = response.data?.scenes || [];
+        
+        if (scenes.length === 0) {
+          showToast('No scenes available. Create one first!', { type: 'error' });
+          setQuickActionLoading(null);
+          return;
+        }
+        
+        // Find evening/night scene or use first one
+        const eveningScene = scenes.find((s: any) => 
+          s.name.toLowerCase().includes('evening') || 
+          s.name.toLowerCase().includes('night')
+        ) || scenes[0];
+        
+        await scenesApi.activateScene(homeId, eveningScene.id);
+        await refresh();
+        setQuickActionLoading(null);
+        showToast(`${eveningScene.name} activated`, { type: 'success' });
+      }
+    } catch (error) {
+      console.error('Scene activation error:', error);
       setQuickActionLoading(null);
-      showToast('Evening scene activated', { type: 'success' });
-    }, 500);
+      showToast('Failed to activate scene', { type: 'error' });
+    }
   };
 
   // Device modal handlers
