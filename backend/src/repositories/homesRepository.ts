@@ -38,22 +38,42 @@ export async function saveModel3dUrl(homeId: string, model3dUrl: string | null) 
 }
 
 export async function deleteHome(homeId: string) {
+  console.log('[REPO] deleteHome called for homeId:', homeId);
+  
   // Delete home members first (if table exists)
   try {
-    await query('DELETE FROM home_members WHERE home_id = $1', [homeId]);
-  } catch (err) {
+    console.log('[REPO] Attempting to delete from home_members...');
+    const result = await query('DELETE FROM home_members WHERE home_id = $1', [homeId]);
+    console.log('[REPO] Deleted from home_members, rowCount:', result.rowCount);
+  } catch (err: any) {
     // Ignore error if table doesn't exist yet
-    console.log('home_members table may not exist yet, skipping...');
+    console.log('[REPO] home_members error (may not exist):', err.message);
   }
   
   // Delete home invitations (if table exists)
   try {
-    await query('DELETE FROM home_invitations WHERE home_id = $1', [homeId]);
-  } catch (err) {
+    console.log('[REPO] Attempting to delete from home_invitations...');
+    const result = await query('DELETE FROM home_invitations WHERE home_id = $1', [homeId]);
+    console.log('[REPO] Deleted from home_invitations, rowCount:', result.rowCount);
+  } catch (err: any) {
     // Ignore error if table doesn't exist yet
-    console.log('home_invitations table may not exist yet, skipping...');
+    console.log('[REPO] home_invitations error (may not exist):', err.message);
   }
   
   // Cascade delete will handle rooms, devices, scenes, etc.
-  await query('DELETE FROM homes WHERE id = $1', [homeId]);
+  console.log('[REPO] Attempting to delete from homes table...');
+  try {
+    const result = await query('DELETE FROM homes WHERE id = $1', [homeId]);
+    console.log('[REPO] Deleted from homes, rowCount:', result.rowCount);
+    
+    if (result.rowCount === 0) {
+      console.log('[REPO] WARNING: No rows deleted from homes table - home may not exist');
+      throw new Error('Home not found or already deleted');
+    }
+  } catch (err: any) {
+    console.error('[REPO] Failed to delete from homes table:', err.message);
+    throw err;
+  }
+  
+  console.log('[REPO] deleteHome completed successfully');
 }

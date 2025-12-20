@@ -284,21 +284,35 @@ export async function deleteHome(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
+    console.log('[DELETE HOME] Starting deletion process');
+    console.log('[DELETE HOME] User ID:', userId);
+    console.log('[DELETE HOME] Home ID:', homeId);
+
     const home = await ensureHomeAccess(res, homeId, userId);
-    if (!home) return;
+    if (!home) {
+      console.log('[DELETE HOME] Home access check failed');
+      return;
+    }
+
+    console.log('[DELETE HOME] Home found:', home.name);
+    console.log('[DELETE HOME] Owner ID:', home.owner_id);
 
     // Verify user is the owner
     if (home.owner_id !== userId) {
+      console.log('[DELETE HOME] User is not the owner - access denied');
       return errorResponse(res, 'Only the home owner can delete the home', 403);
     }
 
+    console.log('[DELETE HOME] Calling deleteHomeRecord...');
     await deleteHomeRecord(homeId);
+    console.log('[DELETE HOME] Successfully deleted home');
 
     return successResponse(res, {
       message: 'Home deleted successfully',
     });
   } catch (error: any) {
-    console.error('Delete home error:', error);
+    console.error('[DELETE HOME] Error:', error);
+    console.error('[DELETE HOME] Error stack:', error.stack);
     return errorResponse(res, error.message || 'Failed to delete home', 500);
   }
 }
