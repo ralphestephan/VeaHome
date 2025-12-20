@@ -33,7 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
-import { provisionAirguardWithUI, isWifiProvisioningAvailable } from '../services/wifiProvisioning';
+import { provisionDevice } from '../services/deviceProvisioning';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -286,7 +286,7 @@ export default function DeviceOnboardingWizard() {
 
   const handleConnectDeviceWifi = async () => {
     if (!deviceWifiSSID.trim()) {
-      Alert.alert('Error', 'Please enter your home WiFi SSID');
+      Alert.alert('Error', 'Please enter your home WiFi name');
       return;
     }
     if (!deviceWifiPassword.trim()) {
@@ -294,59 +294,33 @@ export default function DeviceOnboardingWizard() {
       return;
     }
     
-    // Check if WiFi provisioning is available
-    if (!isWifiProvisioningAvailable()) {
-      Alert.alert(
-        'Manual Configuration Required',
-        'Automatic WiFi provisioning is not available on this device.\n\n' +
-        'Please follow these steps:\n' +
-        '1. Connect to "SmartMonitor_Setup" WiFi network\n' +
-        '2. Open browser and go to 192.168.4.1\n' +
-        '3. Enter your WiFi credentials\n' +
-        '4. Return to this app when done',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'I\'ve Done This', 
-            onPress: () => setStep('ready')
-          }
-        ]
-      );
-      return;
-    }
-    
     setLoading(true);
     setProvisioningError('');
     
     try {
-      // Use seamless provisioning service
-      const result = await provisionAirguardWithUI(
-        deviceName,
+      const result = await provisionDevice(
         deviceWifiSSID,
         deviceWifiPassword,
         user?.email,
-        (step) => {
-          setProvisioningStep(step);
-        }
+        (step) => setProvisioningStep(step)
       );
 
       if (result.success && result.deviceId) {
-        // Update the smartMonitorId with the returned device ID
         setAirguardSmartMonitorId(result.deviceId.toString());
         
         Alert.alert(
-          'Success',
-          `Device configured successfully! Device ID: ${result.deviceId}\n\nThe device will restart and connect to your WiFi network.`,
-          [{ text: 'OK', onPress: () => setStep('ready') }]
+          'Device Connected!',
+          `Your device is now connected to WiFi and ready to use.`,
+          [{ text: 'Continue', onPress: () => setStep('ready') }]
         );
       } else {
-        setProvisioningError(result.error || 'Provisioning failed');
-        Alert.alert('Error', result.error || 'Failed to provision device');
+        setProvisioningError(result.error || 'Setup failed');
+        Alert.alert('Setup Failed', result.error || 'Could not configure device');
       }
     } catch (e: any) {
-      const errorMsg = e?.message || 'Failed to connect device';
-      setProvisioningError(errorMsg);
-      Alert.alert('Error', errorMsg);
+      const msg = e?.message || 'An error occurred';
+      setProvisioningError(msg);
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
       setProvisioningStep('');
