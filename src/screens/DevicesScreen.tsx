@@ -550,9 +550,15 @@ export default function DevicesScreen() {
                     const api = HubApi(getApiClient(async () => token));
                     await api.deleteDevice(homeId, deviceId);
                     console.log('[DevicesScreen] Device deleted successfully');
+                    
+                    // Close modal first
                     setModalVisible(false);
                     setSelectedDevice(null);
-                    refresh();
+                    
+                    // Then refresh the device list
+                    console.log('[DevicesScreen] Refreshing device list...');
+                    await refresh();
+                    console.log('[DevicesScreen] Device list refreshed');
                   } catch (e: any) {
                     console.error('[DevicesScreen] Failed to delete device:', e);
                     console.error('[DevicesScreen] Error response:', e.response?.data);
