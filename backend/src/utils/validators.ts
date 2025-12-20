@@ -151,7 +151,13 @@ export const automationSchemas = {
     triggers: Joi.array().optional(), // New format
     actions: Joi.array().required(),
     enabled: Joi.boolean().optional(),
-  }).or('trigger', 'triggers'), // Require at least one
+  }).custom((value, helpers) => {
+    // Require at least one of trigger or triggers
+    if (!value.trigger && !value.triggers) {
+      return helpers.error('any.required', { label: 'trigger or triggers' });
+    }
+    return value;
+  }),
   updateAutomation: Joi.object({
     name: Joi.string().optional(),
     trigger: Joi.object().optional(), // Legacy support
