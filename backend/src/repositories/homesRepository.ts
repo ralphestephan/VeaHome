@@ -38,6 +38,22 @@ export async function saveModel3dUrl(homeId: string, model3dUrl: string | null) 
 }
 
 export async function deleteHome(homeId: string) {
+  // Delete home members first (if table exists)
+  try {
+    await query('DELETE FROM home_members WHERE home_id = $1', [homeId]);
+  } catch (err) {
+    // Ignore error if table doesn't exist yet
+    console.log('home_members table may not exist yet, skipping...');
+  }
+  
+  // Delete home invitations (if table exists)
+  try {
+    await query('DELETE FROM home_invitations WHERE home_id = $1', [homeId]);
+  } catch (err) {
+    // Ignore error if table doesn't exist yet
+    console.log('home_invitations table may not exist yet, skipping...');
+  }
+  
   // Cascade delete will handle rooms, devices, scenes, etc.
   await query('DELETE FROM homes WHERE id = $1', [homeId]);
 }
