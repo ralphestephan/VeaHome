@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 
 export interface NotificationItem {
@@ -18,6 +19,8 @@ interface NotificationsContextValue {
   setNotifications: React.Dispatch<React.SetStateAction<NotificationItem[]>>;
   addNotification: (notification: Omit<NotificationItem, 'id'>) => void;
 }
+
+const NOTIFICATIONS_STORAGE_KEY = '@veahome_notifications';
 
 const notificationsSeed: NotificationItem[] = [
   {
@@ -70,16 +73,43 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
   const { token } = useAuth();
   const isDemoMode = token === 'DEMO_TOKEN';
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  // Load demo notifications only in demo mode
+  // Load notifications from storage on mount
   useEffect(() => {
-    if (isDemoMode) {
-      setNotifications(notificationsSeed);
-    } else {
-      // Real users start with empty notifications
-      setNotifications([]);
-    }
+    const loadNotifications = async () => {
+      try {
+        if (isDemoMode) {
+          setNotifications(notificationsSeed);
+        } else {
+          const stored = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setNotifications(parsed);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      } finally {
+        setLoaded(true);
+      }
+    };
+    loadNotifications();
   }, [isDemoMode]);
+
+  // Persist notifications to storage whenever they change (except demo mode)
+  useEffect(() => {
+    if (!loaded || isDemoMode) return;
+    
+    const saveNotifications = async () => {
+      try {
+        await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications));
+      } catch (error) {
+        console.error('Failed to save notifications:', error);
+      }
+    };
+    saveNotifications();
+  }, [notifications, loaded, isDemoMode]);
 
   const markAllRead = useCallback(() => {
     setNotifications([]);

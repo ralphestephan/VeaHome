@@ -58,7 +58,8 @@ export const createInvitation = async (req: Request, res: Response) => {
     return res.status(201).json({
       ...invitation,
       message: 'Invitation created successfully'
-    });\n  } catch (error) {
+    });
+  } catch (error) {
     console.error('Error creating invitation:', error);
     return res.status(500).json({ error: 'Failed to create invitation' });
   }

@@ -93,11 +93,8 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
     const roomDevices = baseDevices.filter((d) => d.roomId === room.id);
     const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
     
-    // Calculate room power consumption
-    // AirGuard: ~2W average (ESP32 + sensors)
-    const airguardPower = roomDevices.filter(d => d.type === 'airguard').length * 2;
-    const otherDevicePower = 0; // TODO: Add other device power calculations
-    const totalPower = airguardPower + otherDevicePower;
+    // Use room power from backend, default to '0W' if not provided
+    const roomPower = room.power || '0W';
     
     return {
       ...room,
@@ -110,7 +107,7 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
       alert: airguard?.airQualityData?.alert ?? room.alert,
       alertFlags: airguard?.airQualityData?.alertFlags ?? room.alertFlags,
       lights: roomDevices.filter((d) => d.type === 'light').length,
-      power: totalPower > 0 ? `${totalPower}W` : room.power,
+      power: roomPower,
     };
   });
 };
