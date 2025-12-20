@@ -151,7 +151,7 @@ export const automationSchemas = {
     triggers: Joi.array().optional(), // New format
     actions: Joi.array().required(),
     enabled: Joi.boolean().optional(),
-  }),
+  }).or('trigger', 'triggers'), // Require at least one
   updateAutomation: Joi.object({
     name: Joi.string().optional(),
     trigger: Joi.object().optional(), // Legacy support

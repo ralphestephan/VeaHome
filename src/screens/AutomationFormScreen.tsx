@@ -371,6 +371,8 @@ export default function AutomationFormScreen() {
         enabled,
       };
 
+      console.log('[AutomationForm] Saving automation with payload:', JSON.stringify(payload, null, 2));
+
       if (automationId) {
         await automationsApi.updateAutomation(homeId, automationId, payload);
       } else {
@@ -382,7 +384,10 @@ export default function AutomationFormScreen() {
       ]);
     } catch (error: any) {
       console.error('Save automation error:', error);
-      Alert.alert('Error', error.message || 'Failed to save automation');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save automation';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -561,9 +566,9 @@ export default function AutomationFormScreen() {
               <Text style={styles.label}>Time (HH:MM)</Text>
               <TextInput
                 style={styles.input}
-                value={trigger.at || '08:00'}
+                value={trigger.at || ''}
                 onChangeText={(text) => updateTrigger(trigger.id, 'at', text)}
-                placeholder="HH:MM"
+                placeholder="08:00"
                 placeholderTextColor={colors.mutedForeground}
               />
             </>
@@ -574,9 +579,9 @@ export default function AutomationFormScreen() {
               <Text style={styles.label}>Time (HH:MM)</Text>
               <TextInput
                 style={styles.input}
-                value={trigger.at || '08:00'}
+                value={trigger.at || ''}
                 onChangeText={(text) => updateTrigger(trigger.id, 'at', text)}
-                placeholder="HH:MM"
+                placeholder="08:00"
                 placeholderTextColor={colors.mutedForeground}
               />
               <Text style={styles.label}>Days</Text>
