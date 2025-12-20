@@ -81,10 +81,9 @@ export async function getNotificationPreferences(userId: string) {
 
 export const usersRepository = {
   createUser,
-  getUserById,
-  getUserByEmail,
-  updateUser,
-  deleteUser,
+  findById: findUserById,
+  findByEmail: findUserByEmail,
+  create: createUser,
   updateNotificationPreferences,
   getNotificationPreferences
 };

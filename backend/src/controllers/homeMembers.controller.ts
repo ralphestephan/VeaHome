@@ -77,7 +77,7 @@ export const getPendingInvitations = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const invitations = await homeMembersRepository.getPendingInvitationsForHome(homeId);
+    const invitations = await homeMembersRepository.getPendingInvitations(homeId);
     return res.json(invitations);
   } catch (error) {
     console.error('Error getting invitations:', error);
