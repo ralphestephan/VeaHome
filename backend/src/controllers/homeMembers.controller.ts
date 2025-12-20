@@ -191,7 +191,7 @@ export const createFamilyMember = async (req: Request, res: Response) => {
     const newUser = await usersRepository.create({
       email,
       name,
-      password: hashedPassword
+      passwordHash: hashedPassword
     });
 
     // Add to home
