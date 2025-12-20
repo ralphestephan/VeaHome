@@ -33,7 +33,7 @@ export async function createAutomation(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, trigger, actions, enabled } = req.body;
+    const { name, trigger, triggers, actions, enabled } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
@@ -42,10 +42,13 @@ export async function createAutomation(req: Request, res: Response) {
       return errorResponse(res, 'Automation name is required', 400);
     }
 
+    // Support both old (trigger) and new (triggers) format
+    const finalTrigger = triggers ? { conditions: triggers } : (trigger || {});
+
     const automation = await saveAutomation({
       home_id: home.id,
       name: name.trim(),
-      trigger: normalizeTrigger(trigger),
+      trigger: finalTrigger,
       actions: normalizeActions(actions),
       enabled: typeof enabled === 'boolean' ? enabled : true,
     });
@@ -67,7 +70,7 @@ export async function updateAutomation(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId, automationId } = req.params;
-    const { name, trigger, actions, enabled } = req.body;
+    const { name, trigger, triggers, actions, enabled } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
@@ -77,9 +80,12 @@ export async function updateAutomation(req: Request, res: Response) {
       return errorResponse(res, 'Automation not found', 404);
     }
 
+    // Support both old (trigger) and new (triggers) format
+    const finalTrigger = triggers ? { conditions: triggers } : (trigger || undefined);
+
     await updateAutomationRecord(automationId, {
       name: name?.trim() || undefined,
-      trigger: trigger ? normalizeTrigger(trigger) : undefined,
+      trigger: finalTrigger,
       actions: actions ? normalizeActions(actions) : undefined,
       enabled: typeof enabled === 'boolean' ? enabled : undefined,
     });

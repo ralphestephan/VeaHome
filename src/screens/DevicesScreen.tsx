@@ -127,6 +127,12 @@ export default function DevicesScreen() {
   };
   
   const handleDeviceLongPress = (device: Device) => {
+    console.log('[DevicesScreen] Opening modal for device:', {
+      id: device.id,
+      name: device.name,
+      type: device.type,
+      category: device.category
+    });
     setSelectedDevice(device);
     setModalVisible(true);
   };

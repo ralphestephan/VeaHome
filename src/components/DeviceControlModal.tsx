@@ -463,6 +463,13 @@ export default function DeviceControlModal({
 
   if (!device) return null;
 
+  console.log('[DeviceControlModal] Device:', {
+    id: device.id,
+    name: device.name,
+    type: device.type,
+    isAirguard: device.type === 'airguard'
+  });
+
   const IconComponent = iconMap[device.type] || Lightbulb;
   const isClimateDevice = device.type === 'thermostat' || device.type === 'ac';
   const isAirguard = device.type === 'airguard';
@@ -560,12 +567,7 @@ export default function DeviceControlModal({
 
             {/* Main Control Area */}
             {isAirguard ? (
-              <ScrollView 
-                style={styles.airguardScrollView}
-                contentContainerStyle={styles.airguardScrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={styles.airguardControl}>
+              <View style={styles.airguardControl}>
                   {/* Online/Offline Status Badge */}
                   <View style={styles.statusBadgeContainer}>
                     <View style={[
@@ -916,7 +918,6 @@ export default function DeviceControlModal({
                   );
                 })()}
                 </View>
-              </ScrollView>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
                 {/* Circular Dial */}
@@ -1111,7 +1112,8 @@ export default function DeviceControlModal({
               </View>
             )}
 
-            {/* Power Button */}
+            {/* Power Button - Not for airguard devices */}
+            {!isAirguard && (
             <TouchableOpacity
               style={[styles.powerButton, isActive && styles.powerButtonActive]}
               onPress={handleToggle}
@@ -1127,6 +1129,7 @@ export default function DeviceControlModal({
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
+            )}
           </LinearGradient>
         </Animated.View>
       </Animated.View>
@@ -1217,6 +1220,7 @@ const createStyles = (colors: any, shadows: any) =>
       borderWidth: 1,
       borderColor: colors.border,
       borderBottomWidth: 0,
+      minHeight: 300, // Ensure modal has minimum height
     },
     header: {
       flexDirection: 'row',
@@ -1523,7 +1527,7 @@ const createStyles = (colors: any, shadows: any) =>
     },
 
     airguardControl: {
-      gap: spacing.lg,
+      gap: spacing.sm,
     },
     statusRow: {
       flexDirection: 'row',

@@ -147,13 +147,15 @@ export const deviceGroupSchemas = {
 export const automationSchemas = {
   createAutomation: Joi.object({
     name: Joi.string().required(),
-    trigger: Joi.object().required(),
+    trigger: Joi.object().optional(), // Legacy support
+    triggers: Joi.array().optional(), // New format
     actions: Joi.array().required(),
     enabled: Joi.boolean().optional(),
   }),
   updateAutomation: Joi.object({
     name: Joi.string().optional(),
-    trigger: Joi.object().optional(),
+    trigger: Joi.object().optional(), // Legacy support
+    triggers: Joi.array().optional(), // New format
     actions: Joi.array().optional(),
     enabled: Joi.boolean().optional(),
   }),

@@ -46,7 +46,7 @@ type RouteProp = {
   };
 };
 
-type TriggerType = 'sensor' | 'time';
+type TriggerType = 'sensor' | 'time' | 'schedule' | 'sunrise' | 'sunset' | 'device_state' | 'geofence' | 'weather' | 'scene' | 'presence';
 type TriggerOperator = 'AND' | 'OR';
 
 interface Trigger {
@@ -57,6 +57,12 @@ interface Trigger {
   condition?: string;
   value?: any;
   at?: string;
+  days?: string[]; // For schedule triggers
+  offset?: number; // Minutes offset for sunrise/sunset
+  location?: { lat: number; lng: number; radius: number }; // For geofence
+  weatherCondition?: string; // sunny, rainy, cloudy, etc.
+  sceneId?: string; // For scene activation triggers
+  userId?: string; // For presence triggers
   operator?: TriggerOperator;
 }
 
@@ -425,6 +431,53 @@ export default function AutomationFormScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Trigger Type Selector */}
+          <Text style={styles.label}>Trigger Type</Text>
+          <View style={styles.chipGroup}>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'sensor' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'sensor', deviceId: undefined, property: undefined, condition: undefined, value: undefined })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'sensor' && styles.chipTextActive]}>Sensor</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'time' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'time', at: '08:00' })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'time' && styles.chipTextActive]}>Time</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'schedule' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'schedule', at: '08:00', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'schedule' && styles.chipTextActive]}>Schedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'sunrise' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'sunrise', offset: 0 })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'sunrise' && styles.chipTextActive]}>Sunrise</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'sunset' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'sunset', offset: 0 })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'sunset' && styles.chipTextActive]}>Sunset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'device_state' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'device_state', deviceId: undefined, condition: 'turns_on' })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'device_state' && styles.chipTextActive]}>Device State</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, trigger.type === 'weather' && styles.chipActive]}
+              onPress={() => updateTriggerMultiple(trigger.id, { type: 'weather', weatherCondition: 'sunny' })}
+            >
+              <Text style={[styles.chipText, trigger.type === 'weather' && styles.chipTextActive]}>Weather</Text>
+            </TouchableOpacity>
+          </View>
+
           {trigger.type === 'sensor' && (
             <>
               <Text style={styles.label}>Select Device</Text>
@@ -513,6 +566,120 @@ export default function AutomationFormScreen() {
                 placeholder="HH:MM"
                 placeholderTextColor={colors.mutedForeground}
               />
+            </>
+          )}
+
+          {trigger.type === 'schedule' && (
+            <>
+              <Text style={styles.label}>Time (HH:MM)</Text>
+              <TextInput
+                style={styles.input}
+                value={trigger.at || '08:00'}
+                onChangeText={(text) => updateTrigger(trigger.id, 'at', text)}
+                placeholder="HH:MM"
+                placeholderTextColor={colors.mutedForeground}
+              />
+              <Text style={styles.label}>Days</Text>
+              <View style={styles.chipGroup}>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+                  const isSelected = (trigger.days || []).includes(day);
+                  return (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        const currentDays = trigger.days || [];
+                        const newDays = isSelected
+                          ? currentDays.filter(d => d !== day)
+                          : [...currentDays, day];
+                        updateTrigger(trigger.id, 'days', newDays);
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{day}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {(trigger.type === 'sunrise' || trigger.type === 'sunset') && (
+            <>
+              <Text style={styles.label}>Offset (minutes before/after)</Text>
+              <TextInput
+                style={styles.input}
+                value={trigger.offset?.toString() || '0'}
+                onChangeText={(text) => updateTrigger(trigger.id, 'offset', parseInt(text) || 0)}
+                placeholder="0 = exact time, +30 = 30 min after, -30 = 30 min before"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+              />
+            </>
+          )}
+
+          {trigger.type === 'device_state' && (
+            <>
+              <Text style={styles.label}>Select Device</Text>
+              <TouchableOpacity
+                style={styles.picker}
+                onPress={() => openDevicePicker('trigger', trigger.id)}
+              >
+                <Text style={[styles.pickerText, !selectedDevice && styles.pickerPlaceholder]}>
+                  {selectedDevice ? selectedDevice.name : 'Choose device...'}
+                </Text>
+                <ChevronDown size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              {selectedDevice && (
+                <>
+                  <Text style={styles.label}>State Change</Text>
+                  <View style={styles.chipGroup}>
+                    <TouchableOpacity
+                      style={[styles.chip, trigger.condition === 'turns_on' && styles.chipActive]}
+                      onPress={() => updateTrigger(trigger.id, 'condition', 'turns_on')}
+                    >
+                      <Text style={[styles.chipText, trigger.condition === 'turns_on' && styles.chipTextActive]}>Turns ON</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.chip, trigger.condition === 'turns_off' && styles.chipActive]}
+                      onPress={() => updateTrigger(trigger.id, 'condition', 'turns_off')}
+                    >
+                      <Text style={[styles.chipText, trigger.condition === 'turns_off' && styles.chipTextActive]}>Turns OFF</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.chip, trigger.condition === 'state_changes' && styles.chipActive]}
+                      onPress={() => updateTrigger(trigger.id, 'condition', 'state_changes')}
+                    >
+                      <Text style={[styles.chipText, trigger.condition === 'state_changes' && styles.chipTextActive]}>Any Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+
+          {trigger.type === 'weather' && (
+            <>
+              <Text style={styles.label}>Weather Condition</Text>
+              <View style={styles.chipGroup}>
+                {[
+                  { id: 'sunny', name: 'Sunny' },
+                  { id: 'cloudy', name: 'Cloudy' },
+                  { id: 'rainy', name: 'Rainy' },
+                  { id: 'stormy', name: 'Stormy' },
+                  { id: 'snowy', name: 'Snowy' },
+                  { id: 'foggy', name: 'Foggy' },
+                ].map(weather => (
+                  <TouchableOpacity
+                    key={weather.id}
+                    style={[styles.chip, trigger.weatherCondition === weather.id && styles.chipActive]}
+                    onPress={() => updateTrigger(trigger.id, 'weatherCondition', weather.id)}
+                  >
+                    <Text style={[styles.chipText, trigger.weatherCondition === weather.id && styles.chipTextActive]}>
+                      {weather.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </>
           )}
         </View>
