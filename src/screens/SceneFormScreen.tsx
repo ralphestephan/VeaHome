@@ -263,21 +263,28 @@ export default function SceneFormScreen() {
         name: sceneName,
         icon: selectedIcon,
         scope,
-        roomIds: scope === 'rooms' ? Array.from(selectedRoomIds) : undefined,
+        roomIds: scope === 'rooms' ? Array.from(selectedRoomIds) : [],
         deviceTypeRules,
       };
 
+      console.log('[SceneForm] Saving scene:', JSON.stringify(payload, null, 2));
+
       if (sceneId) {
-        await scenesApi.updateScene(homeId, sceneId, payload);
+        const response = await scenesApi.updateScene(homeId, sceneId, payload);
+        console.log('[SceneForm] Update response:', response);
         Alert.alert('Success', 'Scene updated successfully');
       } else {
-        await scenesApi.createScene(homeId, payload);
+        const response = await scenesApi.createScene(homeId, payload);
+        console.log('[SceneForm] Create response:', response);
         Alert.alert('Success', 'Scene created successfully');
       }
       navigation.goBack();
     } catch (e: any) {
       console.error('Save scene error:', e);
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to save scene');
+      console.error('Error response:', e?.response?.data);
+      console.error('Error details:', JSON.stringify(e?.response, null, 2));
+      const errorMsg = e?.response?.data?.message || e?.message || 'Failed to save scene';
+      Alert.alert('Error', errorMsg);
     } finally {
       setLoading(false);
     }

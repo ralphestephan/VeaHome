@@ -80,13 +80,37 @@ export const sceneSchemas = {
     name: Joi.string().required(),
     icon: Joi.string().optional(),
     description: Joi.string().optional(),
-    deviceStates: Joi.object().required(),
+    // New hierarchical format
+    scope: Joi.string().valid('home', 'rooms').optional(),
+    roomIds: Joi.array().items(Joi.string().uuid()).optional(),
+    deviceTypeRules: Joi.array().items(
+      Joi.object({
+        type: Joi.string().required(),
+        mode: Joi.string().valid('all', 'specific').required(),
+        deviceIds: Joi.array().items(Joi.string().uuid()).optional(),
+        state: Joi.object().required(),
+      })
+    ).optional(),
+    // Old format (backwards compatibility)
+    deviceStates: Joi.object().optional(),
     devices: Joi.array().items(Joi.string().uuid()).optional(),
   }),
   updateScene: Joi.object({
     name: Joi.string().optional(),
     icon: Joi.string().optional(),
     description: Joi.string().optional(),
+    // New hierarchical format
+    scope: Joi.string().valid('home', 'rooms').optional(),
+    roomIds: Joi.array().items(Joi.string().uuid()).optional(),
+    deviceTypeRules: Joi.array().items(
+      Joi.object({
+        type: Joi.string().required(),
+        mode: Joi.string().valid('all', 'specific').required(),
+        deviceIds: Joi.array().items(Joi.string().uuid()).optional(),
+        state: Joi.object().required(),
+      })
+    ).optional(),
+    // Old format (backwards compatibility)
     deviceStates: Joi.object().optional(),
     devices: Joi.array().items(Joi.string().uuid()).optional(),
   }),
