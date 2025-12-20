@@ -546,13 +546,17 @@ export default function DevicesScreen() {
                 style: 'destructive',
                 onPress: async () => {
                   try {
+                    console.log('[DevicesScreen] Deleting device:', deviceId, 'from home:', homeId);
                     const api = HubApi(getApiClient(async () => token));
                     await api.deleteDevice(homeId, deviceId);
+                    console.log('[DevicesScreen] Device deleted successfully');
                     setModalVisible(false);
                     setSelectedDevice(null);
                     refresh();
-                  } catch (e) {
-                    console.error('Failed to delete device:', e);
+                  } catch (e: any) {
+                    console.error('[DevicesScreen] Failed to delete device:', e);
+                    console.error('[DevicesScreen] Error response:', e.response?.data);
+                    Alert.alert('Error', e.response?.data?.error || 'Failed to delete device');
                   }
                 },
               },

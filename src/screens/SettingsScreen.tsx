@@ -77,15 +77,23 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               setDeleteLoading(true);
+              const homeId = user?.homeId || '';
+              console.log('[SettingsScreen] Deleting home:', homeId);
+              console.log('[SettingsScreen] User ID:', user?.id);
+              
               const client = getApiClient(async () => token);
               const homeApi = HomeApi(client);
-              await homeApi.deleteHome(user?.homeId || '');
+              await homeApi.deleteHome(homeId);
+              
+              console.log('[SettingsScreen] Home deleted successfully');
               Alert.alert('Success', 'Home deleted successfully', [
                 { text: 'OK', onPress: () => logout() }
               ]);
             } catch (error: any) {
-              console.error('Delete home error:', error);
-              Alert.alert('Error', error.response?.data?.message || 'Failed to delete home');
+              console.error('[SettingsScreen] Delete home error:', error);
+              console.error('[SettingsScreen] Error response:', error.response?.data);
+              console.error('[SettingsScreen] Error status:', error.response?.status);
+              Alert.alert('Error', error.response?.data?.error || error.response?.data?.message || 'Failed to delete home');
             } finally {
               setDeleteLoading(false);
             }

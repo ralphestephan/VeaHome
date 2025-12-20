@@ -285,18 +285,32 @@ export async function removeDevice(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId, deviceId } = req.params;
 
+    console.log('[DELETE DEVICE] Starting deletion');
+    console.log('[DELETE DEVICE] User ID:', userId);
+    console.log('[DELETE DEVICE] Home ID:', homeId);
+    console.log('[DELETE DEVICE] Device ID:', deviceId);
+
     const home = await ensureHomeAccess(res, homeId, userId);
-    if (!home) return;
+    if (!home) {
+      console.log('[DELETE DEVICE] Home access check failed');
+      return;
+    }
 
     const device = await getDeviceById(deviceId);
     if (!device || device.home_id !== home.id) {
+      console.log('[DELETE DEVICE] Device not found or not in home');
       return errorResponse(res, 'Device not found', 404);
     }
 
+    console.log('[DELETE DEVICE] Device found:', device.name);
+    console.log('[DELETE DEVICE] Calling deleteDevice...');
     await deleteDevice(deviceId);
+    console.log('[DELETE DEVICE] Successfully deleted device');
+    
     return successResponse(res, { message: 'Device deleted' });
   } catch (error: any) {
-    console.error('Delete device error:', error);
+    console.error('[DELETE DEVICE] Error:', error);
+    console.error('[DELETE DEVICE] Error stack:', error.stack);
     return errorResponse(res, error.message || 'Failed to delete device', 500);
   }
 }

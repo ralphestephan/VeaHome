@@ -86,5 +86,20 @@ export async function updateDevice(id: string, updates: Partial<DeviceInput>) {
 }
 
 export async function deleteDevice(id: string) {
-  await query('DELETE FROM devices WHERE id = $1', [id]);
+  console.log('[REPO] deleteDevice called for deviceId:', id);
+  
+  try {
+    const result = await query('DELETE FROM devices WHERE id = $1', [id]);
+    console.log('[REPO] Deleted from devices, rowCount:', result.rowCount);
+    
+    if (result.rowCount === 0) {
+      console.log('[REPO] WARNING: No rows deleted - device may not exist');
+      throw new Error('Device not found or already deleted');
+    }
+  } catch (err: any) {
+    console.error('[REPO] Failed to delete device:', err.message);
+    throw err;
+  }
+  
+  console.log('[REPO] deleteDevice completed successfully');
 }
