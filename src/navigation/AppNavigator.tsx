@@ -25,6 +25,7 @@ import DeviceOnboardingWizard from '../screens/DeviceOnboardingWizard';
 import SceneFormScreen from '../screens/SceneFormScreen';
 import AutomationFormScreen from '../screens/AutomationFormScreen';
 import HomeSelectorScreen from '../screens/HomeSelectorScreen';
+import HomeMembersScreen from '../screens/HomeMembersScreen';
 import DeviceGroupsScreen from '../screens/DeviceGroupsScreen';
 import AutomationsScreen from '../screens/AutomationsScreen';
 import DeviceHistoryScreen from '../screens/DeviceHistoryScreen';
@@ -151,6 +152,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="Schedules" component={SchedulesScreen} />
           <Stack.Screen name="HomeSelector" component={HomeSelectorScreen} />
+          <Stack.Screen name="HomeMembers" component={HomeMembersScreen} />
           <Stack.Screen name="DeviceGroups" component={DeviceGroupsScreen} />
           <Stack.Screen name="Automations" component={AutomationsScreen} />
           <Stack.Screen name="DeviceHistory" component={DeviceHistoryScreen} />

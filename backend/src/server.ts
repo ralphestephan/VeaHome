@@ -19,6 +19,7 @@ import scheduleRoutes from './routes/schedule.routes';
 import deviceGroupRoutes from './routes/deviceGroup.routes';
 import automationRoutes from './routes/automation.routes';
 import publicAirguardRoutes from './routes/publicAirguard.routes';
+import homeMembersRoutes from './routes/homeMembers.routes';
 
 // Load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ app.use('/public/airguard', publicAirguardRoutes);
 app.use('/hub', hubRoutes);
 app.use('/homes', deviceRoutes);
 app.use('/homes', homeRoutes);
+app.use('/homes', homeMembersRoutes);
 app.use('/homes', sceneRoutes);
 app.use('/homes', scheduleRoutes);
 app.use('/homes', deviceGroupRoutes);

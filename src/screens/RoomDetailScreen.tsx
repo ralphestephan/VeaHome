@@ -1012,42 +1012,21 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           </NeonCard>
         </View>
 
-        {/* Energy Usage */}
+        {/* Energy Usage - Hidden until we implement real power monitoring */}
+        {false && (
         <View style={styles.section}>
           <SectionHeader title="Energy Usage" />
           <NeonCard style={styles.energyCard}>
             <View style={styles.energyHeader}>
               <View>
                 <Text style={styles.energyLabel}>Current Power</Text>
-                <Text style={styles.energyValue}>{room.power}</Text>
-              </View>
-              <View style={styles.trendBadge}>
-                <TrendingDown size={14} color={colors.success} />
-                <Text style={styles.trendText}>-8%</Text>
+                <Text style={styles.energyValue}>{room.power || '0W'}</Text>
               </View>
             </View>
-            <View style={styles.energyBreakdown}>
-              <View style={styles.energyItem}>
-                <View style={styles.energyItemHeader}>
-                  <Text style={styles.energyItemLabel}>Lights</Text>
-                  <Text style={styles.energyItemPercent}>45%</Text>
-                </View>
-                <View style={styles.energyBarContainer}>
-                  <View style={[styles.energyBar, { width: '45%' }]} />
-                </View>
-              </View>
-              <View style={styles.energyItem}>
-                <View style={styles.energyItemHeader}>
-                  <Text style={styles.energyItemLabel}>Climate</Text>
-                  <Text style={styles.energyItemPercent}>55%</Text>
-                </View>
-                <View style={styles.energyBarContainer}>
-                  <View style={[styles.energyBar, { width: '55%' }]} />
-                </View>
-              </View>
-            </View>
+            <Text style={styles.energyNote}>Real-time power monitoring coming soon</Text>
           </NeonCard>
         </View>
+        )}
 
         {/* Bottom spacing */}
         <View style={{ height: 100 }} />

@@ -23,6 +23,7 @@ import {
   ArrowRight,
   CheckCircle,
   Loader,
+  Wifi,
 } from 'lucide-react-native';
 import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -32,6 +33,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
+import { provisionAirguardWithUI } from '../services/wifiProvisioning';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -104,6 +106,8 @@ export default function DeviceOnboardingWizard() {
   // WiFi config
   const [deviceWifiSSID, setDeviceWifiSSID] = useState('');
   const [deviceWifiPassword, setDeviceWifiPassword] = useState('');
+  const [provisioningStep, setProvisioningStep] = useState('');
+  const [provisioningError, setProvisioningError] = useState('');
   
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const safeAvailableRooms = Array.isArray(availableRooms) ? availableRooms : [];
@@ -242,9 +246,9 @@ export default function DeviceOnboardingWizard() {
       const newDeviceId = created?.id || created?.deviceId;
       setDeviceId(newDeviceId);
       
-      // Airguard is standalone; skip learning/wifi steps.
+      // Airguard needs WiFi provisioning
       if (deviceType === 'airguard') {
-        setStep('ready');
+        setStep('wifi');
       }
       // If IR/RF device, go to learning step
       else if (deviceCategory === 'IR' || deviceCategory === 'RF') {
@@ -282,19 +286,49 @@ export default function DeviceOnboardingWizard() {
 
   const handleConnectDeviceWifi = async () => {
     if (!deviceWifiSSID.trim()) {
-      Alert.alert('Error', 'Please enter device WiFi SSID');
+      Alert.alert('Error', 'Please enter your home WiFi SSID');
+      return;
+    }
+    if (!deviceWifiPassword.trim()) {
+      Alert.alert('Error', 'Please enter your WiFi password');
       return;
     }
     
     setLoading(true);
+    setProvisioningError('');
+    
     try {
-      // Wait for device to connect
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setStep('ready');
+      // Use seamless provisioning service
+      const result = await provisionAirguardWithUI(
+        deviceName,
+        deviceWifiSSID,
+        deviceWifiPassword,
+        user?.email,
+        (step) => {
+          setProvisioningStep(step);
+        }
+      );
+
+      if (result.success && result.deviceId) {
+        // Update the smartMonitorId with the returned device ID
+        setAirguardSmartMonitorId(result.deviceId.toString());
+        
+        Alert.alert(
+          'Success',
+          `Device configured successfully! Device ID: ${result.deviceId}\n\nThe device will restart and connect to your WiFi network.`,
+          [{ text: 'OK', onPress: () => setStep('ready') }]
+        );
+      } else {
+        setProvisioningError(result.error || 'Provisioning failed');
+        Alert.alert('Error', result.error || 'Failed to provision device');
+      }
     } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || 'Failed to connect device');
+      const errorMsg = e?.message || 'Failed to connect device';
+      setProvisioningError(errorMsg);
+      Alert.alert('Error', errorMsg);
     } finally {
       setLoading(false);
+      setProvisioningStep('');
     }
   };
 
@@ -505,18 +539,23 @@ export default function DeviceOnboardingWizard() {
   // WiFi Device Configuration
   const renderWifiStep = () => (
     <View style={styles.stepContainer}>
+      <View style={styles.iconContainer}>
+        <Wifi size={48} color={colors.primary} />
+      </View>
       <Text style={styles.stepTitle}>Connect Device to WiFi</Text>
       <Text style={styles.stepDescription}>
-        Enter WiFi credentials for your device
+        {deviceType === 'airguard' 
+          ? 'We\'ll automatically connect to your Airguard device and configure WiFi credentials.'
+          : 'Enter WiFi credentials for your device'}
       </Text>
       
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>WiFi SSID</Text>
+        <Text style={styles.inputLabel}>Your Home WiFi SSID</Text>
         <TextInput
           style={styles.input}
           value={deviceWifiSSID}
           onChangeText={setDeviceWifiSSID}
-          placeholder="Enter WiFi network name"
+          placeholder="Enter your WiFi network name"
           placeholderTextColor={colors.mutedForeground}
           autoCapitalize="none"
         />
@@ -528,11 +567,32 @@ export default function DeviceOnboardingWizard() {
           style={styles.input}
           value={deviceWifiPassword}
           onChangeText={setDeviceWifiPassword}
-          placeholder="Enter WiFi password"
+          placeholder="Enter your WiFi password"
           placeholderTextColor={colors.mutedForeground}
           secureTextEntry
           autoCapitalize="none"
         />
+      </View>
+
+      {provisioningStep && (
+        <View style={styles.provisioningStatus}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.provisioningText}>{provisioningStep}</Text>
+        </View>
+      )}
+
+      {provisioningError && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{provisioningError}</Text>
+        </View>
+      )}
+
+      <View style={styles.infoBox}>
+        <Text style={styles.infoText}>
+          {deviceType === 'airguard' 
+            ? '📱 The app will connect to your device\'s WiFi access point (SmartMonitor_Setup), send credentials, and return to your home network automatically.'
+            : '💡 Make sure the device is powered on and in pairing mode.'}
+        </Text>
       </View>
       
       <TouchableOpacity
@@ -544,7 +604,9 @@ export default function DeviceOnboardingWizard() {
           <ActivityIndicator size="small" color="white" />
         ) : (
           <>
-            <Text style={styles.primaryButtonText}>Connect Device</Text>
+            <Text style={styles.primaryButtonText}>
+              {deviceType === 'airguard' ? 'Start Provisioning' : 'Connect Device'}
+            </Text>
             <ArrowRight size={20} color="white" />
           </>
         )}
@@ -837,6 +899,41 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  provisioningStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: `${colors.primary}15`,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+  },
+  provisioningText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  errorBox: {
+    backgroundColor: `${colors.destructive || '#ef4444'}15`,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+  },
+  errorText: {
+    fontSize: 14,
+    color: colors.destructive || '#ef4444',
+  },
+  infoBox: {
+    backgroundColor: colors.secondary,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.md,
+  },
+  infoText: {
+    fontSize: 13,
+    color: colors.mutedForeground,
+    lineHeight: 20,
   },
   infoCard: {
     backgroundColor: colors.secondary,

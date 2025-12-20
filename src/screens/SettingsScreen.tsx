@@ -96,7 +96,7 @@ export default function SettingsScreen() {
   };
 
   const handleInviteUser = () => {
-    Alert.alert('Invite User', 'User invitation feature coming soon! You\'ll be able to share access to your home with family members.');
+    navigation.navigate('HomeMembers');
   };
 
   const handleAddHub = () => {

@@ -152,4 +152,19 @@ export const DeviceHistoryApi = (client: AxiosInstance) => ({
   getDeviceHistory: (homeId: string, deviceId: string, range?: string) => client.get(`/homes/${homeId}/devices/${deviceId}/history`, { params: { range } }),
 });
 
+// Home Members
+export const HomeMembersApi = (client: AxiosInstance) => ({
+  getMembers: (homeId: string) => client.get(`/homes/${homeId}/members`),
+  createInvitation: (homeId: string, email: string, role?: string) => 
+    client.post(`/homes/${homeId}/invitations`, { email, role }),
+  getPendingInvitations: (homeId: string) => client.get(`/homes/${homeId}/invitations`),
+  acceptInvitation: (token: string) => client.post(`/homes/invitations/${token}/accept`),
+  cancelInvitation: (invitationId: string, homeId: string) => 
+    client.delete(`/homes/invitations/${invitationId}`, { data: { homeId } }),
+  removeMember: (homeId: string, memberId: string) => 
+    client.delete(`/homes/${homeId}/members/${memberId}`),
+  createFamilyMember: (homeId: string, payload: { name: string; email: string; password: string; role?: string }) =>
+    client.post(`/homes/${homeId}/family-members`, payload),
+});
+
 

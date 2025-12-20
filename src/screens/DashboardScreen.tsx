@@ -49,7 +49,7 @@ import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useAirguardAlerts } from '../hooks/useAirguardAlerts';
 import { useDemo } from '@/context/DemoContext';
 import type { Room, Device, Home } from '../types';
-import { getApiClient, HomeApi, PublicAirguardApi } from '../services/api';
+import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -82,7 +82,8 @@ export default function DashboardScreen() {
   const heroScale = useRef(new Animated.Value(0.95)).current;
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const { user, token } = useAuth();
-  const homeId = user?.homeId;
+  const { currentHomeId } = useAuth();
+  const homeId = currentHomeId || user?.homeId;
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
   const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene, addRoom: demoAddRoom, setDeviceMuted } = useDemo();
   
@@ -94,6 +95,7 @@ export default function DashboardScreen() {
   useAirguardAlerts(isDemoMode ? [] : devices);
   
   const { energyData } = useEnergyData(homeId, 'day');
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
   const [showRoomPopup, setShowRoomPopup] = useState(false);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
@@ -160,6 +162,26 @@ export default function DashboardScreen() {
     };
     loadHome();
   }, [homeId, token]);
+
+  // Load schedules
+  useEffect(() => {
+    const loadSchedules = async () => {
+      if (homeId && token && !isDemoMode) {
+        try {
+          const client = getApiClient(async () => token);
+          const schedulesApi = SchedulesApi(client);
+          const response = await schedulesApi.listSchedules(homeId);
+          const schedulesList = response.data?.schedules || [];
+          // Get next 2 upcoming schedules
+          setSchedules(schedulesList.filter((s: any) => s.enabled).slice(0, 2));
+        } catch (e) {
+          console.error('Error loading schedules:', e);
+          setSchedules([]);
+        }
+      }
+    };
+    loadSchedules();
+  }, [homeId, token, isDemoMode]);
 
   // Real-time updates
   const { isConnected: isCloudConnected } = useRealtime({
@@ -730,30 +752,45 @@ export default function DashboardScreen() {
             title="Upcoming" 
             action={{ label: 'All Schedules', onPress: () => navigation.navigate('Schedules') }}
           />
-          <NeonCard style={styles.scheduleCard}>
-            <View style={styles.scheduleItem}>
-              <View style={styles.scheduleIcon}>
-                <Clock size={18} color={colors.primary} />
+          {schedules.length > 0 ? (
+            <NeonCard style={styles.scheduleCard}>
+              {schedules.map((schedule, index) => (
+                <React.Fragment key={schedule.id}>
+                  <View style={styles.scheduleItem}>
+                    <View style={styles.scheduleIcon}>
+                      <Clock size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.scheduleContent}>
+                      <Text style={styles.scheduleTitle}>{schedule.name}</Text>
+                      <Text style={styles.scheduleTime}>
+                        {schedule.days?.join(', ')} at {schedule.time}
+                      </Text>
+                    </View>
+                    {schedule.enabled && (
+                      <View style={styles.scheduleBadge}>
+                        <Text style={styles.scheduleBadgeText}>Active</Text>
+                      </View>
+                    )}
+                  </View>
+                  {index < schedules.length - 1 && <View style={styles.scheduleDivider} />}
+                </React.Fragment>
+              ))}
+            </NeonCard>
+          ) : (
+            <NeonCard style={styles.scheduleCard}>
+              <View style={styles.emptySchedule}>
+                <Clock size={32} color={colors.mutedForeground} />
+                <Text style={styles.emptyScheduleText}>No schedules yet</Text>
+                <TouchableOpacity
+                  style={styles.addScheduleButton}
+                  onPress={() => navigation.navigate('Schedules')}
+                >
+                  <Plus size={16} color={colors.primary} />
+                  <Text style={styles.addScheduleText}>Add Schedule</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.scheduleContent}>
-                <Text style={styles.scheduleTitle}>Night Mode</Text>
-                <Text style={styles.scheduleTime}>Today at 10:00 PM</Text>
-              </View>
-              <View style={styles.scheduleBadge}>
-                <Text style={styles.scheduleBadgeText}>Active</Text>
-              </View>
-            </View>
-            <View style={styles.scheduleDivider} />
-            <View style={styles.scheduleItem}>
-              <View style={[styles.scheduleIcon, { backgroundColor: colors.warning + '20' }]}>
-                <Sun size={18} color={colors.warning} />
-              </View>
-              <View style={styles.scheduleContent}>
-                <Text style={styles.scheduleTitle}>Morning Routine</Text>
-                <Text style={styles.scheduleTime}>Tomorrow at 7:00 AM</Text>
-              </View>
-            </View>
-          </NeonCard>
+            </NeonCard>
+          )}
         </View>
 
         {/* Bottom spacing */}
@@ -1073,6 +1110,30 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => {
       height: 1,
       backgroundColor: colors.border,
       marginVertical: spacing.md,
+    },
+    emptySchedule: {
+      alignItems: 'center',
+      padding: spacing.xl,
+      gap: spacing.md,
+    },
+    emptyScheduleText: {
+      fontSize: fontSize.md,
+      color: colors.mutedForeground,
+    },
+    addScheduleButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.primary + '20',
+      borderRadius: borderRadius.md,
+      marginTop: spacing.sm,
+    },
+    addScheduleText: {
+      fontSize: fontSize.sm,
+      color: colors.primary,
+      fontWeight: '600',
     },
   });
 };

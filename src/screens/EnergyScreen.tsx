@@ -290,29 +290,22 @@ export default function EnergyScreen() {
           </View>
         </View>
 
-        {/* Cost Estimate */}
+        {/* Cost Estimate - Hidden until we have billing integration */}
+        {false && (
         <View style={styles.costCard}>
           <View style={styles.costHeader}>
             <Text style={styles.costTitle}>Estimated Cost</Text>
             <Calendar size={20} color={colors.primary} />
           </View>
           <View style={styles.costValueContainer}>
-            <Text style={styles.costValue}>$18.45</Text>
+            <Text style={styles.costValue}>Coming Soon</Text>
           </View>
-          <Text style={styles.costLabel}>Today's electricity cost</Text>
-          <View style={styles.costBreakdown}>
-            <View style={styles.costItem}>
-              <Text style={styles.costItemLabel}>This Week</Text>
-              <Text style={styles.costItemValue}>$112.30</Text>
-            </View>
-            <View style={styles.costItem}>
-              <Text style={styles.costItemLabel}>This Month</Text>
-              <Text style={styles.costItemValue}>$456.80</Text>
-            </View>
-          </View>
+          <Text style={styles.costLabel}>Billing integration pending</Text>
         </View>
+        )}
 
-        {/* Insights */}
+        {/* Insights - Hidden until we implement analytics */}
+        {false && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Energy Insights</Text>
           <View style={styles.insightCard}>
@@ -320,24 +313,14 @@ export default function EnergyScreen() {
               <TrendingDown size={16} color={colors.success} />
             </View>
             <View style={styles.insightContent}>
-              <Text style={styles.insightTitle}>Great Job!</Text>
+              <Text style={styles.insightTitle}>Analytics Coming Soon!</Text>
               <Text style={styles.insightText}>
-                You've saved 12% more energy today
-              </Text>
-            </View>
-          </View>
-          <View style={styles.insightCard}>
-            <View style={[styles.insightIcon, { backgroundColor: `${colors.info}20` }]}>
-              <Info size={16} color={colors.info} />
-            </View>
-            <View style={styles.insightContent}>
-              <Text style={styles.insightTitle}>Peak Hours Alert</Text>
-              <Text style={styles.insightText}>
-                Most energy used between 6-9 PM
+                Energy insights and recommendations will appear here
               </Text>
             </View>
           </View>
         </View>
+        )}
       </ScrollView>
     </View>
   );

@@ -2,7 +2,15 @@ import { query } from '../config/database';
 import { Home } from '../types';
 
 export async function getHomesByUserId(userId: string): Promise<Home[]> {
-  const { rows } = await query('SELECT * FROM homes WHERE user_id = $1 ORDER BY created_at', [userId]);
+  // Get all homes where user is owner OR member
+  const { rows } = await query(
+    `SELECT DISTINCT h.* 
+     FROM homes h
+     LEFT JOIN home_members hm ON h.id = hm.home_id
+     WHERE h.user_id = $1 OR hm.user_id = $1
+     ORDER BY h.created_at`,
+    [userId]
+  );
   return rows;
 }
 
