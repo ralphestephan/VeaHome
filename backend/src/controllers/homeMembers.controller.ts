@@ -16,10 +16,10 @@ export const getHomeMembers = async (req: Request, res: Response) => {
     }
 
     const members = await homeMembersRepository.getHomeMembers(homeId);
-    res.json(members);
+    return res.json(members);
   } catch (error) {
     console.error('Error getting home members:', error);
-    res.status(500).json({ error: 'Failed to get home members' });
+    return res.status(500).json({ error: 'Failed to get home members' });
   }
 };
 
@@ -55,13 +55,12 @@ export const createInvitation = async (req: Request, res: Response) => {
     // TODO: Send email with invitation link
     // const inviteLink = `${process.env.APP_URL}/invite/${invitation.token}`;
 
-    res.status(201).json({
+    return res.status(201).json({
       ...invitation,
       message: 'Invitation created successfully'
-    });
-  } catch (error) {
+    });\n  } catch (error) {
     console.error('Error creating invitation:', error);
-    res.status(500).json({ error: 'Failed to create invitation' });
+    return res.status(500).json({ error: 'Failed to create invitation' });
   }
 };
 
@@ -77,11 +76,11 @@ export const getPendingInvitations = async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const invitations = await homeMembersRepository.getPendingInvitations(homeId);
-    res.json(invitations);
+    const invitations = await homeMembersRepository.getPendingInvitationsForHome(homeId);
+    return res.json(invitations);
   } catch (error) {
     console.error('Error getting invitations:', error);
-    res.status(500).json({ error: 'Failed to get invitations' });
+    return res.status(500).json({ error: 'Failed to get invitations' });
   }
 };
 
@@ -103,10 +102,10 @@ export const acceptInvitation = async (req: Request, res: Response) => {
     }
 
     await homeMembersRepository.acceptInvitation(token, userId);
-    res.json({ message: 'Invitation accepted successfully', homeId: invitation.homeId });
+    return res.json({ message: 'Invitation accepted successfully', homeId: invitation.homeId });
   } catch (error) {
     console.error('Error accepting invitation:', error);
-    res.status(500).json({ error: 'Failed to accept invitation' });
+    return res.status(500).json({ error: 'Failed to accept invitation' });
   }
 };
 
@@ -124,10 +123,10 @@ export const cancelInvitation = async (req: Request, res: Response) => {
     }
 
     await homeMembersRepository.cancelInvitation(invitationId);
-    res.json({ message: 'Invitation cancelled successfully' });
+    return res.json({ message: 'Invitation cancelled successfully' });
   } catch (error) {
     console.error('Error cancelling invitation:', error);
-    res.status(500).json({ error: 'Failed to cancel invitation' });
+    return res.status(500).json({ error: 'Failed to cancel invitation' });
   }
 };
 
@@ -150,10 +149,10 @@ export const removeMember = async (req: Request, res: Response) => {
     }
 
     await homeMembersRepository.removeMember(homeId, memberId);
-    res.json({ message: 'Member removed successfully' });
+    return res.json({ message: 'Member removed successfully' });
   } catch (error) {
     console.error('Error removing member:', error);
-    res.status(500).json({ error: 'Failed to remove member' });
+    return res.status(500).json({ error: 'Failed to remove member' });
   }
 };
 
@@ -197,12 +196,12 @@ export const createFamilyMember = async (req: Request, res: Response) => {
     // Add to home
     await homeMembersRepository.addMember(homeId, newUser.id, role, userId);
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Family member created successfully',
       user: { id: newUser.id, email: newUser.email, name: newUser.name }
     });
   } catch (error) {
     console.error('Error creating family member:', error);
-    res.status(500).json({ error: 'Failed to create family member' });
+    return res.status(500).json({ error: 'Failed to create family member' });
   }
 };

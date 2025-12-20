@@ -11,6 +11,7 @@ export interface User {
 export interface Home {
   id: string;
   user_id: string;
+  owner_id?: string;
   name: string;
   model3d_url?: string;
   layout?: any;

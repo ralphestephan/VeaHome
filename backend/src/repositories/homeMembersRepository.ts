@@ -1,4 +1,4 @@
-import { pool } from '../config/database';
+import pool from '../config/database';
 import crypto from 'crypto';
 
 export interface HomeMember {
@@ -38,7 +38,7 @@ export const homeMembersRepository = {
        ORDER BY hm.role DESC, hm.joined_at ASC`,
       [homeId]
     );
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       homeId: row.home_id,
       userId: row.user_id,
@@ -142,7 +142,7 @@ export const homeMembersRepository = {
        ORDER BY created_at DESC`,
       [homeId]
     );
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       homeId: row.home_id,
       email: row.email,

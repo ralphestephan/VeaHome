@@ -78,3 +78,13 @@ export async function getNotificationPreferences(userId: string) {
   const { rows } = await query('SELECT * FROM notification_preferences WHERE user_id = $1', [userId]);
   return rows[0] || null;
 }
+
+export const usersRepository = {
+  createUser,
+  getUserById,
+  getUserByEmail,
+  updateUser,
+  deleteUser,
+  updateNotificationPreferences,
+  getNotificationPreferences
+};
