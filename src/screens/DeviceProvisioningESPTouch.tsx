@@ -258,18 +258,15 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.foreground }]}>Add {deviceType}</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Fully automatic setup - just like Tuya! No manual WiFi switching needed.
+        Setup requires connecting to the device's WiFi network temporarily.
       </Text>
       <View style={[styles.stepsList, { backgroundColor: colors.card }]}>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>1. Make sure device shows "SETUP MODE"</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Tap Continue - app connects automatically</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Enter your WiFi password</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>4. Done! Everything happens automatically</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>1. Device shows "SETUP MODE"</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Connect to "{DEVICE_AP_SSID}" WiFi</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Return to app</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>4. Enter your home WiFi password</Text>
       </View>
-      <TouchableOpacity style={styles.button} onPress={() => {
-        setStep('connect');
-        connectToDeviceAP();
-      }}>
+      <TouchableOpacity style={styles.button} onPress={() => setStep('connect')}>
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
     </View>
@@ -277,54 +274,38 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
 
   const renderConnect = () => (
     <View style={styles.container}>
-      {isProcessing ? (
-        <>
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 20 }} />
-          <Text style={[styles.title, { color: colors.foreground }]}>Connecting...</Text>
-          <Text style={[styles.description, { color: colors.foreground }]}>{statusMessage}</Text>
-          <Text style={[styles.note, { color: colors.mutedForeground }]}>
-            This happens automatically. Please wait...
-          </Text>
-        </>
-      ) : connectedToDevice ? (
-        <>
-          <Text style={styles.successIcon}>✓</Text>
-          <Text style={[styles.title, { color: colors.foreground }]}>Connected!</Text>
-          <Text style={[styles.description, { color: colors.foreground }]}>
-            Successfully connected to device WiFi.
-          </Text>
-          <TouchableOpacity style={styles.button} onPress={() => setStep('credentials')}>
-            <Text style={styles.buttonText}>Continue</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.title, { color: colors.foreground }]}>Connection Failed</Text>
-          <Text style={[styles.description, { color: colors.foreground }]}>
-            Could not connect automatically. Please connect manually.
-          </Text>
-          
-          <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>WiFi Network:</Text>
-            <Text style={[styles.infoValue, { color: colors.primary }]}>{DEVICE_AP_SSID}</Text>
-            <Text style={[styles.infoNote, { color: colors.mutedForeground }]}>
-              (No password required)
-            </Text>
-          </View>
+      <Text style={[styles.title, { color: colors.foreground }]}>Connect to Device</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>
+        Please connect your phone to the device's WiFi network:
+      </Text>
+      
+      <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
+        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>WiFi Network:</Text>
+        <Text style={[styles.infoValue, { color: colors.primary, fontSize: 20, fontWeight: 'bold' }]}>{DEVICE_AP_SSID}</Text>
+        <Text style={[styles.infoNote, { color: colors.mutedForeground, marginTop: 4 }]}>
+          (Open network - no password needed)
+        </Text>
+      </View>
 
-          <TouchableOpacity style={styles.button} onPress={connectToDeviceAP}>
-            <Text style={styles.buttonText}>Try Again</Text>
-          </TouchableOpacity>
+      <View style={[styles.stepsBox, { backgroundColor: colors.card }]}>
+        <Text style={[styles.stepLabel, { color: colors.mutedForeground, marginBottom: 8 }]}>Steps:</Text>
+        <Text style={[styles.stepInstruction, { color: colors.foreground }]}>1. Tap "Open WiFi Settings" below</Text>
+        <Text style={[styles.stepInstruction, { color: colors.foreground }]}>2. Find and connect to: {DEVICE_AP_SSID}</Text>
+        <Text style={[styles.stepInstruction, { color: colors.foreground }]}>3. Return to this app</Text>
+        <Text style={[styles.stepInstruction, { color: colors.foreground }]}>4. Tap "I'm Connected"</Text>
+      </View>
 
-          <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: '#6c757d' }]} onPress={() => Linking.openSettings()}>
-            <Text style={styles.buttonText}>Open WiFi Settings</Text>
-          </TouchableOpacity>
+      <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+        <Text style={styles.buttonText}>Open WiFi Settings</Text>
+      </TouchableOpacity>
 
-          <TouchableOpacity style={styles.linkButton} onPress={() => setStep('intro')}>
-            <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
-          </TouchableOpacity>
-        </>
-      )}
+      <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: '#28a745' }]} onPress={() => setStep('credentials')}>
+        <Text style={styles.buttonText}>I'm Connected - Continue</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.linkButton} onPress={() => setStep('intro')}>
+        <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -533,6 +514,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  stepsBox: {
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  stepLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  stepInstruction: {
+    fontSize: 15,
+    marginBottom: 8,
   },
   note: {
     fontSize: 14,
