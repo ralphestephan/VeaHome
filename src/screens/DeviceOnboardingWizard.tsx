@@ -255,7 +255,7 @@ export default function DeviceOnboardingWizard() {
       
       // For non-Airguard devices, continue with learning/WiFi
       // If IR/RF device, go to learning step
-      else if (deviceCategory === 'IR' || deviceCategory === 'RF') {
+      if (deviceCategory === 'IR' || deviceCategory === 'RF') {
         setStep('learning');
       } else if (deviceCategory === 'WiFi') {
         setStep('wifi');
