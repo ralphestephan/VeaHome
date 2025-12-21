@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
@@ -16,25 +16,56 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   const [statusMessage, setStatusMessage] = useState('');
   const [currentSSID, setCurrentSSID] = useState('');
 
+  // Auto-detect WiFi on mount
+  useEffect(() => {
+    checkCurrentWiFi();
+  }, []);
+
   // Get phone's current WiFi SSID
   const checkCurrentWiFi = async () => {
-    const netInfo = await NetInfo.fetch();
-    if (netInfo.type === 'wifi' && netInfo.details?.ssid) {
-      setCurrentSSID(netInfo.details.ssid);
-      return netInfo.details.ssid;
+    try {
+      const netInfo = await NetInfo.fetch();
+      console.log('[ESPTouch] NetInfo:', JSON.stringify(netInfo));
+      
+      if (netInfo.type === 'wifi') {
+        // Try to get SSID from details
+        const ssid = netInfo.details?.ssid || netInfo.details?.['SSID'];
+        if (ssid) {
+          setCurrentSSID(ssid);
+          return ssid;
+        }
+      }
+      
+      // If we can't detect SSID, still allow user to proceed
+      Alert.alert(
+        'WiFi Detection',
+        'Could not detect WiFi name automatically. Make sure you are connected to WiFi and enter the network name manually if needed.',
+        [{ text: 'OK' }]
+      );
+      return 'unknown'; // Return a placeholder to allow proceeding
+    } catch (error) {
+      console.error('[ESPTouch] WiFi check error:', error);
+      return 'unknown';
     }
-    Alert.alert('Not Connected', 'Please connect your phone to WiFi first');
-    return null;
   };
 
   const startProvisioning = async () => {
-    const ssid = await checkCurrentWiFi();
-    if (!ssid) return;
+    if (!wifiPassword.trim()) {
+      Alert.alert('Error', 'Please enter WiFi password');
+      return;
+    }
+
+    let ssid = currentSSID;
+    if (!ssid || ssid === 'unknown') {
+      ssid = await checkCurrentWiFi();
+    }
 
     try {
       setIsProcessing(true);
       setStep('provisioning');
       setStatusMessage('Broadcasting WiFi credentials...');
+
+      console.log('[ESPTouch] Starting with SSID:', ssid);
 
       // Start ESPTouch SmartConfig
       const result = await SmartConfig.start({
@@ -45,6 +76,8 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
         timeout: 60000, // 60 seconds
       });
 
+      console.log('[ESPTouch] Result:', result);
+
       if (result && result.ipv4) {
         setStatusMessage('✓ Device configured successfully!');
         setStep('success');
@@ -52,8 +85,9 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
         throw new Error('Configuration timeout - device did not respond');
       }
     } catch (error: any) {
+      console.error('[ESPTouch] Error:', error);
       setIsProcessing(false);
-      Alert.alert('Configuration Failed', error.message || 'Please try again');
+      Alert.alert('Configuration Failed', error.message || 'Please try again. Make sure device is in setup mode.');
       setStep('credentials');
     } finally {
       SmartConfig.stop();
@@ -62,14 +96,14 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
 
   const renderIntro = () => (
     <View style={styles.container}>
-      <Text style={styles.title}>Add {deviceType}</Text>
-      <Text style={styles.description}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Add {deviceType}</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>
         Fully automatic WiFi configuration - no manual steps required!
       </Text>
-      <View style={styles.stepsList}>
-        <Text style={styles.stepText}>1. Make sure device shows "SETUP MODE"</Text>
-        <Text style={styles.stepText}>2. Enter your WiFi password</Text>
-        <Text style={styles.stepText}>3. Click Configure - that's it!</Text>
+      <View style={[styles.stepsList, { backgroundColor: colors.card }]}>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>1. Make sure device shows "SETUP MODE"</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Enter your WiFi password</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Click Configure - that's it!</Text>
       </View>
       <TouchableOpacity style={styles.button} onPress={() => setStep('credentials')}>
         <Text style={styles.buttonText}>Continue</Text>
@@ -79,21 +113,21 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
 
   const renderCredentials = () => (
     <View style={styles.container}>
-      <Text style={styles.title}>WiFi Configuration</Text>
-      <Text style={styles.description}>
+      <Text style={[styles.title, { color: colors.foreground }]}>WiFi Configuration</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>
         Your phone will broadcast credentials to the device.{'\n'}
         Keep your phone on WiFi during this process.
       </Text>
 
-      {currentSSID && (
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Current WiFi:</Text>
-          <Text style={styles.infoValue}>{currentSSID}</Text>
+      {currentSSID && currentSSID !== 'unknown' && (
+        <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
+          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Current WiFi:</Text>
+          <Text style={[styles.infoValue, { color: colors.foreground }]}>{currentSSID}</Text>
         </View>
       )}
 
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, borderWidth: 1 }]}
         placeholder="WiFi Password"
         placeholderTextColor={colors.mutedForeground}
         value={wifiPassword}
@@ -115,9 +149,9 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   const renderProvisioning = () => (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.title}>Configuring Device...</Text>
-      <Text style={styles.description}>{statusMessage}</Text>
-      <Text style={styles.note}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Configuring Device...</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>{statusMessage}</Text>
+      <Text style={[styles.note, { color: colors.mutedForeground }]}>
         This may take 10-30 seconds.{'\n'}
         Keep your phone on WiFi.
       </Text>
@@ -127,8 +161,8 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   const renderSuccess = () => (
     <View style={styles.container}>
       <Text style={styles.successIcon}>✓</Text>
-      <Text style={styles.title}>Setup Complete!</Text>
-      <Text style={styles.description}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Setup Complete!</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>
         Your {deviceType} is now connected and will appear in your devices list shortly.
       </Text>
       <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
@@ -171,7 +205,6 @@ const styles = StyleSheet.create({
   },
   stepsList: {
     alignSelf: 'stretch',
-    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 12,
     padding: 20,
     marginBottom: 32,
@@ -182,7 +215,6 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     alignSelf: 'stretch',
-    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -200,7 +232,6 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.1)',
     fontSize: 16,
     marginBottom: 20,
   },
@@ -228,5 +259,6 @@ const styles = StyleSheet.create({
   successIcon: {
     fontSize: 72,
     marginBottom: 20,
+    color: '#00CC66',
   },
 });
