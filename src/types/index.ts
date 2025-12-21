@@ -4,6 +4,8 @@ export type RootStackParamList = {
   HubPair: undefined;
   HubSetup: { hubId: string; qrCode: string };
   DeviceOnboarding: { hubId: string };
+  DeviceProvisioning: { deviceType: string };
+  DeviceProvisioningESPTouch: { deviceType: string };
   RoomDetail: { roomId: string };
   Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;

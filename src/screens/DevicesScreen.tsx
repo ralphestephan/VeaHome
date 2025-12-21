@@ -639,7 +639,7 @@ export default function DevicesScreen() {
               style={styles.modalButton}
               onPress={() => {
                 setShowVealiveModal(false);
-                navigation.navigate('DeviceProvisioning', { deviceType: 'SmartMonitor' });
+                navigation.navigate('DeviceProvisioningESPTouch', { deviceType: 'SmartMonitor' });
               }}
             >
               <LinearGradient

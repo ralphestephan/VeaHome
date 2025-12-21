@@ -45,7 +45,7 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
         timeout: 60000, // 60 seconds
       });
 
-      if (result.success) {
+      if (result && result.ipv4) {
         setStatusMessage('✓ Device configured successfully!');
         setStep('success');
       } else {
