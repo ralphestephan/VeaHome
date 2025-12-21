@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ImageBackground,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
@@ -77,6 +78,8 @@ export default function DevicesScreen() {
   const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showVealiveModal, setShowVealiveModal] = useState(false);
   
   // Modal state
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
@@ -474,34 +477,7 @@ export default function DevicesScreen() {
         <Text style={styles.subtitle}>{devices.length} devices connected</Text>
         <TouchableOpacity 
           style={styles.addButtonWrapper}
-          onPress={() => {
-            // For AirGuard/SmartMonitor, use new seamless provisioning wizard
-            // For hub devices (IR/RF/Zigbee), use old onboarding flow
-            Alert.alert(
-              'Add Device',
-              'What type of device do you want to add?',
-              [
-                {
-                  text: 'AirGuard/SmartMonitor',
-                  onPress: () => navigation.navigate('DeviceProvisioning', { deviceType: 'SmartMonitor' })
-                },
-                {
-                  text: 'Hub Device (IR/RF/Zigbee)',
-                  onPress: () => {
-                    const hubId = hubs.length > 0 
-                      ? hubs[0].id 
-                      : devices.find(d => d.hubId)?.hubId 
-                      || '';
-                    navigation.navigate('DeviceOnboarding', { hubId });
-                  }
-                },
-                {
-                  text: 'Cancel',
-                  style: 'cancel'
-                }
-              ]
-            );
-          }}
+          onPress={() => setShowAddModal(true)}
         >
           <LinearGradient
             colors={gradients.accent}
@@ -595,6 +571,120 @@ export default function DevicesScreen() {
           }}
         />
       )}
+
+      {/* Add Device Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Device</Text>
+            <Text style={styles.modalDescription}>Choose device type to add</Text>
+            
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setShowAddModal(false);
+                setShowVealiveModal(true);
+              }}
+            >
+              <LinearGradient
+                colors={gradients.accent}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalButtonGradient}
+              >
+                <Text style={styles.modalButtonText}>Vealive Device</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setShowAddModal(false);
+                Alert.alert('Coming Soon', 'Tuya and eWeLink device integration coming soon!');
+              }}
+            >
+              <View style={styles.modalButtonSecondary}>
+                <Text style={styles.modalButtonSecondaryText}>Tuya/eWeLink Device</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowAddModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Vealive Device Type Modal */}
+      <Modal
+        visible={showVealiveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVealiveModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Vealive Device</Text>
+            <Text style={styles.modalDescription}>Select your device type</Text>
+            
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setShowVealiveModal(false);
+                navigation.navigate('DeviceProvisioning', { deviceType: 'SmartMonitor' });
+              }}
+            >
+              <LinearGradient
+                colors={gradients.accent}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modalButtonGradient}
+              >
+                <Text style={styles.modalButtonText}>AirGuard</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setShowVealiveModal(false);
+                Alert.alert('Coming Soon', 'VeaHub setup coming soon!');
+              }}
+            >
+              <View style={styles.modalButtonSecondary}>
+                <Text style={styles.modalButtonSecondaryText}>VeaHub</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => {
+                setShowVealiveModal(false);
+                Alert.alert('Coming Soon', 'VeaRelay setup coming soon!');
+              }}
+            >
+              <View style={styles.modalButtonSecondary}>
+                <Text style={styles.modalButtonSecondaryText}>VeaRelay</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowVealiveModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -758,5 +848,72 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     emptyText: {
       color: colors.mutedForeground,
       fontSize: fontSize.sm,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing.xl,
+    },
+    modalContent: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.xl,
+      padding: spacing.xl,
+      width: '100%',
+      maxWidth: 400,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+      textAlign: 'center',
+    },
+    modalDescription: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.xl,
+      textAlign: 'center',
+    },
+    modalButton: {
+      marginBottom: spacing.md,
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+    },
+    modalButtonGradient: {
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+    },
+    modalButtonText: {
+      color: 'white',
+      fontSize: fontSize.md,
+      fontWeight: '600',
+    },
+    modalButtonSecondary: {
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalButtonSecondaryText: {
+      color: colors.foreground,
+      fontSize: fontSize.md,
+      fontWeight: '600',
+    },
+    modalCancelButton: {
+      paddingVertical: spacing.md,
+      marginTop: spacing.sm,
+    },
+    modalCancelText: {
+      color: colors.mutedForeground,
+      fontSize: fontSize.md,
+      textAlign: 'center',
     },
   });

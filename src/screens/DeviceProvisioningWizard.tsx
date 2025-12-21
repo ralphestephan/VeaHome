@@ -38,7 +38,7 @@ export default function DeviceProvisioningWizard({ route }: any) {
         const connected = await checkDeviceConnection();
         if (connected) {
           setDeviceConnected(true);
-          setStatusMessage('✓ Connected to device');
+          setStatusMessage('Connected to device');
         }
       }, 2000);
 
@@ -84,7 +84,7 @@ export default function DeviceProvisioningWizard({ route }: any) {
       const result = await response.json();
 
       if (result.success) {
-        setStatusMessage('✓ Credentials saved to device');
+        setStatusMessage('Credentials saved to device');
         setCurrentStep('pairing');
         
         // Device will restart - wait then try to pair
@@ -115,7 +115,7 @@ export default function DeviceProvisioningWizard({ route }: any) {
       // Placeholder - replace with actual API call
       await new Promise(resolve => setTimeout(resolve, 3000));
       
-      setStatusMessage('✓ Device connected successfully!');
+      setStatusMessage('Device connected successfully!');
       setCurrentStep('success');
     } catch (error: any) {
       Alert.alert('Pairing Error', 'Device connected to WiFi but failed to pair with your account. Try again from the devices screen.');
@@ -136,7 +136,9 @@ export default function DeviceProvisioningWizard({ route }: any) {
 
   const renderIntroStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.emoji}>📡</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.iconCircleText}>1</Text>
+      </View>
       <Text style={styles.title}>Add {deviceType}</Text>
       <Text style={styles.description}>
         This wizard will guide you through connecting your device to WiFi.
@@ -155,57 +157,44 @@ export default function DeviceProvisioningWizard({ route }: any) {
 
   const renderConnectStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.emoji}>📶</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.iconCircleText}>2</Text>
+      </View>
       <Text style={styles.title}>Connect to Device</Text>
       <Text style={styles.description}>
-        {Platform.OS === 'ios' 
-          ? 'Open WiFi settings and connect to:'
-          : 'Connect to the device WiFi network:'}
+        Follow these steps to connect to your device:
       </Text>
-      <View style={styles.wifiNameBox}>
-        <Text style={styles.wifiNameText}>SmartMonitor_Setup</Text>
+      
+      <View style={styles.instructionsList}>
+        <Text style={styles.instructionStep}>1. Go to your phone's WiFi settings</Text>
+        <Text style={styles.instructionStep}>2. Look for network:</Text>
+        <View style={styles.wifiNameBox}>
+          <Text style={styles.wifiNameText}>SmartMonitor_Setup</Text>
+        </View>
+        <Text style={styles.instructionStep}>3. Connect to this network (no password needed)</Text>
+        <Text style={styles.instructionStep}>4. Return to this app and tap Continue</Text>
       </View>
       
-      {deviceConnected ? (
+      {deviceConnected && (
         <View style={styles.successBox}>
-          <Text style={styles.successText}>✓ Connected to device</Text>
+          <Text style={styles.successText}>Connected to device</Text>
         </View>
-      ) : (
-        <Text style={styles.note}>
-          {Platform.OS === 'ios'
-            ? 'iOS will ask permission to use this network. Allow it.'
-            : 'No password required'}
-        </Text>
       )}
 
       <TouchableOpacity
         style={styles.primaryButton}
-        onPress={openWiFiSettings}
-      >
-        <Text style={styles.primaryButtonText}>Open WiFi Settings</Text>
-      </TouchableOpacity>
-
-      {deviceConnected && (
-        <TouchableOpacity
-          style={[styles.primaryButton, { marginTop: 12 }]}
-          onPress={() => setCurrentStep('credentials')}
-        >
-          <Text style={styles.primaryButtonText}>Next →</Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity
-        style={styles.textButton}
         onPress={() => setCurrentStep('credentials')}
       >
-        <Text style={styles.textButtonText}>Skip detection →</Text>
+        <Text style={styles.primaryButtonText}>Continue</Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderCredentialsStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.emoji}>🔐</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.iconCircleText}>3</Text>
+      </View>
       <Text style={styles.title}>Home WiFi Credentials</Text>
       <Text style={styles.description}>
         Enter your home WiFi details. The device will connect to this network.
@@ -238,17 +227,19 @@ export default function DeviceProvisioningWizard({ route }: any) {
         onPress={() => setCurrentStep('provisioning')}
         disabled={!homeWifiSSID || !homeWifiPassword}
       >
-        <Text style={styles.primaryButtonText}>Continue</Text>
+        <Text style={styles.primaryButtonText}>Send to Device</Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderProvisioningStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.emoji}>⚙️</Text>
+      <View style={styles.iconCircle}>
+        <Text style={styles.iconCircleText}>4</Text>
+      </View>
       <Text style={styles.title}>Configure Device</Text>
       <Text style={styles.description}>
-        Ready to send WiFi credentials to your device.
+        Sending WiFi credentials to your device.
       </Text>
 
       <View style={styles.infoBox}>
@@ -289,7 +280,9 @@ export default function DeviceProvisioningWizard({ route }: any) {
 
   const renderSuccessStep = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.emoji}>✅</Text>
+      <View style={[styles.iconCircle, styles.iconCircleSuccess]}>
+        <Text style={styles.iconCircleText}>✓</Text>
+      </View>
       <Text style={styles.title}>Setup Complete!</Text>
       <Text style={styles.description}>
         Your {deviceType} is now connected and ready to use.
@@ -379,9 +372,37 @@ function createStyles(colors: ThemeColors) {
     stepContainer: {
       alignItems: 'center',
     },
-    emoji: {
-      fontSize: 64,
+    iconCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
       marginBottom: 24,
+    },
+    iconCircleSuccess: {
+      backgroundColor: colors.success,
+    },
+    iconCircleText: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: '#fff',
+    },
+    instructionsList: {
+      width: '100%',
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    instructionStep: {
+      fontSize: 15,
+      color: colors.foreground,
+      marginBottom: 12,
+      lineHeight: 22,
     },
     title: {
       fontSize: 28,
