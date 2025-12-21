@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
-import SmartConfig from 'react-native-smartconfig';
+// import SmartConfig from 'react-native-smartconfig';
 import NetInfo from '@react-native-community/netinfo';
 
 export default function DeviceProvisioningESPTouch({ route }: any) {
@@ -12,9 +12,11 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   
   const [step, setStep] = useState<'intro' | 'credentials' | 'provisioning' | 'success'>('intro');
   const [wifiPassword, setWifiPassword] = useState('');
+  const [wifiSSID, setWifiSSID] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [currentSSID, setCurrentSSID] = useState('');
+  const [manualMode, setManualMode] = useState(false);
 
   // Auto-detect WiFi on mount
   useEffect(() => {
@@ -55,42 +57,56 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
       return;
     }
 
-    let ssid = currentSSID;
+    let ssid = currentSSID || wifiSSID;
     if (!ssid || ssid === 'unknown') {
-      ssid = await checkCurrentWiFi();
+      const tempSsid = await checkCurrentWiFi();
+      if (tempSsid && tempSsid !== 'unknown') {
+        ssid = tempSsid;
+      }
+    }
+
+    if (!ssid || ssid === 'unknown') {
+      Alert.alert(
+        'WiFi Required',
+        'Please enter your WiFi network name manually',
+        [{ text: 'OK', onPress: () => setManualMode(true) }]
+      );
+      return;
     }
 
     try {
       setIsProcessing(true);
       setStep('provisioning');
-      setStatusMessage('Broadcasting WiFi credentials...');
+      setStatusMessage('Connecting to device WiFi network...');
 
-      console.log('[ESPTouch] Starting with SSID:', ssid);
+      console.log('[Provisioning] Starting with SSID:', ssid);
 
-      // Start ESPTouch SmartConfig
-      const result = await SmartConfig.start({
-        type: 'esptouch',
-        ssid: ssid,
-        bssid: ssid, // Use SSID as fallback
-        password: wifiPassword,
-        timeout: 60000, // 60 seconds
-      });
+      // For now, show instructions since SmartConfig isn't working
+      Alert.alert(
+        'Manual Setup Required',
+        `1. Connect your phone to "SmartMonitor_Setup" WiFi\n2. Device will configure automatically\n\nNetwork: ${ssid}\nPassword: ${wifiPassword}`,
+        [
+          {
+            text: 'Open WiFi Settings',
+            onPress: () => {
+              Linking.openSettings();
+              setStep('success');
+            }
+          },
+          {
+            text: 'Done',
+            onPress: () => setStep('success')
+          }
+        ]
+      );
 
-      console.log('[ESPTouch] Result:', result);
-
-      if (result && result.ipv4) {
-        setStatusMessage('✓ Device configured successfully!');
-        setStep('success');
-      } else {
-        throw new Error('Configuration timeout - device did not respond');
-      }
-    } catch (error: any) {
-      console.error('[ESPTouch] Error:', error);
       setIsProcessing(false);
-      Alert.alert('Configuration Failed', error.message || 'Please try again. Make sure device is in setup mode.');
+      
+    } catch (error: any) {
+      console.error('[Provisioning] Error:', error);
+      setIsProcessing(false);
+      Alert.alert('Error', error.message || 'Setup failed. Please try again.');
       setStep('credentials');
-    } finally {
-      SmartConfig.stop();
     }
   };
 
@@ -115,15 +131,23 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.foreground }]}>WiFi Configuration</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Your phone will broadcast credentials to the device.{'\n'}
-        Keep your phone on WiFi during this process.
+        Enter your WiFi credentials to configure the device.
       </Text>
 
-      {currentSSID && currentSSID !== 'unknown' && (
+      {currentSSID && currentSSID !== 'unknown' ? (
         <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
           <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Current WiFi:</Text>
           <Text style={[styles.infoValue, { color: colors.foreground }]}>{currentSSID}</Text>
         </View>
+      ) : (
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.card, color: colors.foreground, borderColor: colors.border, borderWidth: 1 }]}
+          placeholder="WiFi Network Name (SSID)"
+          placeholderTextColor={colors.mutedForeground}
+          value={wifiSSID}
+          onChangeText={setWifiSSID}
+          autoCapitalize="none"
+        />
       )}
 
       <TextInput
