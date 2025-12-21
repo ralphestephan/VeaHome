@@ -233,23 +233,27 @@ export default function DeviceOnboardingWizard() {
         }
       }
 
+      // For Airguard, DON'T create device yet - wait until WiFi provisioning succeeds
+      if (deviceType === 'airguard') {
+        // Store config for later, go to WiFi step
+        setStep('wifi');
+        return;
+      }
+
+      // For non-Airguard devices, create now
       const response = await hubApi.addDevice(homeId, {
         name: deviceName,
         type: deviceType,
-        category: deviceType === 'airguard' ? 'Sensor' : deviceCategory,
+        category: deviceCategory,
         roomId: selectedRoom,
         hubId: normalizedHubId || undefined,
-        signalMappings: deviceType === 'airguard' ? { smartMonitorId } : undefined,
       });
 
       const created = response.data?.data?.device ?? response.data?.device ?? response.data;
       const newDeviceId = created?.id || created?.deviceId;
       setDeviceId(newDeviceId);
       
-      // Airguard needs WiFi provisioning
-      if (deviceType === 'airguard') {
-        setStep('wifi');
-      }
+      // For non-Airguard devices, continue with learning/WiFi
       // If IR/RF device, go to learning step
       else if (deviceCategory === 'IR' || deviceCategory === 'RF') {
         setStep('learning');
@@ -294,10 +298,17 @@ export default function DeviceOnboardingWizard() {
       return;
     }
     
+    const homeId = user?.homeId;
+    if (!homeId) {
+      Alert.alert('Error', 'Missing home context');
+      return;
+    }
+    
     setLoading(true);
     setProvisioningError('');
     
     try {
+      // Step 1: Provision the device with WiFi credentials
       const result = await provisionDevice(
         deviceWifiSSID,
         deviceWifiPassword,
@@ -305,17 +316,43 @@ export default function DeviceOnboardingWizard() {
         (step) => setProvisioningStep(step)
       );
 
-      if (result.success && result.deviceId) {
-        setAirguardSmartMonitorId(result.deviceId.toString());
-        
-        Alert.alert(
-          'Device Connected!',
-          `Your device is now connected to WiFi and ready to use.`,
-          [{ text: 'Continue', onPress: () => setStep('ready') }]
-        );
-      } else {
+      if (!result.success || !result.deviceId) {
         setProvisioningError(result.error || 'Setup failed');
         Alert.alert('Setup Failed', result.error || 'Could not configure device');
+        return;
+      }
+
+      // Step 2: NOW create the device in our database (AFTER provisioning succeeds)
+      const smartMonitorId = result.deviceId;
+      setAirguardSmartMonitorId(smartMonitorId.toString());
+      
+      try {
+        const response = await hubApi.addDevice(homeId, {
+          name: deviceName || `AirGuard ${smartMonitorId}`,
+          type: 'airguard',
+          category: 'Sensor',
+          roomId: selectedRoom,
+          hubId: undefined, // AirGuard is standalone
+          signalMappings: { smartMonitorId },
+        });
+
+        const created = response.data?.data?.device ?? response.data?.device ?? response.data;
+        const newDeviceId = created?.id || created?.deviceId;
+        setDeviceId(newDeviceId);
+        
+        Alert.alert(
+          'Device Added!',
+          `Your AirGuard device is now connected and added to your home.`,
+          [{ text: 'Continue', onPress: () => setStep('ready') }]
+        );
+      } catch (dbError: any) {
+        // Device connected to WiFi but failed to save to database
+        console.error('Failed to save device to database:', dbError);
+        Alert.alert(
+          'Partial Success',
+          'Device connected to WiFi but failed to save to your home. Please try adding it again.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
       }
     } catch (e: any) {
       const msg = e?.message || 'An error occurred';

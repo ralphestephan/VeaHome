@@ -475,12 +475,32 @@ export default function DevicesScreen() {
         <TouchableOpacity 
           style={styles.addButtonWrapper}
           onPress={() => {
-            // Get hubId from existing hubs or devices
-            const hubId = hubs.length > 0 
-              ? hubs[0].id 
-              : devices.find(d => d.hubId)?.hubId 
-              || '';
-            navigation.navigate('DeviceOnboarding', { hubId });
+            // For AirGuard/SmartMonitor, use new seamless provisioning wizard
+            // For hub devices (IR/RF/Zigbee), use old onboarding flow
+            Alert.alert(
+              'Add Device',
+              'What type of device do you want to add?',
+              [
+                {
+                  text: 'AirGuard/SmartMonitor',
+                  onPress: () => navigation.navigate('DeviceProvisioning', { deviceType: 'SmartMonitor' })
+                },
+                {
+                  text: 'Hub Device (IR/RF/Zigbee)',
+                  onPress: () => {
+                    const hubId = hubs.length > 0 
+                      ? hubs[0].id 
+                      : devices.find(d => d.hubId)?.hubId 
+                      || '';
+                    navigation.navigate('DeviceOnboarding', { hubId });
+                  }
+                },
+                {
+                  text: 'Cancel',
+                  style: 'cancel'
+                }
+              ]
+            );
           }}
         >
           <LinearGradient
