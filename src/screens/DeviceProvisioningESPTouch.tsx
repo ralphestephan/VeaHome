@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking, Platform, PermissionsAndroid } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import NetInfo from '@react-native-community/netinfo';
+import WifiManager from 'react-native-wifi-reborn';
 
 const DEVICE_AP_SSID = 'SmartMonitor_Setup';
 const DEVICE_API_URL = 'http://192.168.4.1/api/provision';
@@ -19,11 +20,46 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   const [statusMessage, setStatusMessage] = useState('');
   const [homeWifiSSID, setHomeWifiSSID] = useState('');
   const [connectedToDevice, setConnectedToDevice] = useState(false);
+  const [hasPermissions, setHasPermissions] = useState(false);
 
-  // Auto-detect home WiFi on mount
+  // Request WiFi permissions and detect home WiFi on mount
   useEffect(() => {
-    checkCurrentWiFi();
+    requestPermissions();
   }, []);
+
+  // Request necessary permissions for WiFi management
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.ACCESS_WIFI_STATE,
+          PermissionsAndroid.PERMISSIONS.CHANGE_WIFI_STATE,
+        ]);
+        
+        const allGranted = Object.values(granted).every(
+          status => status === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        setHasPermissions(allGranted);
+        if (allGranted) {
+          checkCurrentWiFi();
+        } else {
+          Alert.alert(
+            'Permissions Required',
+            'Location and WiFi permissions are needed to configure the device automatically.',
+            [{ text: 'Open Settings', onPress: () => Linking.openSettings() }]
+          );
+        }
+      } catch (err) {
+        console.error('[Permissions] Error:', err);
+      }
+    } else {
+      // iOS doesn't need runtime permissions for WiFi
+      setHasPermissions(true);
+      checkCurrentWiFi();
+    }
+  };
 
   // Monitor WiFi connection status
   useEffect(() => {
@@ -50,19 +86,78 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   // Get phone's current WiFi SSID (home network)
   const checkCurrentWiFi = async () => {
     try {
+      // Try WifiManager first (more reliable)
+      try {
+        const ssid = await WifiManager.getCurrentWifiSSID();
+        if (ssid && ssid !== DEVICE_AP_SSID && !ssid.includes('SmartMonitor')) {
+          // Remove quotes if present (Android sometimes returns SSID with quotes)
+          const cleanSSID = ssid.replace(/"/g, '');
+          setHomeWifiSSID(cleanSSID);
+          setWifiSSID(cleanSSID);
+          console.log('[WiFi] Home network detected:', cleanSSID);
+          return;
+        }
+      } catch (wifiErr) {
+        console.log('[WiFi] WifiManager failed, trying NetInfo');
+      }
+
+      // Fallback to NetInfo
       const netInfo = await NetInfo.fetch();
-      console.log('[WiFi] NetInfo:', JSON.stringify(netInfo));
-      
       if (netInfo.type === 'wifi') {
         const ssid = netInfo.details?.ssid || netInfo.details?.['SSID'];
         if (ssid && ssid !== DEVICE_AP_SSID && !ssid.includes('SmartMonitor')) {
           setHomeWifiSSID(ssid);
           setWifiSSID(ssid);
-          console.log('[WiFi] Home network detected:', ssid);
+          console.log('[WiFi] Home network detected (NetInfo):', ssid);
         }
       }
     } catch (error) {
       console.error('[WiFi] Detection error:', error);
+    }
+  };
+
+  // Automatically connect to device AP
+  const connectToDeviceAP = async () => {
+    try {
+      setIsProcessing(true);
+      setStatusMessage('Connecting to device WiFi...');
+      console.log('[WiFi] Attempting to connect to:', DEVICE_AP_SSID);
+
+      if (Platform.OS === 'ios') {
+        // iOS 11+: Use NEHotspotConfiguration
+        await WifiManager.connectToProtectedSSID(DEVICE_AP_SSID, '', false, false);
+      } else {
+        // Android: Use WifiManager
+        await WifiManager.connectToProtectedSSID(DEVICE_AP_SSID, '', false);
+      }
+
+      // Wait a moment for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Verify connection
+      const currentSSID = await WifiManager.getCurrentWifiSSID();
+      const cleanSSID = currentSSID.replace(/"/g, '');
+      
+      if (cleanSSID === DEVICE_AP_SSID || cleanSSID.includes('SmartMonitor')) {
+        console.log('[WiFi] Successfully connected to device');
+        setConnectedToDevice(true);
+        setIsProcessing(false);
+        setStep('credentials');
+      } else {
+        throw new Error('Failed to connect to device WiFi');
+      }
+    } catch (error: any) {
+      console.error('[WiFi] Connection error:', error);
+      setIsProcessing(false);
+      
+      Alert.alert(
+        'Connection Failed',
+        `Could not connect to device WiFi automatically.\n\nPlease connect manually to "${DEVICE_AP_SSID}" in WiFi settings.`,
+        [
+          { text: 'Open WiFi Settings', onPress: () => Linking.openSettings() },
+          { text: 'Cancel', onPress: () => setStep('intro') }
+        ]
+      );
     }
   };
 
@@ -107,8 +202,26 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
       console.log('[Provisioning] Response:', result);
 
       if (result.success) {
-        setStatusMessage('Configuration successful! Device is restarting...');
-        setTimeout(() => {
+        setStatusMessage('Configuration successful! Reconnecting to home WiFi...');
+        
+        // Automatically reconnect to home WiFi
+        setTimeout(async () => {
+          try {
+            if (homeWifiSSID && wifiPassword) {
+              console.log('[WiFi] Reconnecting to home network:', homeWifiSSID);
+              
+              if (Platform.OS === 'ios') {
+                await WifiManager.connectToProtectedSSID(homeWifiSSID, wifiPassword, false, false);
+              } else {
+                await WifiManager.connectToProtectedSSID(homeWifiSSID, wifiPassword, false);
+              }
+              
+              setStatusMessage('Reconnected to home WiFi!');
+            }
+          } catch (reconnectErr) {
+            console.log('[WiFi] Auto-reconnect failed, user will reconnect manually');
+          }
+          
           setStep('success');
           setIsProcessing(false);
         }, 2000);
@@ -145,15 +258,18 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.foreground }]}>Add {deviceType}</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        This setup requires connecting to the device's WiFi network temporarily.
+        Fully automatic setup - just like Tuya! No manual WiFi switching needed.
       </Text>
       <View style={[styles.stepsList, { backgroundColor: colors.card }]}>
         <Text style={[styles.stepText, { color: colors.foreground }]}>1. Make sure device shows "SETUP MODE"</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Connect to "{DEVICE_AP_SSID}" WiFi</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Enter your home WiFi password</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>4. Done! Device will configure automatically</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Tap Continue - app connects automatically</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Enter your WiFi password</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>4. Done! Everything happens automatically</Text>
       </View>
-      <TouchableOpacity style={styles.button} onPress={() => setStep('connect')}>
+      <TouchableOpacity style={styles.button} onPress={() => {
+        setStep('connect');
+        connectToDeviceAP();
+      }}>
         <Text style={styles.buttonText}>Continue</Text>
       </TouchableOpacity>
     </View>
@@ -161,44 +277,54 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
 
   const renderConnect = () => (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.foreground }]}>Connect to Device</Text>
-      <Text style={[styles.description, { color: colors.foreground }]}>
-        Connect your phone to the device's WiFi network to continue setup.
-      </Text>
-
-      <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
-        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>WiFi Network:</Text>
-        <Text style={[styles.infoValue, { color: colors.primary }]}>{DEVICE_AP_SSID}</Text>
-        <Text style={[styles.infoNote, { color: colors.mutedForeground }]}>
-          (No password required)
-        </Text>
-      </View>
-
-      {connectedToDevice ? (
-        <View style={[styles.successBox, { backgroundColor: colors.card, borderColor: colors.primary }]}>
-          <Text style={[styles.successText, { color: colors.primary }]}>✓ Connected to device</Text>
-        </View>
-      ) : (
-        <View style={[styles.warningBox, { backgroundColor: colors.card }]}>
-          <Text style={[styles.warningText, { color: colors.mutedForeground }]}>
-            Waiting for connection...
+      {isProcessing ? (
+        <>
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 20 }} />
+          <Text style={[styles.title, { color: colors.foreground }]}>Connecting...</Text>
+          <Text style={[styles.description, { color: colors.foreground }]}>{statusMessage}</Text>
+          <Text style={[styles.note, { color: colors.mutedForeground }]}>
+            This happens automatically. Please wait...
           </Text>
-        </View>
+        </>
+      ) : connectedToDevice ? (
+        <>
+          <Text style={styles.successIcon}>✓</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Connected!</Text>
+          <Text style={[styles.description, { color: colors.foreground }]}>
+            Successfully connected to device WiFi.
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={() => setStep('credentials')}>
+            <Text style={styles.buttonText}>Continue</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <>
+          <Text style={[styles.title, { color: colors.foreground }]}>Connection Failed</Text>
+          <Text style={[styles.description, { color: colors.foreground }]}>
+            Could not connect automatically. Please connect manually.
+          </Text>
+          
+          <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>WiFi Network:</Text>
+            <Text style={[styles.infoValue, { color: colors.primary }]}>{DEVICE_AP_SSID}</Text>
+            <Text style={[styles.infoNote, { color: colors.mutedForeground }]}>
+              (No password required)
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.button} onPress={connectToDeviceAP}>
+            <Text style={styles.buttonText}>Try Again</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.button, { marginTop: 12, backgroundColor: '#6c757d' }]} onPress={() => Linking.openSettings()}>
+            <Text style={styles.buttonText}>Open WiFi Settings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.linkButton} onPress={() => setStep('intro')}>
+            <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
+          </TouchableOpacity>
+        </>
       )}
-
-      <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
-        <Text style={styles.buttonText}>Open WiFi Settings</Text>
-      </TouchableOpacity>
-
-      {connectedToDevice && (
-        <TouchableOpacity style={[styles.button, { marginTop: 12 }]} onPress={() => setStep('credentials')}>
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity style={styles.linkButton} onPress={() => setStep('intro')}>
-        <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -266,24 +392,28 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
       <Text style={styles.successIcon}>✓</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>Setup Complete!</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Your {deviceType} has been configured successfully.{'\n\n'}
-        Device will restart and connect to your WiFi network.{'\n\n'}
-        It will appear in your devices list within 1-2 minutes.
+        Your {deviceType} has been configured successfully!{'\n\n'}
+        Device is restarting and will connect to your WiFi.{'\n\n'}
+        {homeWifiSSID && 'Your phone has been automatically reconnected to your home WiFi.'}
+        {'\n\n'}Device will appear in your devices list within 1-2 minutes.
       </Text>
       
       <View style={[styles.infoBox, { backgroundColor: colors.card, marginTop: 20 }]}>
-        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Next Steps:</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>1. Reconnect phone to home WiFi: {homeWifiSSID || wifiSSID}</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Wait 1-2 minutes for device to connect</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Check Devices screen</Text>
+        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>What's happening:</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>✓ Device received WiFi credentials</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>✓ Device is restarting</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>✓ {homeWifiSSID ? 'Phone reconnected to home WiFi' : 'Reconnect phone to home WiFi'}</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>⏳ Device connecting (1-2 minutes)</Text>
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
-        <Text style={styles.buttonText}>Open WiFi Settings</Text>
-      </TouchableOpacity>
+      {!homeWifiSSID && (
+        <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+          <Text style={styles.buttonText}>Reconnect to Home WiFi</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity style={[styles.button, { marginTop: 12 }]} onPress={() => navigation.goBack()}>
-        <Text style={styles.buttonText}>Done</Text>
+        <Text style={styles.buttonText}>Go to Devices</Text>
       </TouchableOpacity>
     </View>
   );
