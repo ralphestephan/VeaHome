@@ -22,6 +22,7 @@ import SignupScreen from '../screens/Auth/SignupScreen';
 import HubPairScreen from '../screens/HubPairScreen';
 import HubSetupWizard from '../screens/HubSetupWizard';
 import DeviceOnboardingWizard from '../screens/DeviceOnboardingWizard';
+import DeviceProvisioningWizard from '../screens/DeviceProvisioningWizard';
 import SceneFormScreen from '../screens/SceneFormScreen';
 import AutomationFormScreen from '../screens/AutomationFormScreen';
 import HomeSelectorScreen from '../screens/HomeSelectorScreen';
@@ -145,6 +146,7 @@ export default function AppNavigator() {
           <Stack.Screen name="HubPair" component={HubPairScreen} />
           <Stack.Screen name="HubSetup" component={HubSetupWizard} />
           <Stack.Screen name="DeviceOnboarding" component={DeviceOnboardingWizard} />
+          <Stack.Screen name="DeviceProvisioning" component={DeviceProvisioningWizard} />
           <Stack.Screen name="SceneForm" component={SceneFormScreen} />
           <Stack.Screen name="AutomationForm" component={AutomationFormScreen} />
           <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />

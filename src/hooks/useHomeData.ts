@@ -140,7 +140,12 @@ export const useHomeData = (homeId: string | null | undefined) => {
 
   const enrichAirguards = useCallback(async (baseDevices: Device[]): Promise<Device[]> => {
     const airguards = baseDevices.filter((d) => d.type === 'airguard');
-    if (!airguards.length) return baseDevices;
+    if (!airguards.length) {
+      console.log('[enrichAirguards] No airguard devices found in current device list');
+      return baseDevices;
+    }
+
+    console.log('[enrichAirguards] Enriching', airguards.length, 'airguard device(s)');
 
     const fetchLatest = async (smartMonitorId: number | string) => {
       // Use a shorter timeout so a slow Influx/Node-RED path doesn't stall the whole home refresh.

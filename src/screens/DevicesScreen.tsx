@@ -548,21 +548,26 @@ export default function DevicesScreen() {
                   try {
                     console.log('[DevicesScreen] Deleting device:', deviceId, 'from home:', homeId);
                     const api = HubApi(getApiClient(async () => token));
-                    await api.deleteDevice(homeId, deviceId);
-                    console.log('[DevicesScreen] Device deleted successfully');
                     
-                    // Close modal first
+                    // Delete from backend
+                    await api.deleteDevice(homeId, deviceId);
+                    console.log('[DevicesScreen] Device deleted successfully from backend');
+                    
+                    // Close modal immediately
                     setModalVisible(false);
                     setSelectedDevice(null);
                     
-                    // Then refresh the device list
-                    console.log('[DevicesScreen] Refreshing device list...');
+                    // Force immediate refresh to clear cache
+                    console.log('[DevicesScreen] Force refreshing device list...');
+                    setRefreshing(true);
                     await refresh();
-                    console.log('[DevicesScreen] Device list refreshed');
+                    setRefreshing(false);
+                    console.log('[DevicesScreen] Device list refreshed and cache cleared');
                   } catch (e: any) {
                     console.error('[DevicesScreen] Failed to delete device:', e);
                     console.error('[DevicesScreen] Error response:', e.response?.data);
                     Alert.alert('Error', e.response?.data?.error || 'Failed to delete device');
+                    setRefreshing(false);
                   }
                 },
               },
