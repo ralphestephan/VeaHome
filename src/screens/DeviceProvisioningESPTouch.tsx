@@ -2,111 +2,142 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
-// import SmartConfig from 'react-native-smartconfig';
 import NetInfo from '@react-native-community/netinfo';
+
+const DEVICE_AP_SSID = 'SmartMonitor_Setup';
+const DEVICE_API_URL = 'http://192.168.4.1/api/provision';
 
 export default function DeviceProvisioningESPTouch({ route }: any) {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const deviceType = route.params?.deviceType || 'AirGuard';
   
-  const [step, setStep] = useState<'intro' | 'credentials' | 'provisioning' | 'success'>('intro');
+  const [step, setStep] = useState<'intro' | 'connect' | 'credentials' | 'provisioning' | 'success'>('intro');
   const [wifiPassword, setWifiPassword] = useState('');
   const [wifiSSID, setWifiSSID] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const [currentSSID, setCurrentSSID] = useState('');
-  const [manualMode, setManualMode] = useState(false);
+  const [homeWifiSSID, setHomeWifiSSID] = useState('');
+  const [connectedToDevice, setConnectedToDevice] = useState(false);
 
-  // Auto-detect WiFi on mount
+  // Auto-detect home WiFi on mount
   useEffect(() => {
     checkCurrentWiFi();
   }, []);
 
-  // Get phone's current WiFi SSID
+  // Monitor WiFi connection status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      if (state.type === 'wifi' && state.details?.ssid) {
+        const ssid = state.details.ssid;
+        console.log('[WiFi] Connected to:', ssid);
+        
+        // Check if connected to device AP
+        if (ssid === DEVICE_AP_SSID || ssid.includes('SmartMonitor')) {
+          setConnectedToDevice(true);
+          if (step === 'connect') {
+            setStep('credentials');
+          }
+        } else {
+          setConnectedToDevice(false);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [step]);
+
+  // Get phone's current WiFi SSID (home network)
   const checkCurrentWiFi = async () => {
     try {
       const netInfo = await NetInfo.fetch();
-      console.log('[ESPTouch] NetInfo:', JSON.stringify(netInfo));
+      console.log('[WiFi] NetInfo:', JSON.stringify(netInfo));
       
       if (netInfo.type === 'wifi') {
-        // Try to get SSID from details
         const ssid = netInfo.details?.ssid || netInfo.details?.['SSID'];
-        if (ssid) {
-          setCurrentSSID(ssid);
-          return ssid;
+        if (ssid && ssid !== DEVICE_AP_SSID && !ssid.includes('SmartMonitor')) {
+          setHomeWifiSSID(ssid);
+          setWifiSSID(ssid);
+          console.log('[WiFi] Home network detected:', ssid);
         }
       }
-      
-      // If we can't detect SSID, still allow user to proceed
-      Alert.alert(
-        'WiFi Detection',
-        'Could not detect WiFi name automatically. Make sure you are connected to WiFi and enter the network name manually if needed.',
-        [{ text: 'OK' }]
-      );
-      return 'unknown'; // Return a placeholder to allow proceeding
     } catch (error) {
-      console.error('[ESPTouch] WiFi check error:', error);
-      return 'unknown';
+      console.error('[WiFi] Detection error:', error);
     }
   };
 
-  const startProvisioning = async () => {
+  const sendCredentials = async () => {
     if (!wifiPassword.trim()) {
       Alert.alert('Error', 'Please enter WiFi password');
       return;
     }
 
-    let ssid = currentSSID || wifiSSID;
-    if (!ssid || ssid === 'unknown') {
-      const tempSsid = await checkCurrentWiFi();
-      if (tempSsid && tempSsid !== 'unknown') {
-        ssid = tempSsid;
-      }
-    }
-
-    if (!ssid || ssid === 'unknown') {
-      Alert.alert(
-        'WiFi Required',
-        'Please enter your WiFi network name manually',
-        [{ text: 'OK', onPress: () => setManualMode(true) }]
-      );
+    const ssid = wifiSSID || homeWifiSSID;
+    if (!ssid) {
+      Alert.alert('Error', 'Please enter WiFi network name');
       return;
     }
 
     try {
       setIsProcessing(true);
       setStep('provisioning');
-      setStatusMessage('Connecting to device WiFi network...');
+      setStatusMessage('Sending WiFi credentials to device...');
 
-      console.log('[Provisioning] Starting with SSID:', ssid);
+      console.log('[Provisioning] Sending credentials:', { ssid });
 
-      // For now, show instructions since SmartConfig isn't working
-      Alert.alert(
-        'Manual Setup Required',
-        `1. Connect your phone to "SmartMonitor_Setup" WiFi\n2. Device will configure automatically\n\nNetwork: ${ssid}\nPassword: ${wifiPassword}`,
-        [
-          {
-            text: 'Open WiFi Settings',
-            onPress: () => {
-              Linking.openSettings();
-              setStep('success');
-            }
-          },
-          {
-            text: 'Done',
-            onPress: () => setStep('success')
-          }
-        ]
-      );
+      // Send credentials to device via HTTP POST
+      const response = await fetch(DEVICE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ssid: ssid,
+          password: wifiPassword,
+        }),
+        // Timeout after 10 seconds
+        signal: AbortSignal.timeout(10000),
+      });
 
-      setIsProcessing(false);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('[Provisioning] Response:', result);
+
+      if (result.success) {
+        setStatusMessage('Configuration successful! Device is restarting...');
+        setTimeout(() => {
+          setStep('success');
+          setIsProcessing(false);
+        }, 2000);
+      } else {
+        throw new Error(result.message || 'Configuration failed');
+      }
       
     } catch (error: any) {
       console.error('[Provisioning] Error:', error);
       setIsProcessing(false);
-      Alert.alert('Error', error.message || 'Setup failed. Please try again.');
-      setStep('credentials');
+      
+      if (error.name === 'TimeoutError') {
+        Alert.alert(
+          'Connection Timeout',
+          'Could not reach device. Make sure you are connected to "SmartMonitor_Setup" WiFi.',
+          [
+            { text: 'Open WiFi Settings', onPress: () => Linking.openSettings() },
+            { text: 'Try Again', onPress: () => setStep('connect') }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Configuration Failed',
+          error.message || 'Could not configure device. Please try again.',
+          [
+            { text: 'Retry', onPress: () => setStep('credentials') }
+          ]
+        );
+      }
     }
   };
 
@@ -114,15 +145,59 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.foreground }]}>Add {deviceType}</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Fully automatic WiFi configuration - no manual steps required!
+        This setup requires connecting to the device's WiFi network temporarily.
       </Text>
       <View style={[styles.stepsList, { backgroundColor: colors.card }]}>
         <Text style={[styles.stepText, { color: colors.foreground }]}>1. Make sure device shows "SETUP MODE"</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Enter your WiFi password</Text>
-        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Click Configure - that's it!</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Connect to "{DEVICE_AP_SSID}" WiFi</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Enter your home WiFi password</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>4. Done! Device will configure automatically</Text>
       </View>
-      <TouchableOpacity style={styles.button} onPress={() => setStep('credentials')}>
+      <TouchableOpacity style={styles.button} onPress={() => setStep('connect')}>
         <Text style={styles.buttonText}>Continue</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderConnect = () => (
+    <View style={styles.container}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Connect to Device</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>
+        Connect your phone to the device's WiFi network to continue setup.
+      </Text>
+
+      <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
+        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>WiFi Network:</Text>
+        <Text style={[styles.infoValue, { color: colors.primary }]}>{DEVICE_AP_SSID}</Text>
+        <Text style={[styles.infoNote, { color: colors.mutedForeground }]}>
+          (No password required)
+        </Text>
+      </View>
+
+      {connectedToDevice ? (
+        <View style={[styles.successBox, { backgroundColor: colors.card, borderColor: colors.primary }]}>
+          <Text style={[styles.successText, { color: colors.primary }]}>✓ Connected to device</Text>
+        </View>
+      ) : (
+        <View style={[styles.warningBox, { backgroundColor: colors.card }]}>
+          <Text style={[styles.warningText, { color: colors.mutedForeground }]}>
+            Waiting for connection...
+          </Text>
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+        <Text style={styles.buttonText}>Open WiFi Settings</Text>
+      </TouchableOpacity>
+
+      {connectedToDevice && (
+        <TouchableOpacity style={[styles.button, { marginTop: 12 }]} onPress={() => setStep('credentials')}>
+          <Text style={styles.buttonText}>Continue</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity style={styles.linkButton} onPress={() => setStep('intro')}>
+        <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
       </TouchableOpacity>
     </View>
   );
@@ -131,13 +206,13 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.foreground }]}>WiFi Configuration</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Enter your WiFi credentials to configure the device.
+        Enter your home WiFi credentials to configure the device.
       </Text>
 
-      {currentSSID && currentSSID !== 'unknown' ? (
+      {homeWifiSSID ? (
         <View style={[styles.infoBox, { backgroundColor: colors.card }]}>
-          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Current WiFi:</Text>
-          <Text style={[styles.infoValue, { color: colors.foreground }]}>{currentSSID}</Text>
+          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Home WiFi Network:</Text>
+          <Text style={[styles.infoValue, { color: colors.foreground }]}>{homeWifiSSID}</Text>
         </View>
       ) : (
         <TextInput
@@ -162,10 +237,14 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
 
       <TouchableOpacity
         style={[styles.button, !wifiPassword && styles.buttonDisabled]}
-        onPress={startProvisioning}
+        onPress={sendCredentials}
         disabled={!wifiPassword}
       >
         <Text style={styles.buttonText}>Configure Device</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.linkButton} onPress={() => setStep('connect')}>
+        <Text style={[styles.linkText, { color: colors.primary }]}>Back</Text>
       </TouchableOpacity>
     </View>
   );
@@ -187,9 +266,23 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
       <Text style={styles.successIcon}>✓</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>Setup Complete!</Text>
       <Text style={[styles.description, { color: colors.foreground }]}>
-        Your {deviceType} is now connected and will appear in your devices list shortly.
+        Your {deviceType} has been configured successfully.{'\n\n'}
+        Device will restart and connect to your WiFi network.{'\n\n'}
+        It will appear in your devices list within 1-2 minutes.
       </Text>
-      <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
+      
+      <View style={[styles.infoBox, { backgroundColor: colors.card, marginTop: 20 }]}>
+        <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Next Steps:</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>1. Reconnect phone to home WiFi: {homeWifiSSID || wifiSSID}</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>2. Wait 1-2 minutes for device to connect</Text>
+        <Text style={[styles.stepText, { color: colors.foreground }]}>3. Check Devices screen</Text>
+      </View>
+
+      <TouchableOpacity style={styles.button} onPress={() => Linking.openSettings()}>
+        <Text style={styles.buttonText}>Open WiFi Settings</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.button, { marginTop: 12 }]} onPress={() => navigation.goBack()}>
         <Text style={styles.buttonText}>Done</Text>
       </TouchableOpacity>
     </View>
@@ -198,6 +291,7 @@ export default function DeviceProvisioningESPTouch({ route }: any) {
   return (
     <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
       {step === 'intro' && renderIntro()}
+      {step === 'connect' && renderConnect()}
       {step === 'credentials' && renderCredentials()}
       {step === 'provisioning' && renderProvisioning()}
       {step === 'success' && renderSuccess()}
@@ -252,6 +346,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  infoNote: {
+    fontSize: 13,
+    opacity: 0.6,
+    marginTop: 4,
+  },
+  successBox: {
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+  },
+  successText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  warningBox: {
+    alignSelf: 'stretch',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  warningText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
   input: {
     width: '100%',
     padding: 16,
@@ -273,6 +394,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  linkButton: {
+    marginTop: 16,
+    padding: 12,
+  },
+  linkText: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   note: {
     fontSize: 14,
