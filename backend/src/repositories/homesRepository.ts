@@ -11,12 +11,21 @@ export async function getHomesByUserId(userId: string): Promise<Home[]> {
      ORDER BY h.created_at`,
     [userId]
   );
-  return rows;
+  // Map user_id to owner_id for each home
+  return rows.map((home: any) => ({
+    ...home,
+    owner_id: home.user_id
+  }));
 }
 
 export async function getHomeById(id: string): Promise<Home | null> {
   const { rows } = await query('SELECT * FROM homes WHERE id = $1', [id]);
-  return rows[0] || null;
+  const home = rows[0] || null;
+  // Map user_id to owner_id for backward compatibility
+  if (home) {
+    home.owner_id = home.user_id;
+  }
+  return home;
 }
 
 export async function createHome(userId: string, name: string, model3dUrl?: string): Promise<Home> {

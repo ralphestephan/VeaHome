@@ -80,7 +80,6 @@ export async function getNotificationPreferences(userId: string) {
 }
 
 export const usersRepository = {
-  createUser,
   findById: findUserById,
   findByEmail: findUserByEmail,
   create: createUser,
