@@ -1,16 +1,27 @@
 {
   "expo": {
     "name": "VeaHome",
+    "slug": "veahome",
     "userInterfaceStyle": "dark",
     "main": "index.ts",
     "assetBundlePatterns": [
       "**/*"
+    ],
+    "plugins": [
+      [
+        "react-native-wifi-reborn",
+        {
+          "fineLocationPermission": "Allow VeaHome to access your location to find and connect to your smart devices"
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vealive.veahome",
       "infoPlist": {
         "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing.",
+        "NSLocationWhenInUseUsageDescription": "VeaHome needs location access to connect to your smart devices WiFi",
+        "NSLocalNetworkUsageDescription": "VeaHome needs local network access to communicate with your smart devices",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
@@ -29,7 +40,8 @@
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_STATE",
         "CHANGE_NETWORK_STATE",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "INTERNET"
       ]
     },
     "web": {

@@ -270,8 +270,9 @@ void handleProvisionRequest() {
   tft.drawString("WiFi configured!", W/2, 130, 2);
   tft.drawString("Restarting...", W/2, 155, 2);
 
-  // Send response
-  server.send(200, "application/json", "{\"success\":true,\"message\":\"Credentials saved. Rebooting...\"}");
+  // Send response with deviceId
+  String response = "{\"success\":true,\"deviceId\":" + String(DEVICE_ID) + ",\"message\":\"Credentials saved. Rebooting...\"}";
+  server.send(200, "application/json", response);
 
   delay(1000);
   ESP.restart();
