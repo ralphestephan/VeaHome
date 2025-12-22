@@ -8,14 +8,7 @@
       "**/*"
     ],
     "plugins": [
-      [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": false,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow VeaHome to use Bluetooth to setup smart devices"
-        }
-      ]
+      "react-native-ble-plx"
     ],
     "ios": {
       "supportsTablet": true,

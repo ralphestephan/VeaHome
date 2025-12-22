@@ -639,7 +639,11 @@ export default function DevicesScreen() {
               style={styles.modalButton}
               onPress={() => {
                 setShowVealiveModal(false);
-                navigation.navigate('DeviceOnboarding', { deviceType: 'SmartMonitor' });
+                navigation.navigate('BLEDeviceWizard', { 
+                  homeId: selectedHomeId,
+                  hubId: hubId,
+                  deviceType: 'SmartMonitor' 
+                });
               }}
             >
               <LinearGradient
@@ -648,7 +652,7 @@ export default function DevicesScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.modalButtonGradient}
               >
-                <Text style={styles.modalButtonText}>AirGuard</Text>
+                <Text style={styles.modalButtonText}>AirGuard (BLE Setup)</Text>
               </LinearGradient>
             </TouchableOpacity>
 

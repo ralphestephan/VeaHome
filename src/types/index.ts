@@ -3,9 +3,9 @@ export type RootStackParamList = {
   Dashboard: { screen?: keyof BottomTabParamList; params?: Record<string, unknown> } | undefined;
   HubPair: undefined;
   HubSetup: { hubId: string; qrCode: string };
-  DeviceOnboarding: { hubId: string };
+  DeviceOnboarding: { hubId?: string; deviceType?: string };
   DeviceProvisioning: { deviceType: string };
-  DeviceProvisioningESPTouch: { deviceType: string };
+  BLEDeviceWizard: { homeId: string; hubId?: string; deviceType?: string };
   RoomDetail: { roomId: string };
   Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;

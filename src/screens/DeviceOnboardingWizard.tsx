@@ -51,8 +51,9 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type RouteProp = {
   key: string;
   name: string;
-  params: {
-    hubId: string;
+  params?: {
+    hubId?: string;
+    deviceType?: string; // 'SmartMonitor' for AirGuard direct flow
   };
 };
 
@@ -94,15 +95,18 @@ export default function DeviceOnboardingWizard() {
   const { token, user } = useAuth();
   const demo = useDemo();
   const isDemoMode = token === 'DEMO_TOKEN';
-  const { hubId } = route.params || { hubId: '' };
+  const { hubId, deviceType: routeDeviceType } = route.params || {};
   
-  const [step, setStep] = useState<Step>('type');
+  // Check if this is a direct AirGuard flow (from DevicesScreen)
+  const isAirguardFlow = routeDeviceType === 'SmartMonitor' || routeDeviceType === 'airguard';
+  
+  const [step, setStep] = useState<Step>(isAirguardFlow ? 'wifi' : 'type');
   const [loading, setLoading] = useState(false);
   
   // Device configuration
-  const [deviceType, setDeviceType] = useState<DeviceType | null>(null);
-  const [deviceName, setDeviceName] = useState('');
-  const [deviceCategory, setDeviceCategory] = useState<DeviceCategory>('IR');
+  const [deviceType, setDeviceType] = useState<DeviceType | null>(isAirguardFlow ? 'airguard' : null);
+  const [deviceName, setDeviceName] = useState(isAirguardFlow ? 'AirGuard' : '');
+  const [deviceCategory, setDeviceCategory] = useState<DeviceCategory>(isAirguardFlow ? 'Sensor' : 'IR');
   const [selectedRoom, setSelectedRoom] = useState<string>('');
 
   // Airguard config
@@ -215,13 +219,13 @@ export default function DeviceOnboardingWizard() {
 
   // Check Bluetooth when entering WiFi step
   useEffect(() => {
-    if (step === 'wifi' && deviceType === 'airguard') {
+    if (step === 'wifi' && (deviceType === 'airguard' || isAirguardFlow)) {
       startBLEScan();
     }
     return () => {
       stopScan();
     };
-  }, [step, deviceType]);
+  }, [step, deviceType, isAirguardFlow]);
 
   const handleSelectType = (type: DeviceType) => {
     setDeviceType(type);

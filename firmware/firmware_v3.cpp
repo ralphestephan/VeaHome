@@ -52,6 +52,10 @@
 #include "esp_wifi.h"
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 // -------------------------------------------------------------
 // Pins
@@ -84,6 +88,20 @@ String topicThresholds;
 String topicCmdBuzzer;
 String topicCmdThresholds;
 String mqttClientId;
+
+// BLE UUIDs (must match mobile app)
+#define BLE_SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define BLE_WIFI_LIST_CHAR_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define BLE_WIFI_CRED_CHAR_UUID "cf7e8a3d-c4c0-4ff1-8b42-bc5e0e3f4d8f"
+#define BLE_DEVICE_INFO_CHAR_UUID "1c95d5e3-d8f7-413a-bf3d-7a2e5d7be87e"
+
+// BLE Objects
+BLEServer* pServer = nullptr;
+BLECharacteristic* pWifiListChar = nullptr;
+BLECharacteristic* pWifiCredChar = nullptr;
+BLECharacteristic* pDeviceInfoChar = nullptr;
+bool bleClientConnected = false;
+bool bleProvisioningMode = false;
 
 // -------------------------------------------------------------
 // Networking objects
@@ -189,6 +207,7 @@ bool lastMuteState  = true;
 // Forward Declarations
 // -------------------------------------------------------------
 void startAPMode();
+void startBLEProvisioning();
 void launchCaptivePortal();
 bool loadPrefs();
 void savePrefs();
@@ -205,6 +224,56 @@ void drawCards(int temp, int hum, int dust, int mq2);
 void drawFooter();
 void drawMuteIcon(bool muted);
 void setLED(const String& status);
+
+// BLE Callbacks
+class BLEServerCallbacks: public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) {
+    bleClientConnected = true;
+    Serial.println("[BLE] Client connected");
+  }
+
+  void onDisconnect(BLEServer* pServer) {
+    bleClientConnected = false;
+    Serial.println("[BLE] Client disconnected");
+    // Restart advertising
+    if (bleProvisioningMode) {
+      pServer->startAdvertising();
+    }
+  }
+};
+
+class WiFiCredCallbacks: public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pCharacteristic) {
+    std::string value = pCharacteristic->getValue();
+    if (value.length() > 0) {
+      Serial.println("[BLE] Received WiFi credentials");
+      
+      // Parse JSON: {"ssid":"HomeWiFi","password":"password123"}
+      StaticJsonDocument<256> doc;
+      DeserializationError err = deserializeJson(doc, value.c_str());
+      
+      if (!err) {
+        ssid = doc["ssid"].as<String>();
+        password = doc["password"].as<String>();
+        
+        Serial.printf("[BLE] SSID: %s\n", ssid.c_str());
+        savePrefs();
+        
+        // Send confirmation
+        StaticJsonDocument<128> response;
+        response["success"] = true;
+        response["message"] = "Credentials saved. Restarting...";
+        String jsonResponse;
+        serializeJson(response, jsonResponse);
+        pCharacteristic->setValue(jsonResponse.c_str());
+        pCharacteristic->notify();
+        
+        delay(1000);
+        ESP.restart();
+      }
+    }
+  }
+};
 
 // -------------------------------------------------------------
 // Helpers
@@ -297,8 +366,8 @@ void setup() {
 
   // Load settings
   if (!loadPrefs()) {
-    Serial.println("[PREF] No WiFi saved. Starting AP.");
-    startAPMode();
+    Serial.println("[PREF] No WiFi saved. Starting BLE provisioning.");
+    startBLEProvisioning();
     return;
   }
 
@@ -338,11 +407,104 @@ void setup() {
 }
 
 // -------------------------------------------------------------
+// BLE Provisioning Mode
+// -------------------------------------------------------------
+void startBLEProvisioning() {
+  bleProvisioningMode = true;
+  
+  Serial.println("[BLE] Starting BLE provisioning mode");
+  
+  // Show BLE mode on display
+  tft.fillScreen(COL_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COL_TEXT);
+  tft.drawString("BLE Pairing Mode", W/2, H/2 - 20, 4);
+  tft.setTextColor(COL_MUTED);
+  tft.drawString("Open VeaHome app to connect", W/2, H/2 + 20, 2);
+  
+  // Initialize BLE
+  String bleName = "SmartMonitor_" + String(DEVICE_ID);
+  BLEDevice::init(bleName.c_str());
+  
+  // Create BLE Server
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new BLEServerCallbacks());
+  
+  // Create BLE Service
+  BLEService *pService = pServer->createService(BLE_SERVICE_UUID);
+  
+  // Device Info Characteristic (Read)
+  pDeviceInfoChar = pService->createCharacteristic(
+    BLE_DEVICE_INFO_CHAR_UUID,
+    BLECharacteristic::PROPERTY_READ
+  );
+  StaticJsonDocument<128> deviceInfo;
+  deviceInfo["deviceId"] = DEVICE_ID;
+  deviceInfo["name"] = bleName;
+  deviceInfo["type"] = "SmartMonitor";
+  String infoJson;
+  serializeJson(deviceInfo, infoJson);
+  pDeviceInfoChar->setValue(infoJson.c_str());
+  
+  // WiFi Networks Characteristic (Read)
+  pWifiListChar = pService->createCharacteristic(
+    BLE_WIFI_LIST_CHAR_UUID,
+    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+  );
+  pWifiListChar->addDescriptor(new BLE2902());
+  
+  // Scan and send WiFi networks
+  int n = WiFi.scanNetworks();
+  StaticJsonDocument<1024> networks;
+  JsonArray array = networks.to<JsonArray>();
+  for (int i = 0; i < min(n, 10); i++) {
+    JsonObject net = array.createNestedObject();
+    net["ssid"] = WiFi.SSID(i);
+    net["signal"] = WiFi.RSSI(i);
+    net["secured"] = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+  }
+  String networksJson;
+  serializeJson(networks, networksJson);
+  pWifiListChar->setValue(networksJson.c_str());
+  
+  // WiFi Credentials Characteristic (Write)
+  pWifiCredChar = pService->createCharacteristic(
+    BLE_WIFI_CRED_CHAR_UUID,
+    BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY
+  );
+  pWifiCredChar->addDescriptor(new BLE2902());
+  pWifiCredChar->setCallbacks(new WiFiCredCallbacks());
+  
+  // Start service
+  pService->start();
+  
+  // Start advertising
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(BLE_SERVICE_UUID);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
+  
+  Serial.println("[BLE] Advertising started");
+  Serial.printf("[BLE] Device name: %s\n", bleName.c_str());
+  Serial.printf("[BLE] Found %d WiFi networks\n", n);
+}
+
+// -------------------------------------------------------------
 // Loop
 // -------------------------------------------------------------
 void loop() {
   // Handle buttons
   handleButtons();
+
+  // BLE provisioning mode
+  if (bleProvisioningMode) {
+    // Just wait for BLE connection and credentials
+    // Device will restart when credentials received
+    delay(100);
+    return;
+  }
 
   // Captive portal
   if (apModeActive) {
