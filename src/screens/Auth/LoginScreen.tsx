@@ -77,7 +77,9 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
     try {
       await login(trimmedEmail, password);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Login failed');
+      const errorMsg = e?.response?.data?.error || e?.response?.data?.message || e?.message || 'Login failed';
+      setError(errorMsg);
+      console.log('[Login] Error:', errorMsg);
     } finally {
       setSubmitting(false);
     }

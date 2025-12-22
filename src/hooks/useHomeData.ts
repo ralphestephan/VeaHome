@@ -141,7 +141,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
   const enrichAirguards = useCallback(async (baseDevices: Device[]): Promise<Device[]> => {
     const airguards = baseDevices.filter((d) => d.type === 'airguard');
     if (!airguards.length) {
-      console.log('[enrichAirguards] No airguard devices found in current device list');
+      // No airguards to enrich - silent return
       return baseDevices;
     }
 

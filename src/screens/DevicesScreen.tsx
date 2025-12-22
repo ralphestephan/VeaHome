@@ -640,7 +640,7 @@ export default function DevicesScreen() {
               onPress={() => {
                 setShowVealiveModal(false);
                 navigation.navigate('BLEDeviceWizard', { 
-                  homeId: selectedHomeId,
+                  homeId: homeId,
                   hubId: hubId,
                   deviceType: 'SmartMonitor' 
                 });
