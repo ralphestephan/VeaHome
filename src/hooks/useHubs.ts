@@ -38,10 +38,11 @@ export const useHubs = (homeId: string | null | undefined) => {
   const refresh = async () => {
     if (!homeId) return;
     try {
-      const response = await hubApi.listHubs(homeId);
+      const response = await hubApi.listHubs(homeId).catch(() => ({ data: [] }));
       setHubs(response.data || []);
     } catch (e) {
       console.error('Error refreshing hubs:', e);
+      setHubs([]);
     }
   };
 

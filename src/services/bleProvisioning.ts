@@ -15,9 +15,11 @@
  * - Characteristic UUID: beb5483e-36e1-4688-b7f5-ea07361b26a8
  * - Write: {"ssid":"...","password":"..."}
  * - Notify: {"success":true,"deviceId":1}
+ * 
+ * NOTE: BLE requires a development build. In Expo Go, scanning will fail gracefully.
  */
 
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, NativeModules } from 'react-native';
 import { Buffer } from 'buffer';
 
 // BLE UUIDs (must match firmware)
@@ -40,35 +42,32 @@ export interface ProvisionResult {
   error?: string;
 }
 
-// Dynamic BLE loading - prevents crash in Expo Go
-let BleManagerClass: any = null;
-let bleManager: any = null;
-let bleAvailable = false;
+// Check if BLE native module exists BEFORE importing
+// This prevents NativeEventEmitter crash in Expo Go
+const isBleNativeAvailable = !!NativeModules.BleManager;
 
-try {
-  const blePlx = require('react-native-ble-plx');
-  BleManagerClass = blePlx.BleManager;
-  bleAvailable = true;
-  console.log('[BLE] Native module loaded');
-} catch (e) {
-  console.log('[BLE] Native module not available (Expo Go mode)');
-}
+console.log('[BLE] Native module available:', isBleNativeAvailable);
+
+// Lazy-loaded BLE manager
+let bleManagerInstance: any = null;
 
 function getBleManager(): any {
-  if (!BleManagerClass) {
+  if (!isBleNativeAvailable) {
     throw new Error('BLE not available in Expo Go. Build a development client for BLE support.');
   }
-  if (!bleManager) {
-    bleManager = new BleManagerClass();
+  if (!bleManagerInstance) {
+    // Only import BLE library when we know native module exists
+    const { BleManager } = require('react-native-ble-plx');
+    bleManagerInstance = new BleManager();
   }
-  return bleManager;
+  return bleManagerInstance;
 }
 
 /**
  * Check if BLE is available
  */
 export function isBLEAvailable(): boolean {
-  return bleAvailable;
+  return isBleNativeAvailable;
 }
 
 /**
@@ -113,15 +112,15 @@ async function requestPermissions(): Promise<boolean> {
  * Check if Bluetooth is enabled
  */
 export async function checkBluetoothEnabled(): Promise<boolean> {
-  if (!bleAvailable) return false;
+  if (!isBleNativeAvailable) {
+    console.log('[BLE] Native module not available, returning false');
+    return false;
+  }
   
   try {
     const manager = getBleManager();
-    return new Promise((resolve) => {
-      manager.state().then((state: string) => {
-        resolve(state === 'PoweredOn');
-      });
-    });
+    const state = await manager.state();
+    return state === 'PoweredOn';
   } catch {
     return false;
   }
@@ -134,6 +133,11 @@ export async function scanForDevices(
   onDeviceFound: (device: BLEDevice) => void,
   timeoutMs: number = 10000
 ): Promise<BLEDevice[]> {
+  if (!isBleNativeAvailable) {
+    console.log('[BLE] Native module not available, cannot scan');
+    throw new Error('BLE not available. Please build a development client.');
+  }
+  
   console.log('[BLE] Starting scan...');
   
   const hasPermission = await requestPermissions();
@@ -190,9 +194,14 @@ export async function scanForDevices(
  * Stop scanning
  */
 export function stopScan(): void {
-  const manager = getBleManager();
-  manager.stopDeviceScan();
-  console.log('[BLE] Scan stopped');
+  if (!isBleNativeAvailable || !bleManagerInstance) return;
+  
+  try {
+    bleManagerInstance.stopDeviceScan();
+    console.log('[BLE] Scan stopped');
+  } catch (error) {
+    console.error('[BLE] Error stopping scan:', error);
+  }
 }
 
 /**
@@ -204,6 +213,13 @@ export async function provisionDevice(
   wifiPassword: string,
   onProgress?: (step: string) => void
 ): Promise<ProvisionResult> {
+  if (!isBleNativeAvailable) {
+    return {
+      success: false,
+      error: 'BLE not available. Please build a development client.',
+    };
+  }
+
   const manager = getBleManager();
   let connectedDevice: any = null;
 
@@ -326,8 +342,12 @@ export async function provisionDevice(
  * Clean up BLE resources
  */
 export function destroyBLE(): void {
-  if (bleManager) {
-    bleManager.destroy();
-    bleManager = null;
+  if (bleManagerInstance) {
+    try {
+      bleManagerInstance.destroy();
+    } catch (e) {
+      console.error('[BLE] Error destroying manager:', e);
+    }
+    bleManagerInstance = null;
   }
 }
