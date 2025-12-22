@@ -9,27 +9,32 @@
     ],
     "plugins": [
       [
-        "react-native-wifi-reborn",
+        "react-native-ble-plx",
         {
-          "fineLocationPermission": "Allow VeaHome to access your location to find and connect to your smart devices"
+          "isBackgroundEnabled": false,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "Allow VeaHome to use Bluetooth to setup smart devices"
         }
       ]
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vealive.veahome",
-      "entitlements": {
-        "com.apple.developer.networking.HotspotConfiguration": true
-      },
       "infoPlist": {
         "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing.",
-        "NSLocationWhenInUseUsageDescription": "VeaHome needs location access to connect to your smart devices WiFi",
+        "NSBluetoothAlwaysUsageDescription": "VeaHome uses Bluetooth to setup and configure your smart devices",
+        "NSBluetoothPeripheralUsageDescription": "VeaHome uses Bluetooth to communicate with your smart devices",
+        "NSLocationWhenInUseUsageDescription": "VeaHome needs location access to scan for Bluetooth devices",
         "NSLocalNetworkUsageDescription": "VeaHome needs local network access to communicate with your smart devices",
-        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -40,13 +45,16 @@
       },
       "package": "com.vealive.veahome",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_WIFI_STATE",
-        "CHANGE_WIFI_STATE",
-        "CHANGE_NETWORK_STATE",
-        "ACCESS_NETWORK_STATE",
-        "INTERNET"
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_STATE",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET"
       ]
     },
     "web": {
@@ -55,7 +63,10 @@
     "extra": {
       "apiBaseUrl": "http://63.34.243.171:8000",
       "region": "eu-west-1",
-      "demoUserEnabled": true
+      "demoUserEnabled": true,
+      "eas": {
+        "projectId": "f9cd7fbd-1333-4d6e-8950-4fd7de75b966"
+      }
     }
   }
 }

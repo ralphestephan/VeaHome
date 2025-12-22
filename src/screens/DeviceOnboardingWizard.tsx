@@ -24,6 +24,9 @@ import {
   CheckCircle,
   Loader,
   Wifi,
+  Bluetooth,
+  RefreshCw,
+  Signal,
 } from 'lucide-react-native';
 import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -33,7 +36,13 @@ import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, HubApi, HomeApi } from '../services/api';
-import { provisionDevice } from '../services/deviceProvisioning';
+import { 
+  scanForDevices, 
+  provisionDevice as bleProvisionDevice,
+  stopScan,
+  checkBluetoothEnabled,
+  BLEDevice 
+} from '../services/bleProvisioning';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
@@ -109,6 +118,12 @@ export default function DeviceOnboardingWizard() {
   const [provisioningStep, setProvisioningStep] = useState('');
   const [provisioningError, setProvisioningError] = useState('');
   
+  // BLE scanning state
+  const [bleDevices, setBleDevices] = useState<BLEDevice[]>([]);
+  const [selectedBleDevice, setSelectedBleDevice] = useState<BLEDevice | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [bluetoothEnabled, setBluetoothEnabled] = useState(true);
+  
   const [availableRooms, setAvailableRooms] = useState<any[]>([]);
   const safeAvailableRooms = Array.isArray(availableRooms) ? availableRooms : [];
 
@@ -150,6 +165,51 @@ export default function DeviceOnboardingWizard() {
       console.error('Error loading rooms:', e);
     }
   };
+
+  // BLE scanning
+  const startBLEScan = async () => {
+    setIsScanning(true);
+    setBleDevices([]);
+    setSelectedBleDevice(null);
+    setProvisioningError('');
+
+    try {
+      const btEnabled = await checkBluetoothEnabled();
+      if (!btEnabled) {
+        setBluetoothEnabled(false);
+        Alert.alert('Bluetooth Off', 'Please enable Bluetooth to find your device');
+        setIsScanning(false);
+        return;
+      }
+      setBluetoothEnabled(true);
+
+      await scanForDevices(
+        (device) => {
+          setBleDevices(prev => {
+            // Avoid duplicates
+            if (prev.find(d => d.id === device.id)) return prev;
+            return [...prev, device];
+          });
+        },
+        15000 // 15 second scan
+      );
+    } catch (error: any) {
+      console.error('[BLE] Scan error:', error);
+      setProvisioningError(error.message || 'Bluetooth scan failed');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Check Bluetooth when entering WiFi step
+  useEffect(() => {
+    if (step === 'wifi' && deviceType === 'airguard') {
+      startBLEScan();
+    }
+    return () => {
+      stopScan();
+    };
+  }, [step, deviceType]);
 
   const handleSelectType = (type: DeviceType) => {
     setDeviceType(type);
@@ -298,6 +358,12 @@ export default function DeviceOnboardingWizard() {
       return;
     }
     
+    // For Airguard, require BLE device selection
+    if (deviceType === 'airguard' && !selectedBleDevice) {
+      Alert.alert('Error', 'Please select a device from the list');
+      return;
+    }
+    
     const homeId = user?.homeId;
     if (!homeId) {
       Alert.alert('Error', 'Missing home context');
@@ -308,51 +374,58 @@ export default function DeviceOnboardingWizard() {
     setProvisioningError('');
     
     try {
-      // Step 1: Provision the device with WiFi credentials
-      const result = await provisionDevice(
-        deviceWifiSSID,
-        deviceWifiPassword,
-        user?.email,
-        (step) => setProvisioningStep(step)
-      );
-
-      if (!result.success || !result.deviceId) {
-        setProvisioningError(result.error || 'Setup failed');
-        Alert.alert('Setup Failed', result.error || 'Could not configure device');
-        return;
-      }
-
-      // Step 2: NOW create the device in our database (AFTER provisioning succeeds)
-      const smartMonitorId = result.deviceId;
-      setAirguardSmartMonitorId(smartMonitorId.toString());
-      
-      try {
-        const response = await hubApi.addDevice(homeId, {
-          name: deviceName || `AirGuard ${smartMonitorId}`,
-          type: 'airguard',
-          category: 'Sensor',
-          roomId: selectedRoom,
-          hubId: undefined, // AirGuard is standalone
-          signalMappings: { smartMonitorId },
-        });
-
-        const created = response.data?.data?.device ?? response.data?.device ?? response.data;
-        const newDeviceId = created?.id || created?.deviceId;
-        setDeviceId(newDeviceId);
+      // For Airguard: Use BLE provisioning
+      if (deviceType === 'airguard' && selectedBleDevice) {
+        setProvisioningStep('Connecting via Bluetooth...');
         
-        Alert.alert(
-          'Device Added!',
-          `Your AirGuard device is now connected and added to your home.`,
-          [{ text: 'Continue', onPress: () => setStep('ready') }]
+        const result = await bleProvisionDevice(
+          selectedBleDevice.id,
+          deviceWifiSSID,
+          deviceWifiPassword,
+          (step) => setProvisioningStep(step)
         );
-      } catch (dbError: any) {
-        // Device connected to WiFi but failed to save to database
-        console.error('Failed to save device to database:', dbError);
-        Alert.alert(
-          'Partial Success',
-          'Device connected to WiFi but failed to save to your home. Please try adding it again.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+
+        if (!result.success || !result.deviceId) {
+          setProvisioningError(result.error || 'Setup failed');
+          Alert.alert('Setup Failed', result.error || 'Could not configure device');
+          return;
+        }
+
+        // NOW create the device in our database (AFTER provisioning succeeds)
+        const smartMonitorId = result.deviceId;
+        setAirguardSmartMonitorId(smartMonitorId.toString());
+        
+        try {
+          const response = await hubApi.addDevice(homeId, {
+            name: deviceName || `AirGuard ${smartMonitorId}`,
+            type: 'airguard',
+            category: 'Sensor',
+            roomId: selectedRoom,
+            hubId: undefined, // AirGuard is standalone
+            signalMappings: { smartMonitorId },
+          });
+
+          const created = response.data?.data?.device ?? response.data?.device ?? response.data;
+          const newDeviceId = created?.id || created?.deviceId;
+          setDeviceId(newDeviceId);
+          
+          Alert.alert(
+            'Device Added!',
+            `Your AirGuard device is now connected and added to your home.`,
+            [{ text: 'Continue', onPress: () => setStep('ready') }]
+          );
+        } catch (dbError: any) {
+          console.error('Failed to save device to database:', dbError);
+          Alert.alert(
+            'Partial Success',
+            'Device connected to WiFi but failed to save to your home. Please try adding it again.',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        }
+      } else {
+        // Non-Airguard WiFi device (future support)
+        Alert.alert('Info', 'WiFi device provisioning coming soon');
+        setStep('ready');
       }
     } catch (e: any) {
       const msg = e?.message || 'An error occurred';
@@ -568,18 +641,107 @@ export default function DeviceOnboardingWizard() {
     );
   };
 
-  // WiFi Device Configuration
+  // WiFi Device Configuration (with BLE for Airguard)
   const renderWifiStep = () => (
     <View style={styles.stepContainer}>
       <View style={styles.iconContainer}>
-        <Wifi size={48} color={colors.primary} />
+        {deviceType === 'airguard' ? (
+          <Bluetooth size={48} color={colors.primary} />
+        ) : (
+          <Wifi size={48} color={colors.primary} />
+        )}
       </View>
-      <Text style={styles.stepTitle}>Connect Device to WiFi</Text>
+      <Text style={styles.stepTitle}>
+        {deviceType === 'airguard' ? 'Connect via Bluetooth' : 'Connect Device to WiFi'}
+      </Text>
       <Text style={styles.stepDescription}>
         {deviceType === 'airguard' 
-          ? 'We\'ll automatically connect to your Airguard device and configure WiFi credentials.'
+          ? 'Select your device from the list below, then enter your WiFi credentials. Your phone stays connected to the internet!'
           : 'Enter WiFi credentials for your device'}
       </Text>
+
+      {/* BLE Device Scanner for Airguard */}
+      {deviceType === 'airguard' && (
+        <View style={styles.inputContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.inputLabel}>Nearby Devices</Text>
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={startBLEScan}
+              disabled={isScanning}
+            >
+              <RefreshCw 
+                size={20} 
+                color={colors.primary} 
+                style={isScanning ? styles.spinning : undefined}
+              />
+            </TouchableOpacity>
+          </View>
+          
+          {!bluetoothEnabled && (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningText}>
+                ⚠️ Bluetooth is disabled. Please enable it in Settings.
+              </Text>
+            </View>
+          )}
+          
+          {isScanning && (
+            <View style={styles.scanningIndicator}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.scanningText}>Scanning for devices...</Text>
+            </View>
+          )}
+          
+          {!isScanning && bleDevices.length === 0 && bluetoothEnabled && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                No devices found. Make sure your Airguard is powered on.
+              </Text>
+              <TouchableOpacity style={styles.retryButton} onPress={startBLEScan}>
+                <Text style={styles.retryButtonText}>Scan Again</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
+          <ScrollView style={styles.bleDeviceList}>
+            {bleDevices.map((device) => (
+              <TouchableOpacity
+                key={device.id}
+                style={[
+                  styles.bleDeviceCard,
+                  selectedBleDevice?.id === device.id && styles.bleDeviceCardSelected,
+                ]}
+                onPress={() => setSelectedBleDevice(device)}
+              >
+                <View style={styles.bleDeviceInfo}>
+                  <Bluetooth 
+                    size={24} 
+                    color={selectedBleDevice?.id === device.id ? colors.primary : colors.mutedForeground} 
+                  />
+                  <View style={styles.bleDeviceText}>
+                    <Text style={[
+                      styles.bleDeviceName,
+                      selectedBleDevice?.id === device.id && styles.bleDeviceNameSelected,
+                    ]}>
+                      {device.name}
+                    </Text>
+                    <View style={styles.bleDeviceMeta}>
+                      <Signal size={12} color={colors.mutedForeground} />
+                      <Text style={styles.bleDeviceSignal}>
+                        {device.rssi > -60 ? 'Strong' : device.rssi > -80 ? 'Good' : 'Weak'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                {selectedBleDevice?.id === device.id && (
+                  <CheckCircle size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
       
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>Your Home WiFi SSID</Text>
@@ -622,22 +784,27 @@ export default function DeviceOnboardingWizard() {
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
           {deviceType === 'airguard' 
-            ? '📱 The app will connect to your device\'s WiFi access point (SmartMonitor_Setup), send credentials, and return to your home network automatically.'
+            ? '📶 We use Bluetooth to securely send WiFi credentials to your device. Your phone stays connected to the internet the entire time!'
             : '💡 Make sure the device is powered on and in pairing mode.'}
         </Text>
       </View>
       
       <TouchableOpacity
-        style={[styles.primaryButton, loading && styles.buttonDisabled]}
+        style={[
+          styles.primaryButton, 
+          (loading || (deviceType === 'airguard' && !selectedBleDevice)) && styles.buttonDisabled
+        ]}
         onPress={handleConnectDeviceWifi}
-        disabled={loading}
+        disabled={loading || (deviceType === 'airguard' && !selectedBleDevice)}
       >
         {loading ? (
           <ActivityIndicator size="small" color="white" />
         ) : (
           <>
             <Text style={styles.primaryButtonText}>
-              {deviceType === 'airguard' ? 'Start Provisioning' : 'Connect Device'}
+              {deviceType === 'airguard' 
+                ? (selectedBleDevice ? 'Configure Device' : 'Select a Device First')
+                : 'Connect Device'}
             </Text>
             <ArrowRight size={20} color="white" />
           </>
@@ -983,6 +1150,106 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
     fontSize: 16,
     color: colors.foreground,
     fontWeight: '600',
+  },
+  // BLE Device styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  refreshButton: {
+    padding: spacing.xs,
+  },
+  spinning: {
+    opacity: 0.5,
+  },
+  warningBox: {
+    backgroundColor: '#FEF3C7',
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#92400E',
+  },
+  scanningIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  scanningText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: colors.mutedForeground,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  retryButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.lg,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  bleDeviceList: {
+    maxHeight: 180,
+  },
+  bleDeviceCard: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bleDeviceCardSelected: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    backgroundColor: `${colors.primary}10`,
+  },
+  bleDeviceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  bleDeviceText: {
+    gap: spacing.xs,
+  },
+  bleDeviceName: {
+    fontSize: 16,
+    color: colors.foreground,
+    fontWeight: '500',
+  },
+  bleDeviceNameSelected: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  bleDeviceMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  bleDeviceSignal: {
+    fontSize: 12,
+    color: colors.mutedForeground,
   },
 });
 
