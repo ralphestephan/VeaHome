@@ -41,6 +41,7 @@ import {
   provisionDevice as bleProvisionDevice,
   stopScan,
   checkBluetoothEnabled,
+  isBLEAvailable,
   BLEDevice 
 } from '../services/bleProvisioning';
 import type { RootStackParamList } from '../types';
@@ -168,6 +169,17 @@ export default function DeviceOnboardingWizard() {
 
   // BLE scanning
   const startBLEScan = async () => {
+    // Check if BLE native module is available
+    if (!isBLEAvailable()) {
+      setProvisioningError('BLE not available in Expo Go. Build a development client for Bluetooth support.');
+      Alert.alert(
+        'Expo Go Limitation',
+        'Bluetooth provisioning requires a development build.\n\nRun: npx expo run:android\nOr: eas build --profile development',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setIsScanning(true);
     setBleDevices([]);
     setSelectedBleDevice(null);
@@ -184,7 +196,7 @@ export default function DeviceOnboardingWizard() {
       setBluetoothEnabled(true);
 
       await scanForDevices(
-        (device) => {
+        (device: BLEDevice) => {
           setBleDevices(prev => {
             // Avoid duplicates
             if (prev.find(d => d.id === device.id)) return prev;
@@ -382,7 +394,7 @@ export default function DeviceOnboardingWizard() {
           selectedBleDevice.id,
           deviceWifiSSID,
           deviceWifiPassword,
-          (step) => setProvisioningStep(step)
+          (step: string) => setProvisioningStep(step)
         );
 
         if (!result.success || !result.deviceId) {

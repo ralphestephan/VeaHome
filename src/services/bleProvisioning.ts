@@ -17,8 +17,7 @@
  * - Notify: {"success":true,"deviceId":1}
  */
 
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
-import { BleManager, Device, Characteristic } from 'react-native-ble-plx';
+import { Platform, PermissionsAndroid } from 'react-native';
 import { Buffer } from 'buffer';
 
 // BLE UUIDs (must match firmware)
@@ -32,7 +31,7 @@ export interface BLEDevice {
   id: string;
   name: string;
   rssi: number;
-  deviceId?: number; // Parsed from name like "SmartMonitor_1"
+  deviceId?: number;
 }
 
 export interface ProvisionResult {
@@ -41,14 +40,35 @@ export interface ProvisionResult {
   error?: string;
 }
 
-// Singleton BLE manager
-let bleManager: BleManager | null = null;
+// Dynamic BLE loading - prevents crash in Expo Go
+let BleManagerClass: any = null;
+let bleManager: any = null;
+let bleAvailable = false;
 
-function getBleManager(): BleManager {
+try {
+  const blePlx = require('react-native-ble-plx');
+  BleManagerClass = blePlx.BleManager;
+  bleAvailable = true;
+  console.log('[BLE] Native module loaded');
+} catch (e) {
+  console.log('[BLE] Native module not available (Expo Go mode)');
+}
+
+function getBleManager(): any {
+  if (!BleManagerClass) {
+    throw new Error('BLE not available in Expo Go. Build a development client for BLE support.');
+  }
   if (!bleManager) {
-    bleManager = new BleManager();
+    bleManager = new BleManagerClass();
   }
   return bleManager;
+}
+
+/**
+ * Check if BLE is available
+ */
+export function isBLEAvailable(): boolean {
+  return bleAvailable;
 }
 
 /**
@@ -93,13 +113,18 @@ async function requestPermissions(): Promise<boolean> {
  * Check if Bluetooth is enabled
  */
 export async function checkBluetoothEnabled(): Promise<boolean> {
-  const manager = getBleManager();
+  if (!bleAvailable) return false;
   
-  return new Promise((resolve) => {
-    manager.state().then(state => {
-      resolve(state === 'PoweredOn');
+  try {
+    const manager = getBleManager();
+    return new Promise((resolve) => {
+      manager.state().then((state: string) => {
+        resolve(state === 'PoweredOn');
+      });
     });
-  });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -129,7 +154,7 @@ export async function scanForDevices(
     manager.startDeviceScan(
       [SERVICE_UUID], // Only scan for devices with our service
       { allowDuplicates: false },
-      (error, device) => {
+      (error: any, device: any) => {
         if (error) {
           console.error('[BLE] Scan error:', error);
           clearTimeout(timeout);
@@ -180,7 +205,7 @@ export async function provisionDevice(
   onProgress?: (step: string) => void
 ): Promise<ProvisionResult> {
   const manager = getBleManager();
-  let connectedDevice: Device | null = null;
+  let connectedDevice: any = null;
 
   try {
     // Step 1: Connect to device
@@ -211,7 +236,7 @@ export async function provisionDevice(
       connectedDevice!.monitorCharacteristicForService(
         SERVICE_UUID,
         CHARACTERISTIC_UUID,
-        (error, characteristic) => {
+        (error: any, characteristic: any) => {
           if (error) {
             console.error('[BLE] Notification error:', error);
             return;
