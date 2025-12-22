@@ -8,39 +8,17 @@ import { getApiClient, HubApi } from '../services/api';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-type BarCodeScannerType = {
-  BarCodeScanner: React.ComponentType<any> & { requestPermissionsAsync: () => Promise<{ status: string }> };
-};
-
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HubPairScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [scanned, setScanned] = useState(false);
-  const [Scanner, setScanner] = useState<null | BarCodeScannerType['BarCodeScanner']>(null);
-  const [scanning, setScanning] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [manualLoading, setManualLoading] = useState(false);
   const { token, user, refreshMe } = useAuth();
   const client = getApiClient(async () => token);
   const hub = HubApi(client);
-
-  const startScanning = async () => {
-    try {
-      const mod: BarCodeScannerType = await import('expo-barcode-scanner');
-      setScanner(() => mod.BarCodeScanner);
-      const { status } = await mod.BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-      setManualMode(false);
-      setScanning(true);
-    } catch (e) {
-      setHasPermission(false);
-    }
-  };
 
   const pairHubWithCode = async (code: string) => {
     try {
@@ -73,19 +51,9 @@ export default function HubPairScreen() {
     }
   };
 
-  const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanned) return;
-    setScanned(true);
-    try {
-      await pairHubWithCode(data);
-    } catch (e: any) {
-      setScanned(false);
-    }
-  };
-
   const handleManualPair = async () => {
     if (!manualCode.trim()) {
-      Alert.alert('Missing Code', 'Enter the hub code printed below the QR sticker to continue.');
+      Alert.alert('Missing Code', 'Enter the hub code to continue.');
       return;
     }
 
@@ -99,90 +67,29 @@ export default function HubPairScreen() {
     }
   };
 
-  if (!scanning) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.header}>Pair your VeaHub</Text>
-        <Text style={styles.subtitle}>
-          {manualMode
-            ? 'Enter the hub code printed next to the QR sticker.'
-            : 'Connect your hub to get started'}
-        </Text>
-        {manualMode ? (
-          <>
-            <TextInput
-              style={styles.manualInput}
-              placeholder="e.g. HUB-1234-5678"
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              value={manualCode}
-              onChangeText={setManualCode}
-            />
-            <TouchableOpacity
-              style={[styles.scanButton, manualLoading && styles.scanButtonDisabled]}
-              onPress={handleManualPair}
-              disabled={manualLoading}
-            >
-              {manualLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.scanButtonText}>Pair Hub</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.manualButton} onPress={() => setManualMode(false)}>
-              <Text style={styles.manualText}>Back to camera</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.scanButton} onPress={startScanning}>
-              <Text style={styles.scanButtonText}>Scan QR Code</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.manualButton} onPress={() => setManualMode(true)}>
-              <Text style={styles.manualText}>Enter code manually</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-    );
-  }
-
-  if (hasPermission === false) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.text}>No camera access</Text>
-        <TouchableOpacity style={styles.scanButton} onPress={startScanning}>
-          <Text style={styles.scanButtonText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Scan your VeaHub QR</Text>
-      <View style={styles.scannerBox}>
-        {Scanner ? (
-          <Scanner onBarCodeScanned={handleBarCodeScanned} style={StyleSheet.absoluteFillObject} />
-        ) : (
-          <View style={styles.center}>
-            <Text style={styles.text}>Loading scanner...</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.caption}>Align the QR within the frame</Text>
-      <TouchableOpacity style={styles.manualButton} onPress={() => setScanning(false)}>
-        <Text style={styles.manualText}>Cancel</Text>
-      </TouchableOpacity>
+      <Text style={styles.header}>Pair your VeaHub</Text>
+      <Text style={styles.subtitle}>Enter the hub code printed on your device</Text>
+      <TextInput
+        style={styles.manualInput}
+        placeholder="e.g. HUB-1234-5678"
+        placeholderTextColor={colors.mutedForeground}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        value={manualCode}
+        onChangeText={setManualCode}
+      />
       <TouchableOpacity
-        style={styles.manualButton}
-        onPress={() => {
-          setScanning(false);
-          setManualMode(true);
-        }}
+        style={[styles.scanButton, manualLoading && styles.scanButtonDisabled]}
+        onPress={handleManualPair}
+        disabled={manualLoading}
       >
-        <Text style={styles.manualText}>Enter code manually</Text>
+        {manualLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.scanButtonText}>Pair Hub</Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -190,24 +97,20 @@ export default function HubPairScreen() {
 
 const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: spacing.lg, justifyContent: 'center' },
-  header: { color: colors.foreground, fontSize: 20, fontWeight: '700', marginBottom: spacing.md, textAlign: 'center' },
-  subtitle: { color: colors.mutedForeground, textAlign: 'center', marginBottom: spacing.xl },
-  scannerBox: { flex: 1, borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
-  caption: { color: colors.mutedForeground, textAlign: 'center', marginTop: spacing.md },
+  header: { color: colors.foreground, fontSize: 24, fontWeight: '700', marginBottom: spacing.md, textAlign: 'center' },
+  subtitle: { color: colors.mutedForeground, textAlign: 'center', marginBottom: spacing.xl, fontSize: 16 },
   scanButton: {
     backgroundColor: colors.primary,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
     ...shadows.glow,
   },
   scanButtonDisabled: {
     opacity: 0.6,
   },
-  scanButtonText: { color: '#fff', fontWeight: '600' },
-  manualButton: { padding: spacing.md, alignItems: 'center' },
-  manualText: { color: colors.primary },
+  scanButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   manualInput: {
     width: '100%',
     borderRadius: borderRadius.lg,
@@ -216,10 +119,8 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
     padding: spacing.md,
     color: colors.foreground,
     backgroundColor: colors.card,
-    marginBottom: spacing.md,
+    fontSize: 16,
   },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  text: { color: colors.foreground },
 });
 
 
