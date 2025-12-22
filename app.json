@@ -18,12 +18,17 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vealive.veahome",
+      "entitlements": {
+        "com.apple.developer.networking.HotspotConfiguration": true
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing.",
         "NSLocationWhenInUseUsageDescription": "VeaHome needs location access to connect to your smart devices WiFi",
         "NSLocalNetworkUsageDescription": "VeaHome needs local network access to communicate with your smart devices",
+        "UIBackgroundModes": ["fetch", "remote-notification"],
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
         }
       }
     },
