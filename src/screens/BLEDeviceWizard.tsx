@@ -320,8 +320,8 @@ export default function BLEDeviceWizard({ route }: any) {
 
       console.log('[BLEDeviceWizard] Writing credentials to BLE characteristic...');
       
-      // Write credentials to device
-      await connectedBLEDevice.writeCharacteristicWithResponseForService(
+      // Write credentials to device (without response since device will restart)
+      await connectedBLEDevice.writeCharacteristicWithoutResponseForService(
         SERVICE_UUID,
         WIFI_CRED_CHAR_UUID,
         btoa(JSON.stringify(credentials))

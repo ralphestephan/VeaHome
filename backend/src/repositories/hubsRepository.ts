@@ -3,11 +3,14 @@ import { Hub } from '../types';
 
 interface HubInput {
   homeId: string;
-  serialNumber: string;
+  serialNumber?: string;
   name?: string;
   status?: string;
   mqttTopic?: string;
   ownerId?: string;
+  hubType?: string;
+  metadata?: any;
+  roomId?: string;
 }
 
 export async function getHubById(id: string): Promise<Hub | null> {
