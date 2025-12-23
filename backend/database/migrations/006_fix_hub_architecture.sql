@@ -6,10 +6,11 @@
 ALTER TABLE hubs 
   ADD COLUMN IF NOT EXISTS room_id UUID REFERENCES rooms(id) ON DELETE SET NULL;
 
--- 2. Add brand and type to hubs
+-- 2. Add brand, type, and metadata to hubs
 ALTER TABLE hubs
   ADD COLUMN IF NOT EXISTS brand VARCHAR(100) DEFAULT 'vealive',
-  ADD COLUMN IF NOT EXISTS hub_type VARCHAR(50) DEFAULT 'ir_blaster';
+  ADD COLUMN IF NOT EXISTS hub_type VARCHAR(50) DEFAULT 'ir_blaster',
+  ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
 -- 3. Make devices.room_id nullable (device room can be inherited from hub)
 ALTER TABLE devices 
