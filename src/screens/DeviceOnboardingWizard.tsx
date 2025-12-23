@@ -411,32 +411,48 @@ export default function DeviceOnboardingWizard() {
         const smartMonitorId = result.deviceId;
         setAirguardSmartMonitorId(smartMonitorId.toString());
         
+        console.log('[Provisioning] BLE success, saving to database...');
+        setProvisioningStep('Saving device to your home...');
+        
         try {
-          const response = await hubApi.addDevice(homeId, {
+          const devicePayload = {
             name: deviceName || `AirGuard ${smartMonitorId}`,
             type: 'airguard',
             category: 'Sensor',
-            roomId: selectedRoom,
+            roomId: selectedRoom || undefined, // Optional room
             hubId: undefined, // AirGuard is standalone
             signalMappings: { smartMonitorId },
-          });
+          };
+          
+          console.log('[Provisioning] Creating device:', devicePayload);
+          const response = await hubApi.addDevice(homeId, devicePayload);
+          console.log('[Provisioning] Device created:', response.data);
 
           const created = response.data?.data?.device ?? response.data?.device ?? response.data;
           const newDeviceId = created?.id || created?.deviceId;
           setDeviceId(newDeviceId);
           
-          Alert.alert(
-            'Device Added!',
-            `Your AirGuard device is now connected and added to your home.`,
-            [{ text: 'Continue', onPress: () => setStep('ready') }]
-          );
+          // Navigate back to devices screen which will auto-refresh and show the new device
+          console.log('[Provisioning] Success! Navigating back...');
+          setProvisioningStep('Success!');
+          setLoading(false);
+          
+          setTimeout(() => {
+            navigation.goBack();
+          }, 500);
+          return; // Exit early to prevent finally block from clearing state
         } catch (dbError: any) {
-          console.error('Failed to save device to database:', dbError);
+          console.error('[Provisioning] Failed to save device to database:', dbError);
+          const errorMsg = dbError?.response?.data?.error || dbError?.response?.data?.message || dbError?.message || 'Unknown error';
+          console.error('[Provisioning] Error details:', errorMsg);
+          
+          setLoading(false);
           Alert.alert(
-            'Partial Success',
-            'Device connected to WiFi but failed to save to your home. Please try adding it again.',
+            'Setup Complete, Save Failed',
+            `Your device connected to WiFi successfully, but we couldn't add it to your home.\n\nError: ${errorMsg}\n\nTry adding it again from the Devices screen.`,
             [{ text: 'OK', onPress: () => navigation.goBack() }]
           );
+          return;
         }
       } else {
         // Non-Airguard WiFi device (future support)
@@ -444,12 +460,16 @@ export default function DeviceOnboardingWizard() {
         setStep('ready');
       }
     } catch (e: any) {
+      console.error('[Provisioning] Unexpected error:', e);
       const msg = e?.message || 'An error occurred';
       setProvisioningError(msg);
       Alert.alert('Error', msg);
     } finally {
-      setLoading(false);
-      setProvisioningStep('');
+      // Only clear states if we haven't already navigated away
+      if (loading) {
+        setLoading(false);
+        setProvisioningStep('');
+      }
     }
   };
 
@@ -660,13 +680,18 @@ export default function DeviceOnboardingWizard() {
   // WiFi Device Configuration (with BLE for Airguard)
   const renderWifiStep = () => (
     <View style={styles.stepContainer}>
-      <View style={styles.iconContainer}>
-        {deviceType === 'airguard' ? (
-          <Bluetooth size={48} color={colors.primary} />
-        ) : (
-          <Wifi size={48} color={colors.primary} />
-        )}
-      </View>
+      <LinearGradient
+        colors={[`${colors.primary}20`, 'transparent']}
+        style={styles.iconGradientBg}
+      >
+        <View style={styles.iconContainer}>
+          {deviceType === 'airguard' ? (
+            <Bluetooth size={48} color={colors.primary} />
+          ) : (
+            <Wifi size={48} color={colors.primary} />
+          )}
+        </View>
+      </LinearGradient>
       <Text style={styles.stepTitle}>
         {deviceType === 'airguard' ? 'Connect via Bluetooth' : 'Connect Device to WiFi'}
       </Text>
@@ -760,28 +785,34 @@ export default function DeviceOnboardingWizard() {
       )}
       
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Your Home WiFi SSID</Text>
-        <TextInput
-          style={styles.input}
-          value={deviceWifiSSID}
-          onChangeText={setDeviceWifiSSID}
-          placeholder="Enter your WiFi network name"
-          placeholderTextColor={colors.mutedForeground}
-          autoCapitalize="none"
-        />
+        <Text style={styles.inputLabel}>WiFi Network Name</Text>
+        <View style={styles.inputWrapper}>
+          <Wifi size={18} color={colors.mutedForeground} style={styles.inputIcon} />
+          <TextInput
+            style={styles.inputWithIcon}
+            value={deviceWifiSSID}
+            onChangeText={setDeviceWifiSSID}
+            placeholder="Enter your WiFi network name"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+          />
+        </View>
       </View>
       
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>WiFi Password</Text>
-        <TextInput
-          style={styles.input}
-          value={deviceWifiPassword}
-          onChangeText={setDeviceWifiPassword}
-          placeholder="Enter your WiFi password"
-          placeholderTextColor={colors.mutedForeground}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+        <View style={styles.inputWrapper}>
+          <Lock size={18} color={colors.mutedForeground} style={styles.inputIcon} />
+          <TextInput
+            style={styles.inputWithIcon}
+            value={deviceWifiPassword}
+            onChangeText={setDeviceWifiPassword}
+            placeholder="Enter your WiFi password"
+            placeholderTextColor={colors.mutedForeground}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+        </View>
       </View>
 
       {provisioningStep && (
@@ -813,18 +844,25 @@ export default function DeviceOnboardingWizard() {
         onPress={handleConnectDeviceWifi}
         disabled={loading || (deviceType === 'airguard' && !selectedBleDevice)}
       >
-        {loading ? (
-          <ActivityIndicator size="small" color="white" />
-        ) : (
-          <>
-            <Text style={styles.primaryButtonText}>
-              {deviceType === 'airguard' 
-                ? (selectedBleDevice ? 'Configure Device' : 'Select a Device First')
-                : 'Connect Device'}
-            </Text>
-            <ArrowRight size={20} color="white" />
-          </>
-        )}
+        <LinearGradient
+          colors={gradients.accent}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.primaryButtonGradient}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <>
+              <Text style={styles.primaryButtonText}>
+                {deviceType === 'airguard' 
+                  ? (selectedBleDevice ? 'Configure Device' : 'Select a Device First')
+                  : 'Connect Device'}
+              </Text>
+              <ArrowRight size={20} color="white" />
+            </>
+          )}
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
@@ -928,6 +966,16 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
   },
   iconContainer: {
     marginBottom: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGradientBg: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   stepTitle: {
     fontSize: 24,
@@ -988,6 +1036,24 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
     fontSize: 14,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  inputWrapper: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  inputIcon: {
+    marginRight: spacing.sm,
+  },
+  inputWithIcon: {
+    flex: 1,
+    color: colors.foreground,
+    fontSize: 15,
+    paddingVertical: spacing.md,
   },
   categoryGrid: {
     flexDirection: 'row',
@@ -1084,15 +1150,17 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
     fontStyle: 'italic',
   },
   primaryButton: {
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    width: '100%',
+    marginTop: spacing.lg,
+  },
+  primaryButtonGradient: {
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    width: '100%',
-    marginTop: spacing.lg,
   },
   primaryButtonText: {
     color: 'white',
@@ -1181,14 +1249,17 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
     opacity: 0.5,
   },
   warningBox: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: `${colors.destructive || '#ef4444'}15`,
+    borderWidth: 1,
+    borderColor: `${colors.destructive || '#ef4444'}40`,
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
   },
   warningText: {
     fontSize: 14,
-    color: '#92400E',
+    color: colors.destructive || '#ef4444',
+    fontWeight: '500',
   },
   scanningIndicator: {
     flexDirection: 'row',

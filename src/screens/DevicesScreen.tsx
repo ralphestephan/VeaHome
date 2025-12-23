@@ -641,7 +641,7 @@ export default function DevicesScreen() {
                 setShowVealiveModal(false);
                 navigation.navigate('BLEDeviceWizard', { 
                   homeId: homeId,
-                  hubId: hubId,
+                  hubId: hubs?.[0]?.id, // Use first hub if available, undefined for standalone AirGuard
                   deviceType: 'SmartMonitor' 
                 });
               }}
