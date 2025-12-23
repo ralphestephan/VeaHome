@@ -320,19 +320,12 @@ export default function BLEDeviceWizard({ route }: any) {
 
       console.log('[BLEDeviceWizard] Writing credentials to BLE characteristic...');
       
-      // Write credentials to device with timeout
-      const writePromise = connectedBLEDevice.writeCharacteristicWithoutResponseForService(
+      // Write credentials to device
+      await connectedBLEDevice.writeCharacteristicWithResponseForService(
         SERVICE_UUID,
         WIFI_CRED_CHAR_UUID,
         btoa(JSON.stringify(credentials))
       );
-      
-      // Add 10 second timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('BLE write timeout - device not responding')), 10000)
-      );
-      
-      await Promise.race([writePromise, timeoutPromise]);
 
       console.log('[BLEDeviceWizard] Credentials written successfully');
       setStatusMessage('Credentials sent! Device is connecting to WiFi...');
