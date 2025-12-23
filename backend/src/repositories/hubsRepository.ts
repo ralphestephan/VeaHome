@@ -30,8 +30,8 @@ export async function getHubByQrCode(qrCode: string): Promise<Hub | null> {
 
 export async function createHub(input: HubInput): Promise<Hub> {
   const { rows } = await query(
-    `INSERT INTO hubs (home_id, serial_number, name, status, mqtt_topic, owner_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO hubs (home_id, serial_number, name, status, mqtt_topic, owner_id, hub_type, metadata, room_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       input.homeId,
@@ -40,6 +40,9 @@ export async function createHub(input: HubInput): Promise<Hub> {
       input.status || 'pairing',
       input.mqttTopic || null,
       input.ownerId || null,
+      input.hubType || null,
+      input.metadata ? JSON.stringify(input.metadata) : null,
+      input.roomId || null,
     ]
   );
   return rows[0];
