@@ -86,6 +86,43 @@ export async function listHubs(req: Request, res: Response) {
   }
 }
 
+export async function createHubDirect(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId } = req.params;
+    const { name, hubType, metadata, roomId } = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const hub = await createHub({
+      homeId: home.id,
+      name: name || `Hub ${Date.now()}`,
+      hubType: hubType || 'airguard',
+      status: 'online',
+      ownerId: home.user_id,
+      metadata: metadata || {},
+      roomId: roomId || null,
+    });
+
+    if (!hub) {
+      return errorResponse(res, 'Failed to create hub', 500);
+    }
+
+    let mqttTopic = hub.mqtt_topic || `hubs/${hub.id}`;
+    if (!hub.mqtt_topic) {
+      await updateHubTopic(hub.id, mqttTopic);
+      hub.mqtt_topic = mqttTopic;
+    }
+
+    return successResponse(res, { hub });
+  } catch (error: any) {
+    console.error('Create hub error:', error);
+    return errorResponse(res, error.message || 'Failed to create hub', 500);
+  }
+}
+
 export async function connectWifi(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;

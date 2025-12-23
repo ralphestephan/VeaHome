@@ -14,10 +14,12 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { BleManager, Device as BLEDevice } from 'react-native-ble-plx';
-import * as hubApi from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getApiClient, HubApi } from '../services/api';
 
 // BLE Service UUIDs - must match ESP32 firmware
 const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
@@ -45,7 +47,21 @@ const bleManager = new BleManager();
 export default function BLEDeviceWizard({ route }: any) {
   const navigation = useNavigation();
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { token } = useAuth();
+  // Ensure we have valid colors with fallback
+  const safeColors = { 
+    ...Colors, 
+    ...colors,
+    // Explicit text color fallbacks
+    text: colors.text || colors.foreground || '#FFFFFF',
+    textSecondary: colors.textSecondary || colors.mutedForeground || '#B0B0B0',
+    // Ensure card backgrounds are visible
+    card: colors.card || '#1E293B',
+    background: colors.background || '#0F172A',
+    border: colors.border || '#334155',
+    accent: colors.accent || '#3B82F6',
+  };
+  const styles = useMemo(() => createStyles(safeColors), [colors]);
   
   const homeId = route.params?.homeId;
   const hubId = route.params?.hubId;
@@ -59,6 +75,7 @@ export default function BLEDeviceWizard({ route }: any) {
   const [selectedNetwork, setSelectedNetwork] = useState<WiFiNetwork | null>(null);
   const [wifiPassword, setWifiPassword] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [deviceInfo, setDeviceInfo] = useState<{ deviceId?: string | number; name?: string } | null>(null);
 
@@ -186,9 +203,12 @@ export default function BLEDeviceWizard({ route }: any) {
 
   // Connect to selected BLE device
   const connectToDevice = async (device: DiscoveredDevice) => {
+    if (isConnecting) return; // Prevent multiple connections
+    
     setSelectedDevice(device);
     setStatusMessage(`Connecting to ${device.name}...`);
     setIsScanning(true);
+    setIsConnecting(true);
 
     try {
       // Connect to device
@@ -221,6 +241,7 @@ export default function BLEDeviceWizard({ route }: any) {
     } catch (error: any) {
       console.error('Connection Error:', error);
       setIsScanning(false);
+      setIsConnecting(false);
       Alert.alert(
         'Connection Failed', 
         error.message || 'Could not connect to device. Make sure it\'s powered on and nearby.'
@@ -252,75 +273,130 @@ export default function BLEDeviceWizard({ route }: any) {
         ]);
         setStatusMessage('Using available networks');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('WiFi Scan Error:', error);
-      // Use mock data as fallback
-      setWifiNetworks([
-        { ssid: 'Home WiFi', signal: -45, secured: true },
-        { ssid: 'Guest Network', signal: -60, secured: false },
-      ]);
+      Alert.alert(
+        'WiFi Scan Failed',
+        'Could not get WiFi networks from device. Please enter your network details manually.'
+      );
+      // Use empty list - user will need to type SSID manually
+      setWifiNetworks([]);
       setStatusMessage('Select your WiFi network');
     }
   };
 
   // Send WiFi credentials to device via BLE
   const provisionDevice = async () => {
+    console.log('[BLEDeviceWizard] provisionDevice called');
+    console.log('[BLEDeviceWizard] State:', { 
+      selectedNetwork: selectedNetwork?.ssid, 
+      hasPassword: !!wifiPassword, 
+      hasDevice: !!connectedBLEDevice 
+    });
+    
     if (!selectedNetwork || !wifiPassword) {
+      console.error('[BLEDeviceWizard] Missing network or password');
       Alert.alert('Missing Information', 'Please select network and enter password');
       return;
     }
 
     if (!connectedBLEDevice) {
+      console.error('[BLEDeviceWizard] Not connected to BLE device');
       Alert.alert('Not Connected', 'Please reconnect to the device');
       return;
     }
 
+    console.log('[BLEDeviceWizard] Moving to provisioning step');
     setCurrentStep('provisioning');
     setStatusMessage('Sending WiFi credentials to device...');
 
     try {
+      console.log('[BLEDeviceWizard] Preparing credentials for:', selectedNetwork.ssid);
+      console.log('[BLEDeviceWizard] Preparing credentials for:', selectedNetwork.ssid);
       const credentials = {
         ssid: selectedNetwork.ssid,
         password: wifiPassword
       };
 
-      // Write credentials to device
-      await connectedBLEDevice.writeCharacteristicWithResponseForService(
+      console.log('[BLEDeviceWizard] Writing credentials to BLE characteristic...');
+      
+      // Write credentials to device with timeout
+      const writePromise = connectedBLEDevice.writeCharacteristicWithoutResponseForService(
         SERVICE_UUID,
         WIFI_CRED_CHAR_UUID,
         btoa(JSON.stringify(credentials))
       );
+      
+      // Add 10 second timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('BLE write timeout - device not responding')), 10000)
+      );
+      
+      await Promise.race([writePromise, timeoutPromise]);
 
+      console.log('[BLEDeviceWizard] Credentials written successfully');
       setStatusMessage('Credentials sent! Device is connecting to WiFi...');
+
+      console.log('[BLEDeviceWizard] WiFi credentials sent, waiting 5s for device to restart...');
 
       // Device will restart - wait then try to add to backend
       setTimeout(async () => {
+        console.log('[BLEDeviceWizard] Timeout completed, attempting backend registration...');
+        console.log('[BLEDeviceWizard] Context:', { homeId, deviceInfo, roomId, token: token ? 'present' : 'missing' });
+        
         try {
           // Disconnect BLE
+          console.log('[BLEDeviceWizard] Disconnecting BLE...');
           await connectedBLEDevice.cancelConnection();
           setConnectedBLEDevice(null);
+          console.log('[BLEDeviceWizard] BLE disconnected');
 
-          // Create device in backend
+          // Create hub in backend (AirGuard is a hub)
           if (homeId && deviceInfo?.deviceId) {
-            const response = await hubApi.addDevice(homeId, {
-              name: selectedDevice?.name || 'SmartMonitor',
-              type: 'airguard',
-              category: 'WiFi',
-              roomId: roomId,
-              hubId: hubId,
+            setStatusMessage('Registering device with your account...');
+            console.log('[BLEDeviceWizard] Creating hub in backend...');
+            
+            const client = getApiClient(async () => token);
+            const api = HubApi(client);
+            
+            const hubData = {
+              name: selectedDevice?.name || `SmartMonitor ${deviceInfo.deviceId}`,
+              hubType: 'airguard',
               metadata: {
                 smartMonitorId: deviceInfo.deviceId,
-              }
-            });
+                deviceType: 'SmartMonitor',
+                wifiConnected: true,
+              },
+              roomId: roomId || undefined,
+            };
+            
+            console.log('[BLEDeviceWizard] Hub data:', hubData);
+            
+            const response = await api.addHub(homeId, hubData);
 
-            console.log('Device added to backend:', response.data);
+            console.log('[BLEDeviceWizard] Hub added successfully:', response.data);
+            setStatusMessage('Device registered successfully!');
+          } else {
+            console.error('[BLEDeviceWizard] Missing homeId or deviceId:', { homeId, deviceInfo });
+            Alert.alert('Registration Issue', 'Device connected but missing required info. Check logs.');
           }
 
+          console.log('[BLEDeviceWizard] Moving to success step');
           setCurrentStep('success');
           setStatusMessage('Device connected successfully!');
         } catch (error: any) {
-          console.error('Backend Error:', error);
+          console.error('[BLEDeviceWizard] Backend Error:', error);
+          console.error('[BLEDeviceWizard] Error details:', {
+            message: error.message,
+            response: error?.response?.data,
+            status: error?.response?.status
+          });
+          
           // Still show success - device is provisioned even if backend fails
+          Alert.alert(
+            'Registration Failed',
+            `Device connected to WiFi but failed to register: ${error?.response?.data?.message || error.message}`
+          );
           setCurrentStep('success');
           setStatusMessage('Device connected! You may need to add it manually.');
         }
@@ -346,7 +422,7 @@ export default function BLEDeviceWizard({ route }: any) {
   const renderPermissionsStep = () => (
     <View style={styles.stepContainer}>
       <View style={styles.iconContainer}>
-        <Ionicons name="shield-checkmark" size={80} color={colors.accent} />
+        <Ionicons name="shield-checkmark" size={80} color="#3B82F6" />
       </View>
 
       <Text style={styles.title}>Permissions Required</Text>
@@ -419,10 +495,11 @@ export default function BLEDeviceWizard({ route }: any) {
           {discoveredDevices.map((device) => (
             <TouchableOpacity
               key={device.id}
-              style={styles.deviceItem}
-              onPress={() => connectToDevice(device)}
+              style={[styles.deviceItem, (isConnecting || isScanning) && styles.deviceItemDisabled]}
+              onPress={() => !isConnecting && !isScanning && connectToDevice(device)}
+              disabled={isConnecting || isScanning}
             >
-              <Ionicons name="bluetooth" size={24} color={colors.accent} />
+              <Ionicons name="bluetooth" size={24} color="#3B82F6" />
               <Text style={styles.deviceName}>{device.name}</Text>
             </TouchableOpacity>
           ))}
@@ -444,18 +521,22 @@ export default function BLEDeviceWizard({ route }: any) {
             key={device.id}
             style={[
               styles.deviceItem,
-              selectedDevice?.id === device.id && styles.deviceItemSelected
+              selectedDevice?.id === device.id && styles.deviceItemSelected,
+              (isConnecting || isScanning) && styles.deviceItemDisabled
             ]}
-            onPress={() => connectToDevice(device)}
+            onPress={() => !isConnecting && !isScanning && connectToDevice(device)}
+            disabled={isConnecting || isScanning}
           >
-            <Ionicons name="bluetooth" size={24} color={colors.accent} />
+            <Ionicons name="bluetooth" size={24} color="#3B82F6" />
             <Text style={styles.deviceName}>{device.name}</Text>
             <Text style={styles.deviceRssi}>Signal: {device.rssi} dBm</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.tapMessage}>Tap a device to connect</Text>
+      <Text style={styles.tapMessage}>
+        {isConnecting ? 'Connecting...' : isScanning ? 'Scanning...' : 'Tap a device to connect'}
+      </Text>
     </View>
   );
 
@@ -477,9 +558,9 @@ export default function BLEDeviceWizard({ route }: any) {
               setCurrentStep('credentials');
             }}
           >
-            <Ionicons name="wifi" size={24} color={colors.accent} />
+            <Ionicons name="wifi" size={24} color="#3B82F6" />
             <Text style={styles.networkName}>{network.ssid}</Text>
-            {network.secured && <Ionicons name="lock-closed" size={16} color={colors.textSecondary} />}
+            {network.secured && <Ionicons name="lock-closed" size={16} color="#9CA3AF" />}
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -496,7 +577,7 @@ export default function BLEDeviceWizard({ route }: any) {
 
       <View style={styles.inputContainer}>
         <View style={styles.inputRow}>
-          <Ionicons name="wifi" size={20} color={colors.accent} />
+          <Ionicons name="wifi" size={20} color="#3B82F6" />
           <Text style={styles.inputLabel}>{selectedNetwork?.ssid}</Text>
           <TouchableOpacity onPress={() => setCurrentStep('network-scan')}>
             <Text style={styles.selectWifiLink}>Select WiFi</Text>
@@ -504,11 +585,11 @@ export default function BLEDeviceWizard({ route }: any) {
         </View>
 
         <View style={styles.inputRow}>
-          <Ionicons name="lock-closed" size={20} color={colors.textSecondary} />
+          <Ionicons name="lock-closed" size={20} color="#9CA3AF" />
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="#9CA3AF"
             value={wifiPassword}
             onChangeText={setWifiPassword}
             secureTextEntry
@@ -765,6 +846,9 @@ const createStyles = (colors: ThemeColors) =>
     },
     deviceItemSelected: {
       borderColor: colors.accent,
+    },
+    deviceItemDisabled: {
+      opacity: 0.5,
     },
     deviceName: {
       fontSize: 16,

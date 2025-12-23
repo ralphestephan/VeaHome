@@ -80,6 +80,8 @@ export const AuthApi = (client: AxiosInstance) => ({
 // Hub & devices
 export const HubApi = (client: AxiosInstance) => ({
   pairHub: (qrCode: string, homeId: string) => client.post('/hub/pair', { qrCode, homeId }),
+  listHubs: (homeId: string) => client.get(`/homes/${homeId}/hubs`),
+  addHub: (homeId: string, payload: any) => client.post(`/homes/${homeId}/hubs`, payload),
   listDevices: (homeId: string) => client.get(`/homes/${homeId}/devices`),
   addDevice: (homeId: string, payload: any) => client.post(`/homes/${homeId}/devices`, payload),
   learnSignal: (hubId: string, deviceId: string, action: string) => client.post(`/hubs/${hubId}/devices/${deviceId}/learn`, { action }),
