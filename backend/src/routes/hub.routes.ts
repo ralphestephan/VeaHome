@@ -14,8 +14,8 @@ import { hubSchemas } from '../utils/validators';
 const router = Router();
 
 router.post('/pair', authenticateToken, validate(hubSchemas.pairHub), pairHub);
-router.get('/homes/:homeId/hubs', authenticateToken, listHubs);
-router.post('/homes/:homeId/hubs', authenticateToken, createHubDirect);
+router.get('/:homeId/hubs', authenticateToken, listHubs);
+router.post('/:homeId/hubs', authenticateToken, createHubDirect);
 router.post('/:hubId/wifi', authenticateToken, validate(hubSchemas.connectWifi), connectWifi);
 router.post('/:hubId/rooms', authenticateToken, validate(hubSchemas.assignRooms), assignRooms);
 router.get('/:hubId/status', authenticateToken, getHubStatus);

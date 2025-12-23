@@ -672,7 +672,7 @@ export default function BLEDeviceWizard({ route }: any) {
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Device</Text>
         <View style={styles.headerRight} />

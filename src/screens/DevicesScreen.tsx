@@ -681,7 +681,7 @@ export default function DevicesScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.modalButtonGradient}
               >
-                <Text style={styles.modalButtonText}>AirGuard/SmartMonitor</Text>
+                <Text style={styles.modalButtonText}>AirGuard</Text>
               </LinearGradient>
             </TouchableOpacity>
 
