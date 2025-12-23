@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, HubApi } from '../services/api';
+import type { Hub } from '../types';
 
 export const useHubs = (homeId: string | null | undefined) => {
   const { token } = useAuth();
-  const [hubs, setHubs] = useState<any[]>([]);
+  const [hubs, setHubs] = useState<Hub[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

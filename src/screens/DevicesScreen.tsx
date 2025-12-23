@@ -96,19 +96,29 @@ export default function DevicesScreen() {
     setRefreshing(false);
   }, [refresh]);
   const [routes] = useState([
-    { key: 'lights', title: 'Lights' },
     { key: 'climate', title: 'Climate' },
-    { key: 'windows', title: 'Shutter' },
-    { key: 'utility', title: 'Utility' },
     { key: 'security', title: 'Security' },
+    { key: 'utility', title: 'Utility' },
+    { key: 'lighting', title: 'Lighting' },
   ]);
 
-  // Filter devices by category
-  const lightsDevices = devices.filter(d => d.type === 'light');
-  const climateDevices = devices.filter(d => d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard');
-  const windowDevices = devices.filter(d => d.type === 'blind' || d.type === 'shutter');
-  const utilityDevices = devices.filter(d => d.type === 'tv' || d.type === 'speaker');
-  const securityDevices = devices.filter(d => d.type === 'camera' || d.type === 'lock');
+  // Map hub types to categories (for client-facing display)
+  const getHubCategory = (hubType: string) => {
+    const categoryMap: Record<string, string> = {
+      'airguard': 'climate', // Air quality monitoring
+      'ir_blaster': 'utility', // Controls various devices
+      'zigbee': 'lighting', // Often used for smart lights
+      'matter': 'utility',
+      'wifi': 'utility',
+    };
+    return categoryMap[hubType] || 'utility';
+  };
+
+  // Filter hubs by category (shown as "devices" to client)
+  const climateHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'climate');
+  const securityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'security');
+  const utilityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'utility');
+  const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
 
   // Group devices by room
   const devicesByRoom = (deviceList: typeof devices) => {

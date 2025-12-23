@@ -1,11 +1,10 @@
 export type RootStackParamList = {
   Home: undefined;
   Dashboard: { screen?: keyof BottomTabParamList; params?: Record<string, unknown> } | undefined;
-  HubPair: undefined;
-  HubSetup: { hubId: string; qrCode: string };
-  DeviceOnboarding: { hubId?: string; deviceType?: string };
-  DeviceProvisioning: { deviceType: string };
-  BLEDeviceWizard: { homeId: string; hubId?: string; deviceType?: string };
+  HubDetail: { hubId: string }; // Show devices controlled by this hub
+  HubSetup: { hubType: 'airguard' | 'ir_blaster' };
+  DeviceOnboarding: { hubId: string }; // Add device to hub
+  BLEDeviceWizard: { homeId: string; hubType?: string };
   RoomDetail: { roomId: string };
   Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;
@@ -21,33 +20,56 @@ export type RootStackParamList = {
 };
 
 export type BottomTabParamList = {
-  Devices: undefined;
+  Hubs: undefined; // Shows all smart hubs (AirGuard, VeaHub, etc.)
   Energy: undefined;
   DashboardTab: undefined;
   Scenes: undefined;
   SettingsTab: undefined;
 };
 
+// Hub = Smart device with processor (can run automations independently)
+// Examples: AirGuard, VeaHub, Tuya hubs, eWelink hubs
+export interface Hub {
+  id: string;
+  name: string;
+  brand: 'vealive' | 'tuya' | 'ewelink' | 'other';
+  hubType: 'airguard' | 'ir_blaster' | 'zigbee' | 'matter' | 'wifi';
+  serialNumber: string;
+  status: 'online' | 'offline' | 'pending';
+  roomId?: string;
+  homeId: string;
+  wifiSsid?: string;
+  wifiConnected?: boolean;
+  firmwareVersion?: string;
+  lastSeenAt?: string;
+  metadata?: Record<string, any>;
+  // AirGuard specific
+  airQualityData?: {
+    temperature: number;
+    humidity: number;
+    aqi: number;
+    pm25: number;
+    co2: number;
+    tvoc: number;
+  };
+  devices?: Device[]; // Devices controlled by this hub
+}
+
+// Device = Dumb appliance without brain (needs hub to control it)
+// Examples: AC, TV, blinds, lights
 export interface Device {
   id: string;
   name: string;
-  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan' | 'airguard';
+  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan';
   category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
   isActive: boolean;
   isOnline?: boolean;
   value?: number;
   unit?: string;
-  roomId: string;
-  hubId?: string;
+  roomId?: string; // Can inherit from hub.roomId
+  hubId: string; // Required - all devices need a hub
   signalMappings?: Record<string, unknown>;
-  metadata?: {
-    smartMonitorId?: string | number;
-    [key: string]: any;
-  };
-  airQualityData?: {
-    temperature: number;
-    humidity: number;
-    aqi: number;
+  metadata?: Record<string, any>;
     pm25?: number;
     dust?: number;
     mq2?: number;
