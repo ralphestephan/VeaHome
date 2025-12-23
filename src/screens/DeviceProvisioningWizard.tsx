@@ -12,7 +12,10 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { Colors } from '../constants/theme';
 import type { ThemeColors } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
+import { getApiClient, HubApi } from '../services/api';
 
 interface WizardStep {
   step: 'intro' | 'connect' | 'credentials' | 'provisioning' | 'pairing' | 'success';
@@ -21,8 +24,14 @@ interface WizardStep {
 export default function DeviceProvisioningWizard({ route }: any) {
   const navigation = useNavigation();
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { token, user } = useAuth();
+  const homeId = user?.homeId;
+  // Ensure we have valid colors with fallback
+  const safeColors = { ...Colors, ...colors };
+  const styles = useMemo(() => createStyles(safeColors), [colors]);
   const deviceType = route.params?.deviceType || 'SmartMonitor';
+  const roomId = route.params?.roomId;
+  const hubId = route.params?.hubId;
   
   const [currentStep, setCurrentStep] = useState<WizardStep['step']>('intro');
   const [homeWifiSSID, setHomeWifiSSID] = useState('');
@@ -105,20 +114,40 @@ export default function DeviceProvisioningWizard({ route }: any) {
     try {
       setStatusMessage('Waiting for device to connect to your WiFi...');
       
-      // TODO: Call your backend API to pair/register the device
-      // This would typically involve:
-      // 1. Device connecting to home WiFi
-      // 2. Device registering with MQTT broker
-      // 3. Backend detecting new device
-      // 4. User claiming device by deviceId
-      
-      // Placeholder - replace with actual API call
+      // Wait for device to connect to home WiFi and start sending MQTT
       await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      if (!homeId) {
+        throw new Error('No home selected');
+      }
+
+      setStatusMessage('Creating device in your home...');
+      
+      // Create hub/device in backend
+      const client = getApiClient(async () => token);
+      const hubApi = HubApi(client);
+      
+      const response = await hubApi.addHub(homeId, {
+        name: `SmartMonitor ${deviceId}`,
+        hubType: 'airguard',
+        metadata: {
+          smartMonitorId: deviceId,
+          deviceType: 'SmartMonitor',
+          wifiConnected: true,
+        },
+        roomId: roomId || undefined,
+      });
+
+      console.log('[DeviceProvisioningWizard] Device created:', response.data);
       
       setStatusMessage('Device connected successfully!');
       setCurrentStep('success');
     } catch (error: any) {
-      Alert.alert('Pairing Error', 'Device connected to WiFi but failed to pair with your account. Try again from the devices screen.');
+      console.error('[DeviceProvisioningWizard] Pairing error:', error);
+      Alert.alert(
+        'Pairing Error', 
+        error?.response?.data?.message || error.message || 'Device connected to WiFi but failed to pair with your account.'
+      );
       setCurrentStep('success'); // Still show success since WiFi config worked
     } finally {
       setIsProcessing(false);

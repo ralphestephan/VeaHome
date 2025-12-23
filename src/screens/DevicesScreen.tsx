@@ -71,10 +71,11 @@ export default function DevicesScreen() {
   const demo = useDemo();
   
   // Use demo data if in demo mode
-  const devices: Device[] = isDemoMode ? demo.devices : homeDevices;
-  const rooms = isDemoMode ? demo.rooms : homeRooms;
+  const devices: Device[] = isDemoMode ? (demo.devices || []) : (homeDevices || []);
+  const rooms = isDemoMode ? (demo.rooms || []) : (homeRooms || []);
   
-  const { hubs } = useHubs(homeId);
+  const { hubs: fetchedHubs } = useHubs(homeId);
+  const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
   const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -119,6 +120,24 @@ export default function DevicesScreen() {
   const securityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'security');
   const utilityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'utility');
   const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
+
+  // Filter devices by category and include relevant hubs (e.g., AirGuard is a hub but shown as device)
+  const climateDevices = [
+    ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
+    ...climateHubs as any[] // AirGuard hubs shown as climate devices
+  ];
+  const securityDevices = [
+    ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
+    ...securityHubs as any[]
+  ];
+  const utilityDevices = [
+    ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
+    ...utilityHubs as any[]
+  ];
+  const lightsDevices = [
+    ...devices.filter(d => d.category === 'lighting' || d.type === 'light'),
+    ...lightingHubs as any[]
+  ];
 
   // Group devices by room
   const devicesByRoom = (deviceList: typeof devices) => {
@@ -447,11 +466,10 @@ export default function DevicesScreen() {
   };
 
   const renderScene = SceneMap({
-    lights: LightsRoute,
     climate: ClimateRoute,
-    windows: WindowsRoute,
-    utility: UtilityRoute,
     security: SecurityRoute,
+    utility: UtilityRoute,
+    lighting: LightsRoute,
   });
 
   const renderTabBar = (props: any) => (
@@ -651,7 +669,8 @@ export default function DevicesScreen() {
                 setShowVealiveModal(false);
                 navigation.navigate('BLEDeviceWizard', { 
                   homeId: homeId,
-                  hubId: hubs?.[0]?.id, // Use first hub if available, undefined for standalone AirGuard
+                  hubId: hubs?.[0]?.id,
+                  roomId: rooms?.[0]?.id, // Use first room as default
                   deviceType: 'SmartMonitor' 
                 });
               }}
@@ -662,7 +681,7 @@ export default function DevicesScreen() {
                 end={{ x: 1, y: 1 }}
                 style={styles.modalButtonGradient}
               >
-                <Text style={styles.modalButtonText}>AirGuard (BLE Setup)</Text>
+                <Text style={styles.modalButtonText}>AirGuard/SmartMonitor</Text>
               </LinearGradient>
             </TouchableOpacity>
 
