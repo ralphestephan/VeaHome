@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   Lightbulb, 
   Thermometer, 
@@ -92,6 +93,14 @@ export default function DevicesScreen() {
   useRealtime({
     onDeviceUpdate: () => refresh(),
   });
+
+  // Auto-refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[DevicesScreen] Screen focused - refreshing hubs');
+      refreshHubs();
+    }, [refreshHubs])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -620,8 +629,8 @@ export default function DevicesScreen() {
                     console.log('[DevicesScreen] Deleting device:', deviceId, 'from home:', homeId);
                     const api = HubApi(getApiClient(async () => token));
                     
-                    // Check if this is a hub (climate device from hubs table)
-                    const isHub = climateDevices.some(d => d.id === deviceId && 'hub_type' in d);
+                    // Check if this is a hub - look in hubs array
+                    const isHub = hubs.some(h => h.id === deviceId);
                     
                     // Delete from backend
                     if (isHub) {
