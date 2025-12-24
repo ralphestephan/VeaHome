@@ -9,10 +9,11 @@ export const useHubs = (homeId: string | null | undefined) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  console.log('[useHubs] Hook initialized with homeId:', homeId, 'token:', token ? 'present' : 'missing');
+  console.log('🔵 [useHubs v2] Hook initialized with homeId:', homeId, 'token:', token ? 'present' : 'missing');
+  console.log('🟡 [useHubs v2] BEFORE useEffect definition');
 
   useEffect(() => {
-    console.log('[useHubs] useEffect triggered - homeId:', homeId);
+    console.log('🟢 [useHubs v2] ✅ useEffect EXECUTING - homeId:', homeId, 'token:', token ? 'present' : 'missing');
     if (!homeId) {
       console.log('[useHubs] No homeId provided, skipping fetch');
       setLoading(false);
@@ -27,10 +28,9 @@ export const useHubs = (homeId: string | null | undefined) => {
         console.log('[useHubs] Calling hubApi.listHubs...');
         const client = getApiClient(async () => token);
         const hubApi = HubApi(client);
-        const response = await hubApi.listHubs(homeId).catch((err) => {
-          console.error('[useHubs] API call failed:', err);
-          return { data: { hubs: [] } };
-        });
+        const response = await hubApi.listHubs(homeId);
+        
+        console.log('[useHubs] Raw API response:', JSON.stringify(response).substring(0, 500));
         
         // Backend returns { success: true, data: { hubs: [...] } }
         const hubsArray = response.data?.hubs || [];
