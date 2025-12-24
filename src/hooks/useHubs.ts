@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, HubApi } from '../services/api';
 import type { Hub } from '../types';
@@ -11,8 +11,11 @@ export const useHubs = (homeId: string | null | undefined) => {
 
   console.log('[useHubs] Hook initialized with homeId:', homeId, 'token:', token ? 'present' : 'missing');
 
-  const client = getApiClient(async () => token);
-  const hubApi = HubApi(client);
+  // Memoize hubApi to prevent infinite loop
+  const hubApi = useMemo(() => {
+    const client = getApiClient(async () => token);
+    return HubApi(client);
+  }, [token]);
 
   useEffect(() => {
     console.log('[useHubs] useEffect triggered - homeId:', homeId);

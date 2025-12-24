@@ -75,10 +75,20 @@ export async function listHubs(req: Request, res: Response) {
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
 
-    const home = await ensureHomeAccess(res, homeId, userId);
-    if (!home) return;
+    console.log('[listHubs] Listing hubs for homeId:', homeId, 'userId:', userId);
 
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) {
+      console.log('[listHubs] No home access or home not found');
+      return;
+    }
+
+    console.log('[listHubs] Home found:', home.id, 'querying hubs...');
     const hubs = await getHubsByHomeId(home.id);
+    console.log('[listHubs] Found', hubs.length, 'hubs for home', home.id);
+    if (hubs.length > 0) {
+      console.log('[listHubs] Hub IDs:', hubs.map(h => h.id).join(', '));
+    }
     return successResponse(res, { hubs });
   } catch (error: any) {
     console.error('List hubs error:', error);
@@ -93,17 +103,25 @@ export async function createHubDirect(req: Request, res: Response) {
     const { homeId } = req.params;
     const { name, serialNumber, hubType, metadata, roomId } = req.body;
 
+    console.log('[createHubDirect] Creating hub for homeId:', homeId, 'serial:', serialNumber);
+
     const home = await ensureHomeAccess(res, homeId, userId);
-    if (!home) return;
+    if (!home) {
+      console.log('[createHubDirect] No home access or home not found');
+      return;
+    }
+
+    console.log('[createHubDirect] Home found:', home.id, 'user:', home.user_id);
 
     // Check if hub already exists with this serial number
     const existingHub = serialNumber ? await getHubBySerial(serialNumber) : null;
     if (existingHub) {
       // Hub already exists, just return it
-      console.log('Hub with serial number already exists, returning existing hub');
+      console.log('[createHubDirect] Hub with serial number already exists:', existingHub.id, 'home:', existingHub.home_id);
       return successResponse(res, { hub: existingHub });
     }
 
+    console.log('[createHubDirect] Creating new hub with homeId:', home.id);
     const hub = await createHub({
       homeId: home.id,
       serialNumber: serialNumber || `HUB_${Date.now()}`,
