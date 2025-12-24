@@ -29,13 +29,16 @@ export const useHubs = (homeId: string | null | undefined) => {
         const hubApi = HubApi(client);
         const response = await hubApi.listHubs(homeId).catch((err) => {
           console.error('[useHubs] API call failed:', err);
-          return { data: [] };
+          return { data: { hubs: [] } };
         });
-        console.log('[useHubs] Received hubs:', response.data?.length || 0, 'hubs');
-        if (response.data && response.data.length > 0) {
-          console.log('[useHubs] Hub details:', JSON.stringify(response.data, null, 2).substring(0, 500));
+        
+        // Backend returns { success: true, data: { hubs: [...] } }
+        const hubsArray = response.data?.hubs || [];
+        console.log('[useHubs] Received hubs:', hubsArray.length, 'hubs');
+        if (hubsArray.length > 0) {
+          console.log('[useHubs] Hub details:', JSON.stringify(hubsArray, null, 2).substring(0, 500));
         }
-        setHubs(response.data || []);
+        setHubs(hubsArray);
       } catch (e: any) {
         setError(e?.response?.data?.message || 'Failed to load hubs');
         console.error('[useHubs] Error loading hubs:', e);
@@ -59,10 +62,13 @@ export const useHubs = (homeId: string | null | undefined) => {
       const hubApi = HubApi(client);
       const response = await hubApi.listHubs(homeId).catch((err) => {
         console.error('[useHubs.refresh] API call failed:', err);
-        return { data: [] };
+        return { data: { hubs: [] } };
       });
-      console.log('[useHubs.refresh] Received hubs:', response.data?.length || 0, 'hubs');
-      setHubs(response.data || []);
+      
+      // Backend returns { success: true, data: { hubs: [...] } }
+      const hubsArray = response.data?.hubs || [];
+      console.log('[useHubs.refresh] Received hubs:', hubsArray.length, 'hubs');
+      setHubs(hubsArray);
     } catch (e) {
       console.error('[useHubs.refresh] Error refreshing hubs:', e);
       setHubs([]);
