@@ -96,6 +96,14 @@ export async function createHubDirect(req: Request, res: Response) {
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
 
+    // Check if hub already exists with this serial number
+    const existingHub = serialNumber ? await getHubBySerial(serialNumber) : null;
+    if (existingHub) {
+      // Hub already exists, just return it
+      console.log('Hub with serial number already exists, returning existing hub');
+      return successResponse(res, { hub: existingHub });
+    }
+
     const hub = await createHub({
       homeId: home.id,
       serialNumber: serialNumber || `HUB_${Date.now()}`,

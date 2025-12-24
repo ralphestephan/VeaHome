@@ -312,22 +312,31 @@ export default function BLEDeviceWizard({ route }: any) {
 
     try {
       console.log('[BLEDeviceWizard] Preparing credentials for:', selectedNetwork.ssid);
-      console.log('[BLEDeviceWizard] Preparing credentials for:', selectedNetwork.ssid);
       const credentials = {
         ssid: selectedNetwork.ssid,
         password: wifiPassword
       };
 
-      console.log('[BLEDeviceWizard] Writing credentials to BLE characteristic...');
+      const jsonString = JSON.stringify(credentials);
+      console.log('[BLEDeviceWizard] Credentials JSON:', jsonString);
+      console.log('[BLEDeviceWizard] Credentials length:', jsonString.length);
+      
+      // Encode to base64 for BLE transmission
+      const base64Data = btoa(jsonString);
+      console.log('[BLEDeviceWizard] Base64 data:', base64Data);
+      console.log('[BLEDeviceWizard] Base64 length:', base64Data.length);
+
+      console.log('[BLEDeviceWizard] Writing to service:', SERVICE_UUID);
+      console.log('[BLEDeviceWizard] Writing to characteristic:', WIFI_CRED_CHAR_UUID);
       
       // Write credentials to device (without response since device will restart)
       await connectedBLEDevice.writeCharacteristicWithoutResponseForService(
         SERVICE_UUID,
         WIFI_CRED_CHAR_UUID,
-        btoa(JSON.stringify(credentials))
+        base64Data
       );
 
-      console.log('[BLEDeviceWizard] Credentials written successfully');
+      console.log('[BLEDeviceWizard] Write command completed');
       setStatusMessage('Credentials sent! Device is connecting to WiFi...');
 
       console.log('[BLEDeviceWizard] WiFi credentials sent, waiting 5s for device to restart...');
