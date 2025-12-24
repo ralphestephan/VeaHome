@@ -11,12 +11,6 @@ export const useHubs = (homeId: string | null | undefined) => {
 
   console.log('[useHubs] Hook initialized with homeId:', homeId, 'token:', token ? 'present' : 'missing');
 
-  // Memoize hubApi to prevent infinite loop
-  const hubApi = useMemo(() => {
-    const client = getApiClient(async () => token);
-    return HubApi(client);
-  }, [token]);
-
   useEffect(() => {
     console.log('[useHubs] useEffect triggered - homeId:', homeId);
     if (!homeId) {
@@ -31,6 +25,8 @@ export const useHubs = (homeId: string | null | undefined) => {
         setLoading(true);
         setError(null);
         console.log('[useHubs] Calling hubApi.listHubs...');
+        const client = getApiClient(async () => token);
+        const hubApi = HubApi(client);
         const response = await hubApi.listHubs(homeId).catch((err) => {
           console.error('[useHubs] API call failed:', err);
           return { data: [] };
@@ -50,7 +46,7 @@ export const useHubs = (homeId: string | null | undefined) => {
     };
 
     loadHubs();
-  }, [homeId, hubApi]);
+  }, [homeId, token]);
 
   const refresh = async () => {
     if (!homeId) {
@@ -59,6 +55,8 @@ export const useHubs = (homeId: string | null | undefined) => {
     }
     console.log('[useHubs.refresh] Refreshing hubs for home:', homeId);
     try {
+      const client = getApiClient(async () => token);
+      const hubApi = HubApi(client);
       const response = await hubApi.listHubs(homeId).catch((err) => {
         console.error('[useHubs.refresh] API call failed:', err);
         return { data: [] };
