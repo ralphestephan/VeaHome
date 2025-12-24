@@ -5,7 +5,8 @@ import {
   createHubDirect,
   connectWifi, 
   assignRooms, 
-  getHubStatus 
+  getHubStatus,
+  deleteHub
 } from '../controllers/hub.controller';
 import { authenticateToken } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -16,6 +17,7 @@ const router = Router();
 router.post('/pair', authenticateToken, validate(hubSchemas.pairHub), pairHub);
 router.get('/:homeId/hubs', authenticateToken, listHubs);
 router.post('/:homeId/hubs', authenticateToken, createHubDirect);
+router.delete('/:homeId/hubs/:hubId', authenticateToken, deleteHub);
 router.post('/:hubId/wifi', authenticateToken, validate(hubSchemas.connectWifi), connectWifi);
 router.post('/:hubId/rooms', authenticateToken, validate(hubSchemas.assignRooms), assignRooms);
 router.get('/:hubId/status', authenticateToken, getHubStatus);

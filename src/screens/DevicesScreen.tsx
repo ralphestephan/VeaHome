@@ -575,8 +575,17 @@ export default function DevicesScreen() {
                     console.log('[DevicesScreen] Deleting device:', deviceId, 'from home:', homeId);
                     const api = HubApi(getApiClient(async () => token));
                     
+                    // Check if this is a hub (climate device from hubs table)
+                    const isHub = climateDevices.some(d => d.id === deviceId && 'hub_type' in d);
+                    
                     // Delete from backend
-                    await api.deleteDevice(homeId, deviceId);
+                    if (isHub) {
+                      console.log('[DevicesScreen] Deleting hub:', deviceId);
+                      await api.deleteHub(homeId, deviceId);
+                    } else {
+                      console.log('[DevicesScreen] Deleting regular device:', deviceId);
+                      await api.deleteDevice(homeId, deviceId);
+                    }
                     console.log('[DevicesScreen] Device deleted successfully from backend');
                     
                     // Close modal immediately
@@ -587,6 +596,7 @@ export default function DevicesScreen() {
                     console.log('[DevicesScreen] Force refreshing device list...');
                     setRefreshing(true);
                     await refresh();
+                    await refreshHubs();
                     setRefreshing(false);
                     console.log('[DevicesScreen] Device list refreshed and cache cleared');
                   } catch (e: any) {

@@ -11,6 +11,7 @@ import {
   assignRooms as assignRoomsRepo,
   updateHubStatus,
   updateHubTopic,
+  deleteHub as deleteHubRepo,
 } from '../repositories/hubsRepository';
 import { ensureHomeAccess } from './helpers/homeAccess';
 import { encryptSecret } from '../services/cryptoService';
@@ -246,5 +247,42 @@ export async function getHubStatus(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Get hub status error:', error);
     return errorResponse(res, error.message || 'Failed to get hub status', 500);
+  }
+}
+
+export async function deleteHub(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, hubId } = req.params;
+
+    console.log('[deleteHub] Deleting hub:', hubId, 'from home:', homeId, 'by user:', userId);
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) {
+      console.log('[deleteHub] No home access or home not found');
+      return;
+    }
+
+    // Check if hub exists and belongs to this home
+    const hub = await getHubById(hubId);
+    if (!hub) {
+      console.log('[deleteHub] Hub not found:', hubId);
+      return errorResponse(res, 'Hub not found', 404);
+    }
+
+    if (hub.home_id !== homeId) {
+      console.log('[deleteHub] Hub does not belong to this home. Hub home:', hub.home_id, 'requested home:', homeId);
+      return errorResponse(res, 'Hub not found', 404);
+    }
+
+    // Delete the hub
+    await deleteHubRepo(hubId);
+    console.log('[deleteHub] Hub deleted successfully:', hubId);
+
+    return successResponse(res, { message: 'Hub deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete hub error:', error);
+    return errorResponse(res, error.message || 'Failed to delete hub', 500);
   }
 }

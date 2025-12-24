@@ -94,6 +94,7 @@ export const HubApi = (client: AxiosInstance) => ({
   getHubStatus: (hubId: string) => client.get(`/hubs/${hubId}/status`),
   // Get hubs
   listHubs: (homeId: string) => client.get(`/homes/${homeId}/hubs`),
+  deleteHub: (homeId: string, hubId: string) => client.delete(`/homes/${homeId}/hubs/${hubId}`),
 });
 
 // Rooms & energy

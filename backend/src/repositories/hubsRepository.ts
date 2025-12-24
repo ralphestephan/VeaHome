@@ -121,3 +121,7 @@ export async function getHubsByHomeId(homeId: string): Promise<Hub[]> {
 export async function updateHubTopic(hubId: string, topic: string) {
   await query('UPDATE hubs SET mqtt_topic = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [hubId, topic]);
 }
+
+export async function deleteHub(hubId: string): Promise<void> {
+  await query('DELETE FROM hubs WHERE id = $1', [hubId]);
+}
