@@ -554,7 +554,7 @@ export default function DeviceControlModal({
                 </View>
               </View>
               <View style={styles.headerRight}>
-                {isAirguard && onDelete && (
+                {onDelete && (
                   <TouchableOpacity onPress={() => onDelete(device.id)} style={styles.trashButton}>
                     <Trash2 size={18} color="#FF6B6B" />
                   </TouchableOpacity>

@@ -189,6 +189,51 @@ export default function DevicesScreen() {
     }
   };
 
+  const handleDeleteDevice = async (deviceId: string) => {
+    Alert.alert(
+      'Delete Device',
+      'Are you sure you want to delete this device? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isDemoMode) {
+                console.log('[DevicesScreen] Demo mode: simulating delete');
+                setModalVisible(false);
+                return;
+              }
+
+              const device = devices.find((d) => d.id === deviceId) || selectedDevice;
+              const isHub = device && 'hubType' in device;
+
+              if (isHub) {
+                // Delete hub via API
+                const api = await getApiClient();
+                const hubApi = new HubApi(api);
+                await hubApi.deleteHub(homeId!, deviceId);
+                console.log('[DevicesScreen] Hub deleted:', deviceId);
+                await refreshHubs();
+              } else {
+                // Delete regular device
+                // TODO: Implement device deletion endpoint
+                console.log('[DevicesScreen] Regular device deletion not yet implemented');
+              }
+
+              setModalVisible(false);
+              await refresh();
+            } catch (error) {
+              console.error('[DevicesScreen] Error deleting device:', error);
+              Alert.alert('Error', 'Failed to delete device. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleMuteToggle = (deviceId: string, muted: boolean) => {
     if (isDemoMode) {
       demo.setDeviceMuted(deviceId, muted);

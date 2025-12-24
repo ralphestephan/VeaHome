@@ -31,13 +31,17 @@ export const useHubs = (homeId: string | null | undefined) => {
         const response = await hubApi.listHubs(homeId);
         
         console.log('[useHubs] Raw API response:', JSON.stringify(response).substring(0, 500));
+        console.log('[useHubs] response.data:', JSON.stringify(response.data).substring(0, 500));
         
         // Axios wraps in response.data, backend returns { success: true, data: { hubs: [...] } }
         // So full path is: response.data.data.hubs
         const hubsArray = response.data?.data?.hubs || [];
-        console.log('[useHubs] Received hubs:', hubsArray.length, 'hubs');
+        console.log('[useHubs] Extracted hubsArray length:', hubsArray.length);
+        console.log('[useHubs] response.data.data:', JSON.stringify(response.data?.data).substring(0, 500));
+        console.log('[useHubs] response.data.hubs:', JSON.stringify(response.data?.hubs).substring(0, 500));
+        
         if (hubsArray.length > 0) {
-          console.log('[useHubs] Hub details:', JSON.stringify(hubsArray, null, 2).substring(0, 500));
+          console.log('[useHubs] First hub:', JSON.stringify(hubsArray[0], null, 2));
         }
         setHubs(hubsArray);
       } catch (e: any) {
