@@ -354,6 +354,7 @@ export default function BLEDeviceWizard({ route }: any) {
             
             const hubData = {
               name: selectedDevice?.name || `SmartMonitor ${deviceInfo.deviceId}`,
+              serialNumber: `SM_${deviceInfo.deviceId}`,
               hubType: 'airguard',
               metadata: {
                 smartMonitorId: deviceInfo.deviceId,

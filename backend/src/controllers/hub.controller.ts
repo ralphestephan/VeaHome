@@ -91,13 +91,14 @@ export async function createHubDirect(req: Request, res: Response) {
     const authReq = req as AuthRequest;
     const userId = authReq.user?.userId;
     const { homeId } = req.params;
-    const { name, hubType, metadata, roomId } = req.body;
+    const { name, serialNumber, hubType, metadata, roomId } = req.body;
 
     const home = await ensureHomeAccess(res, homeId, userId);
     if (!home) return;
 
     const hub = await createHub({
       homeId: home.id,
+      serialNumber: serialNumber || `HUB_${Date.now()}`,
       name: name || `Hub ${Date.now()}`,
       hubType: hubType || 'airguard',
       status: 'online',
