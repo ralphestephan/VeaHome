@@ -137,7 +137,7 @@ int humMax        = 70;
 int dustThreshold = 400;
 int mq2Threshold  = 60;
 
-int timezoneOffset = 10800;  // GMT+3
+int timezoneOffset = 7200;  // GMT+2 (Lebanon winter time)
 
 bool buzzerEnabled = true;
 

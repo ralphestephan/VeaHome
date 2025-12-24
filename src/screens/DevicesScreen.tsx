@@ -67,6 +67,7 @@ export default function DevicesScreen() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const { user, token } = useAuth();
   const homeId = user?.homeId;
+  console.log('[DevicesScreen] HomeId:', homeId, 'User:', user?.email);
   const { devices: homeDevices, rooms: homeRooms, loading, refresh, isDemoMode } = useHomeData(homeId);
   const demo = useDemo();
   
@@ -75,6 +76,7 @@ export default function DevicesScreen() {
   const rooms = isDemoMode ? (demo.rooms || []) : (homeRooms || []);
   
   const { hubs: fetchedHubs, refresh: refreshHubs } = useHubs(homeId);
+  console.log('[DevicesScreen] Fetched hubs:', fetchedHubs?.length || 0);
   const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
   const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);

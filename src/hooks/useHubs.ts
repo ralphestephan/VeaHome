@@ -9,6 +9,8 @@ export const useHubs = (homeId: string | null | undefined) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  console.log('[useHubs] Hook initialized with homeId:', homeId, 'token:', token ? 'present' : 'missing');
+
   const client = getApiClient(async () => token);
   const hubApi = HubApi(client);
 
@@ -44,7 +46,7 @@ export const useHubs = (homeId: string | null | undefined) => {
     };
 
     loadHubs();
-  }, [homeId, token]);
+  }, [homeId]);
 
   const refresh = async () => {
     if (!homeId) {
