@@ -15,6 +15,7 @@ export const useHubs = (homeId: string | null | undefined) => {
   const hubApi = HubApi(client);
 
   useEffect(() => {
+    console.log('[useHubs] useEffect triggered - homeId:', homeId);
     if (!homeId) {
       console.log('[useHubs] No homeId provided, skipping fetch');
       setLoading(false);
@@ -46,7 +47,7 @@ export const useHubs = (homeId: string | null | undefined) => {
     };
 
     loadHubs();
-  }, [homeId]);
+  }, [homeId, hubApi]);
 
   const refresh = async () => {
     if (!homeId) {
