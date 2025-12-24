@@ -318,25 +318,30 @@ export default function BLEDeviceWizard({ route }: any) {
       };
 
       const jsonString = JSON.stringify(credentials);
-      console.log('[BLEDeviceWizard] Credentials JSON:', jsonString);
-      console.log('[BLEDeviceWizard] Credentials length:', jsonString.length);
+      console.log('[BLEDeviceWizard] JSON string:', jsonString);
+      console.log('[BLEDeviceWizard] JSON length:', jsonString.length);
       
-      // Encode to base64 for BLE transmission
       const base64Data = btoa(jsonString);
-      console.log('[BLEDeviceWizard] Base64 data:', base64Data);
+      console.log('[BLEDeviceWizard] Base64 encoded:', base64Data);
       console.log('[BLEDeviceWizard] Base64 length:', base64Data.length);
-
-      console.log('[BLEDeviceWizard] Writing to service:', SERVICE_UUID);
-      console.log('[BLEDeviceWizard] Writing to characteristic:', WIFI_CRED_CHAR_UUID);
       
-      // Write credentials to device (without response since device will restart)
+      // Request larger MTU to ensure full data transmission (default is 23 bytes = 20 data)
+      try {
+        const mtu = await connectedBLEDevice.requestMTU(512);
+        console.log('[BLEDeviceWizard] MTU negotiated:', mtu, 'bytes');
+      } catch (mtuError) {
+        console.warn('[BLEDeviceWizard] MTU request failed (may not be supported):', mtuError);
+        // Continue anyway - some platforms don't support MTU requests
+      }
+      
+      console.log('[BLEDeviceWizard] Writing to characteristic:', WIFI_CRED_CHAR_UUID);
       await connectedBLEDevice.writeCharacteristicWithoutResponseForService(
         SERVICE_UUID,
         WIFI_CRED_CHAR_UUID,
         base64Data
       );
 
-      console.log('[BLEDeviceWizard] Write command completed');
+      console.log('[BLEDeviceWizard] Write completed successfully');
       setStatusMessage('Credentials sent! Device is connecting to WiFi...');
 
       console.log('[BLEDeviceWizard] WiFi credentials sent, waiting 5s for device to restart...');

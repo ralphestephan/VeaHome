@@ -74,7 +74,7 @@ export default function DevicesScreen() {
   const devices: Device[] = isDemoMode ? (demo.devices || []) : (homeDevices || []);
   const rooms = isDemoMode ? (demo.rooms || []) : (homeRooms || []);
   
-  const { hubs: fetchedHubs } = useHubs(homeId);
+  const { hubs: fetchedHubs, refresh: refreshHubs } = useHubs(homeId);
   const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
   const { toggleDevice, setValue, loading: deviceLoading } = useDeviceControl();
   const [index, setIndex] = useState(0);
@@ -93,9 +93,9 @@ export default function DevicesScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), refreshHubs()]);
     setRefreshing(false);
-  }, [refresh]);
+  }, [refresh, refreshHubs]);
   const [routes] = useState([
     { key: 'climate', title: 'Climate' },
     { key: 'security', title: 'Security' },

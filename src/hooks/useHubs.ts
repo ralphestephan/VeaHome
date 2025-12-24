@@ -14,19 +14,29 @@ export const useHubs = (homeId: string | null | undefined) => {
 
   useEffect(() => {
     if (!homeId) {
+      console.log('[useHubs] No homeId provided, skipping fetch');
       setLoading(false);
       return;
     }
 
+    console.log('[useHubs] Loading hubs for home:', homeId);
     const loadHubs = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await hubApi.listHubs(homeId).catch(() => ({ data: [] }));
+        console.log('[useHubs] Calling hubApi.listHubs...');
+        const response = await hubApi.listHubs(homeId).catch((err) => {
+          console.error('[useHubs] API call failed:', err);
+          return { data: [] };
+        });
+        console.log('[useHubs] Received hubs:', response.data?.length || 0, 'hubs');
+        if (response.data && response.data.length > 0) {
+          console.log('[useHubs] Hub details:', JSON.stringify(response.data, null, 2).substring(0, 500));
+        }
         setHubs(response.data || []);
       } catch (e: any) {
         setError(e?.response?.data?.message || 'Failed to load hubs');
-        console.error('Error loading hubs:', e);
+        console.error('[useHubs] Error loading hubs:', e);
         setHubs([]);
       } finally {
         setLoading(false);
@@ -37,12 +47,20 @@ export const useHubs = (homeId: string | null | undefined) => {
   }, [homeId, token]);
 
   const refresh = async () => {
-    if (!homeId) return;
+    if (!homeId) {
+      console.log('[useHubs.refresh] No homeId, skipping');
+      return;
+    }
+    console.log('[useHubs.refresh] Refreshing hubs for home:', homeId);
     try {
-      const response = await hubApi.listHubs(homeId).catch(() => ({ data: [] }));
+      const response = await hubApi.listHubs(homeId).catch((err) => {
+        console.error('[useHubs.refresh] API call failed:', err);
+        return { data: [] };
+      });
+      console.log('[useHubs.refresh] Received hubs:', response.data?.length || 0, 'hubs');
       setHubs(response.data || []);
     } catch (e) {
-      console.error('Error refreshing hubs:', e);
+      console.error('[useHubs.refresh] Error refreshing hubs:', e);
       setHubs([]);
     }
   };

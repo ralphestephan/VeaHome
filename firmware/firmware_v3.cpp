@@ -242,11 +242,44 @@ class MyBLEServerCallbacks: public BLEServerCallbacks {
   }
 };
 
+// Simple Base64 decoding function
+String base64Decode(const String& input) {
+  const char* base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  
+  String output = "";
+  int val = 0, valb = -8;
+  
+  for (unsigned char c : input) {
+    if (c == '=') break;
+    
+    const char* pos = strchr(base64Chars, c);
+    if (pos == nullptr) continue;
+    
+    val = (val << 6) + (pos - base64Chars);
+    valb += 6;
+    
+    if (valb >= 0) {
+      output += char((val >> valb) & 0xFF);
+      valb -= 8;
+    }
+  }
+  
+  return output;
+}
+
 class WiFiCredCallbacks: public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
     String value = String(pCharacteristic->getValue().c_str());
     if (value.length() > 0) {
       Serial.println("[BLE] Received WiFi credentials");
+      Serial.printf("[BLE] Raw value (%d bytes): %s\n", value.length(), value.c_str());
+      
+      // Check if value is base64 (doesn't start with '{')
+      if (value.length() > 0 && value.charAt(0) != '{') {
+        Serial.println("[BLE] Decoding base64...");
+        value = base64Decode(value);
+        Serial.printf("[BLE] Decoded (%d bytes): %s\n", value.length(), value.c_str());
+      }
       
       // Parse JSON: {"ssid":"HomeWiFi","password":"password123"}
       StaticJsonDocument<256> doc;
@@ -257,6 +290,7 @@ class WiFiCredCallbacks: public BLECharacteristicCallbacks {
         password = doc["password"].as<String>();
         
         Serial.printf("[BLE] SSID: %s\n", ssid.c_str());
+        Serial.printf("[BLE] Password length: %d\n", password.length());
         savePrefs();
         
         // Send confirmation
@@ -268,8 +302,12 @@ class WiFiCredCallbacks: public BLECharacteristicCallbacks {
         pCharacteristic->setValue(jsonResponse.c_str());
         pCharacteristic->notify();
         
+        Serial.println("[BLE] Restarting in 1 second...");
         delay(1000);
         ESP.restart();
+      } else {
+        Serial.printf("[BLE] JSON parse error: %s\n", err.c_str());
+        Serial.printf("[BLE] Failed to parse: %s\n", value.c_str());
       }
     }
   }
