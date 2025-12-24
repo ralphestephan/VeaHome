@@ -32,8 +32,9 @@ export const useHubs = (homeId: string | null | undefined) => {
         
         console.log('[useHubs] Raw API response:', JSON.stringify(response).substring(0, 500));
         
-        // Backend returns { success: true, data: { hubs: [...] } }
-        const hubsArray = response.data?.hubs || [];
+        // Axios wraps in response.data, backend returns { success: true, data: { hubs: [...] } }
+        // So full path is: response.data.data.hubs
+        const hubsArray = response.data?.data?.hubs || [];
         console.log('[useHubs] Received hubs:', hubsArray.length, 'hubs');
         if (hubsArray.length > 0) {
           console.log('[useHubs] Hub details:', JSON.stringify(hubsArray, null, 2).substring(0, 500));
