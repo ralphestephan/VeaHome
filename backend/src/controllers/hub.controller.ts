@@ -90,7 +90,24 @@ export async function listHubs(req: Request, res: Response) {
     if (hubs.length > 0) {
       console.log('[listHubs] Hub IDs:', hubs.map(h => h.id).join(', '));
     }
-    return successResponse(res, { hubs });
+    
+    // Transform to camelCase for frontend
+    const transformedHubs = hubs.map(h => ({
+      id: h.id,
+      homeId: h.home_id,
+      serialNumber: h.serial_number,
+      name: h.name || `Device_${h.serial_number}`,
+      hubType: h.hub_type || 'utility',
+      status: h.status,
+      wifiSsid: h.wifi_ssid,
+      wifiConnected: h.wifi_connected,
+      mqttTopic: h.mqtt_topic,
+      metadata: h.metadata,
+      createdAt: h.created_at,
+      updatedAt: h.updated_at
+    }));
+    
+    return successResponse(res, { hubs: transformedHubs });
   } catch (error: any) {
     console.error('List hubs error:', error);
     return errorResponse(res, error.message || 'Failed to list hubs', 500);

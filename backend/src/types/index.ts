@@ -41,10 +41,12 @@ export interface Hub {
   home_id: string;
   serial_number: string;
   name?: string;
+  hub_type?: string;
   status: string;
   wifi_ssid?: string;
   wifi_connected: boolean;
   mqtt_topic?: string;
+  metadata?: any;
   created_at: Date;
   updated_at: Date;
 }
