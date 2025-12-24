@@ -37,8 +37,8 @@ export const useHubs = (homeId: string | null | undefined) => {
         // So full path is: response.data.data.hubs
         const hubsArray = response.data?.data?.hubs || [];
         console.log('[useHubs] Extracted hubsArray length:', hubsArray.length);
-        console.log('[useHubs] response.data.data:', JSON.stringify(response.data?.data).substring(0, 500));
-        console.log('[useHubs] response.data.hubs:', JSON.stringify(response.data?.hubs).substring(0, 500));
+        console.log('[useHubs] response.data.data:', JSON.stringify(response.data?.data || {}).substring(0, 500));
+        console.log('[useHubs] response.data.hubs:', JSON.stringify(response.data?.hubs || null).substring(0, 500));
         
         if (hubsArray.length > 0) {
           console.log('[useHubs] First hub:', JSON.stringify(hubsArray[0], null, 2));
