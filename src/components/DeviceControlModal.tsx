@@ -1365,61 +1365,63 @@ export default function DeviceControlModal({
         </View>
       </Modal>
 
-      {/* Room Picker Modal */}
+      {/* Room Picker Modal - Redesigned */}
       <Modal
         visible={showRoomPicker}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowRoomPicker(false)}
       >
-        <View style={styles.confirmOverlay}>
+        <View style={styles.roomPickerOverlay}>
           <TouchableOpacity 
             style={StyleSheet.absoluteFill} 
             onPress={() => setShowRoomPicker(false)} 
             activeOpacity={1}
-          >
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
-          </TouchableOpacity>
+          />
           
-          <View style={styles.roomPickerCard}>
+          <View style={styles.roomPickerContainer}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
-              style={styles.roomPickerContent}
+              style={styles.roomPickerGradient}
             >
+              {/* Handle Bar */}
+              <View style={styles.roomPickerHandle} />
+
               {/* Header */}
-              <View style={styles.roomPickerHeader}>
-                <View style={styles.roomPickerTitleContainer}>
-                  <View style={styles.roomPickerIconWrapper}>
-                    <LinearGradient
-                      colors={[colors.primary, colors.neonCyan]}
-                      style={styles.roomPickerIconGradient}
-                    >
-                      <Home size={20} color="#fff" />
-                    </LinearGradient>
-                  </View>
-                  <View>
-                    <Text style={styles.roomPickerTitle}>Assign to Room</Text>
-                    <Text style={styles.roomPickerSubtitle}>Choose a room for this device</Text>
-                  </View>
+              <View style={styles.roomPickerHeaderNew}>
+                <View style={styles.roomPickerIconWrapperNew}>
+                  <LinearGradient
+                    colors={[colors.primary, colors.neonCyan]}
+                    style={styles.roomPickerIconGradientNew}
+                  >
+                    <Home size={24} color="#fff" />
+                  </LinearGradient>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.roomPickerTitleNew}>Select Room</Text>
+                  <Text style={styles.roomPickerSubtitleNew}>
+                    {device?.name || 'Device'} • {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} available
+                  </Text>
                 </View>
                 <TouchableOpacity 
                   onPress={() => setShowRoomPicker(false)}
-                  style={styles.roomPickerClose}
+                  style={styles.roomPickerCloseNew}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <X size={20} color={colors.mutedForeground} />
+                  <X size={24} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
 
-              {/* Room List */}
+              {/* Room Grid */}
               <ScrollView 
-                style={styles.roomPickerScroll}
-                contentContainerStyle={styles.roomPickerList}
+                style={styles.roomPickerScrollNew}
+                contentContainerStyle={styles.roomPickerContentNew}
                 showsVerticalScrollIndicator={false}
-                bounces={false}
               >
+                {/* Remove Option */}
                 {device?.roomId && (
                   <TouchableOpacity
-                    style={styles.roomOptionRemove}
+                    style={styles.roomCardRemove}
                     onPress={async () => {
                       if (!device || !onUpdateRoom) return;
                       try {
@@ -1429,34 +1431,36 @@ export default function DeviceControlModal({
                         console.error('Failed to remove from room:', error);
                       }
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
-                    <View style={styles.roomOptionIcon}>
-                      <X size={18} color={colors.destructive} />
+                    <View style={styles.roomCardRemoveIcon}>
+                      <X size={24} color={colors.destructive} strokeWidth={2.5} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.roomOptionRemoveText}>Remove from room</Text>
-                      <Text style={styles.roomOptionRemoveSubtext}>Unassign this device</Text>
-                    </View>
+                    <Text style={styles.roomCardRemoveTitle}>No Room</Text>
+                    <Text style={styles.roomCardRemoveSubtitle}>Unassign device</Text>
                   </TouchableOpacity>
                 )}
 
+                {/* Room Cards */}
                 {rooms.length === 0 ? (
-                  <View style={styles.roomPickerEmpty}>
-                    <MapPin size={32} color={colors.mutedForeground} />
-                    <Text style={styles.roomPickerEmptyText}>No rooms available</Text>
-                    <Text style={styles.roomPickerEmptySubtext}>Create a room first to assign devices</Text>
+                  <View style={styles.roomPickerEmptyNew}>
+                    <View style={styles.roomPickerEmptyIcon}>
+                      <MapPin size={48} color={colors.mutedForeground} strokeWidth={1.5} />
+                    </View>
+                    <Text style={styles.roomPickerEmptyTitle}>No Rooms Yet</Text>
+                    <Text style={styles.roomPickerEmptySubtitle}>
+                      Create a room in settings to organize your devices
+                    </Text>
                   </View>
                 ) : (
-                  rooms.map((room, index) => {
+                  rooms.map((room) => {
                     const isActive = device?.roomId === room.id;
                     return (
                       <TouchableOpacity
                         key={room.id}
                         style={[
-                          styles.roomOption,
-                          isActive && styles.roomOptionActive,
-                          index === 0 && device?.roomId && { marginTop: spacing.md }
+                          styles.roomCard,
+                          isActive && styles.roomCardActive
                         ]}
                         onPress={async () => {
                           if (!device || !onUpdateRoom) return;
@@ -1467,39 +1471,38 @@ export default function DeviceControlModal({
                             console.error('Failed to assign room:', error);
                           }
                         }}
-                        activeOpacity={0.7}
+                        activeOpacity={0.8}
                       >
-                        <View style={[
-                          styles.roomOptionIcon,
-                          isActive && styles.roomOptionIconActive
-                        ]}>
-                          <Home 
-                            size={18} 
-                            color={isActive ? '#fff' : colors.primary} 
-                          />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[
-                            styles.roomOptionText,
-                            isActive && styles.roomOptionTextActive
-                          ]}>
-                            {room.name}
-                          </Text>
-                          {isActive && (
-                            <View style={styles.roomOptionBadge}>
-                              <Sparkles size={10} color={colors.primary} />
-                              <Text style={styles.roomOptionBadgeText}>Currently assigned</Text>
-                            </View>
-                          )}
-                        </View>
                         {isActive && (
-                          <View style={styles.roomOptionCheck}>
+                          <View style={styles.roomCardCheckBadge}>
                             <LinearGradient
                               colors={[colors.primary, colors.neonCyan]}
-                              style={styles.roomOptionCheckGradient}
+                              style={styles.roomCardCheckGradient}
                             >
-                              <Check size={14} color="#fff" />
+                              <Check size={16} color="#fff" strokeWidth={3} />
                             </LinearGradient>
+                          </View>
+                        )}
+                        <View style={[
+                          styles.roomCardIconContainer,
+                          isActive && styles.roomCardIconContainerActive
+                        ]}>
+                          <Home 
+                            size={28} 
+                            color={isActive ? '#fff' : colors.primary}
+                            strokeWidth={2}
+                          />
+                        </View>
+                        <Text style={[
+                          styles.roomCardTitle,
+                          isActive && styles.roomCardTitleActive
+                        ]} numberOfLines={1}>
+                          {room.name}
+                        </Text>
+                        {isActive && (
+                          <View style={styles.roomCardActiveBadge}>
+                            <Sparkles size={12} color={colors.primary} />
+                            <Text style={styles.roomCardActiveBadgeText}>Active</Text>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -2372,164 +2375,201 @@ const createStyles = (colors: any, shadows: any) =>
       fontWeight: '700',
       color: '#fff',
     },
-    roomPickerCard: {
-      marginHorizontal: spacing.lg,
-      borderRadius: borderRadius.xl,
+    // New Room Picker Styles - Bottom Sheet Design
+    roomPickerOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.75)',
+      justifyContent: 'flex-end',
+    },
+    roomPickerContainer: {
+      borderTopLeftRadius: borderRadius.xxl,
+      borderTopRightRadius: borderRadius.xxl,
       overflow: 'hidden',
-      maxWidth: 500,
-      maxHeight: '80%',
-      width: '100%',
-      alignSelf: 'center',
+      maxHeight: '85%',
       ...shadows.xl,
     },
-    roomPickerContent: {
-      padding: spacing.lg,
-      flex: 1,
+    roomPickerGradient: {
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xl,
+      paddingHorizontal: spacing.lg,
     },
-    roomPickerHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
+    roomPickerHandle: {
+      width: 40,
+      height: 5,
+      borderRadius: borderRadius.full,
+      backgroundColor: colors.muted,
+      alignSelf: 'center',
       marginBottom: spacing.lg,
     },
-    roomPickerTitleContainer: {
+    roomPickerHeaderNew: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
-      flex: 1,
+      marginBottom: spacing.xl,
     },
-    roomPickerIconWrapper: {
+    roomPickerIconWrapperNew: {
+      width: 56,
+      height: 56,
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+      ...shadows.lg,
+    },
+    roomPickerIconGradientNew: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomPickerTitleNew: {
+      fontSize: fontSize.xl,
+      fontWeight: '800',
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    roomPickerSubtitleNew: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      fontWeight: '500',
+    },
+    roomPickerCloseNew: {
       width: 44,
       height: 44,
       borderRadius: borderRadius.lg,
+      backgroundColor: colors.muted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomPickerScrollNew: {
+      maxHeight: 500,
+    },
+    roomPickerContentNew: {
+      gap: spacing.md,
+      paddingBottom: spacing.lg,
+    },
+    // Room Cards - Grid Style
+    roomCard: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.xl,
+      padding: spacing.lg,
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: 'transparent',
+      position: 'relative',
+      ...shadows.md,
+    },
+    roomCardActive: {
+      backgroundColor: colors.primary + '15',
+      borderColor: colors.primary,
+      ...shadows.lg,
+    },
+    roomCardCheckBadge: {
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      width: 28,
+      height: 28,
+      borderRadius: borderRadius.full,
       overflow: 'hidden',
       ...shadows.md,
     },
-    roomPickerIconGradient: {
+    roomCardCheckGradient: {
       width: '100%',
       height: '100%',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    roomPickerTitle: {
+    roomCardIconContainer: {
+      width: 72,
+      height: 72,
+      borderRadius: borderRadius.xxl,
+      backgroundColor: colors.primary + '20',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+    },
+    roomCardIconContainerActive: {
+      backgroundColor: colors.primary,
+    },
+    roomCardTitle: {
       fontSize: fontSize.lg,
       fontWeight: '700',
       color: colors.foreground,
-      marginBottom: 2,
-    },
-    roomPickerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    roomPickerClose: {
-      padding: spacing.xs,
-      marginTop: -4,
-    },
-    roomPickerScroll: {
-      flexGrow: 0,
-      flexShrink: 1,
-    },
-    roomPickerList: {
-      gap: spacing.xs,
-      paddingBottom: spacing.xs,
-    },
-    roomPickerEmpty: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: spacing.xl * 2,
-      gap: spacing.sm,
-    },
-    roomPickerEmptyText: {
-      fontSize: fontSize.md,
-      fontWeight: '600',
-      color: colors.foreground,
-      marginTop: spacing.sm,
-    },
-    roomPickerEmptySubtext: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
       textAlign: 'center',
+      marginBottom: spacing.xs,
     },
-    roomOption: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-      padding: spacing.md,
-      paddingRight: spacing.lg,
-      borderRadius: borderRadius.lg,
-      backgroundColor: colors.muted,
-      marginBottom: spacing.sm,
-      borderWidth: 1.5,
-      borderColor: 'transparent',
-      ...shadows.sm,
-    },
-    roomOptionActive: {
-      backgroundColor: colors.primary + '15',
-      borderColor: colors.primary + '40',
-    },
-    roomOptionIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: borderRadius.md,
-      backgroundColor: colors.primary + '15',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    roomOptionIconActive: {
-      backgroundColor: colors.primary,
-    },
-    roomOptionText: {
-      fontSize: fontSize.md,
-      fontWeight: '600',
-      color: colors.foreground,
-    },
-    roomOptionTextActive: {
+    roomCardTitleActive: {
       color: colors.primary,
-      fontWeight: '700',
     },
-    roomOptionBadge: {
+    roomCardActiveBadge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      marginTop: 4,
+      backgroundColor: colors.primary + '20',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.full,
     },
-    roomOptionBadgeText: {
+    roomCardActiveBadgeText: {
       fontSize: fontSize.xs,
       color: colors.primary,
-      fontWeight: '500',
+      fontWeight: '700',
+      textTransform: 'uppercase',
     },
-    roomOptionCheck: {
-      width: 24,
-      height: 24,
-      borderRadius: borderRadius.full,
-      overflow: 'hidden',
+    // Remove Card
+    roomCardRemove: {
+      backgroundColor: colors.destructive + '15',
+      borderRadius: borderRadius.xl,
+      padding: spacing.lg,
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.destructive + '40',
+      ...shadows.md,
     },
-    roomOptionCheckGradient: {
-      width: '100%',
-      height: '100%',
+    roomCardRemoveIcon: {
+      width: 72,
+      height: 72,
+      borderRadius: borderRadius.xxl,
+      backgroundColor: colors.destructive + '20',
       alignItems: 'center',
       justifyContent: 'center',
+      marginBottom: spacing.md,
     },
-    roomOptionRemove: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-      padding: spacing.md,
-      paddingRight: spacing.lg,
-      borderRadius: borderRadius.lg,
-      backgroundColor: colors.destructive + '10',
-      marginBottom: spacing.sm,
-      borderWidth: 1.5,
-      borderColor: colors.destructive + '30',
-    },
-    roomOptionRemoveText: {
-      fontSize: fontSize.md,
-      fontWeight: '600',
+    roomCardRemoveTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
       color: colors.destructive,
+      marginBottom: spacing.xs,
     },
-    roomOptionRemoveSubtext: {
-      fontSize: fontSize.xs,
+    roomCardRemoveSubtitle: {
+      fontSize: fontSize.sm,
       color: colors.mutedForeground,
-      marginTop: 2,
+    },
+    // Empty State
+    roomPickerEmptyNew: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xl * 3,
+      gap: spacing.md,
+    },
+    roomPickerEmptyIcon: {
+      width: 96,
+      height: 96,
+      borderRadius: borderRadius.xxl,
+      backgroundColor: colors.muted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+    },
+    roomPickerEmptyTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    roomPickerEmptySubtitle: {
+      fontSize: fontSize.md,
+      color: colors.mutedForeground,
+      textAlign: 'center',
+      paddingHorizontal: spacing.xl,
+      lineHeight: 22,
     },
   });
