@@ -296,6 +296,9 @@ export async function updateHub(req: Request, res: Response) {
       return errorResponse(res, 'Hub not found', 404);
     }
 
+    console.log('[updateHub] Request body:', { name, roomId });
+    console.log('[updateHub] Hub ID:', hubId, 'Home ID:', homeId);
+
     // Build update query dynamically
     const updates: string[] = [];
     const values: any[] = [];
@@ -304,11 +307,13 @@ export async function updateHub(req: Request, res: Response) {
     if (name !== undefined) {
       updates.push(`name = $${paramIndex++}`);
       values.push(name);
+      console.log('[updateHub] Adding name update:', name);
     }
 
     if (roomId !== undefined) {
       updates.push(`room_id = $${paramIndex++}`);
       values.push(roomId);
+      console.log('[updateHub] Adding room_id update:', roomId);
     }
 
     if (updates.length === 0) {

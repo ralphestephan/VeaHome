@@ -104,7 +104,8 @@ export default function DeviceControlModal({
   
   const [localValue, setLocalValue] = useState(device?.value ?? 0);
   const [localMode, setLocalMode] = useState<string>('manual');
-  const [isActive, setIsActive] = useState(device?.isActive ?? false);
+  // Don't show as active if device is offline
+  const [isActive, setIsActive] = useState((device?.isOnline !== false) && (device?.isActive ?? false));
   
   // Live airguard data state
   const [liveAirguardData, setLiveAirguardData] = useState<{
@@ -147,6 +148,16 @@ export default function DeviceControlModal({
   
   // Room assignment state
   const [showRoomPicker, setShowRoomPicker] = useState(false);
+  
+  // Local state to track current display values (updates immediately after save)
+  const [displayName, setDisplayName] = useState(device.name);
+  const [displayRoomId, setDisplayRoomId] = useState(device.roomId);
+  
+  // Update display values when device prop changes
+  useEffect(() => {
+    setDisplayName(device.name);
+    setDisplayRoomId(device.roomId);
+  }, [device.name, device.roomId]);
   
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
@@ -465,7 +476,8 @@ export default function DeviceControlModal({
     if (device) {
       setLocalValue(device.value ?? (device.type === 'thermostat' || device.type === 'ac' ? 22 : 100));
       setLocalMode('manual');
-      setIsActive(device.isActive ?? false);
+      // Don't show as active if device is offline
+      setIsActive((device.isOnline !== false) && (device.isActive ?? false));
     }
   }, [device]);
 
@@ -580,10 +592,10 @@ export default function DeviceControlModal({
                 </View>
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={styles.deviceName}>{device.name}</Text>
+                    <Text style={styles.deviceName}>{displayName}</Text>
                     <TouchableOpacity 
                       onPress={() => {
-                        setEditingName(device.name);
+                        setEditingName(displayName);
                         setShowEditName(true);
                       }}
                       style={styles.editIconButton}
@@ -591,14 +603,14 @@ export default function DeviceControlModal({
                       <Edit2 size={14} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   </View>
-                  {device.roomId ? (
+                  {displayRoomId ? (
                     <TouchableOpacity 
                       onPress={() => setShowRoomPicker(true)}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
                       <MapPin size={12} color={colors.mutedForeground} />
                       <Text style={styles.deviceRoom}>
-                        {rooms.find(r => r.id === device.roomId)?.name || device.roomId}
+                        {rooms.find(r => r.id === displayRoomId)?.name || displayRoomId}
                       </Text>
                     </TouchableOpacity>
                   ) : (
@@ -1332,6 +1344,7 @@ export default function DeviceControlModal({
                     try {
                       if (onUpdateName) {
                         await onUpdateName(device.id, editingName.trim());
+                        setDisplayName(editingName.trim()); // Update local display immediately
                       }
                       setShowEditName(false);
                     } catch (error) {
@@ -1419,13 +1432,14 @@ export default function DeviceControlModal({
                 showsVerticalScrollIndicator={false}
               >
                 {/* Remove Option */}
-                {device?.roomId && (
+                {displayRoomId && (
                   <TouchableOpacity
                     style={styles.roomCardRemove}
                     onPress={async () => {
                       if (!device || !onUpdateRoom) return;
                       try {
                         await onUpdateRoom(device.id, null);
+                        setDisplayRoomId(null); // Update local display immediately
                         setShowRoomPicker(false);
                       } catch (error) {
                         console.error('Failed to remove from room:', error);
@@ -1454,7 +1468,7 @@ export default function DeviceControlModal({
                   </View>
                 ) : (
                   rooms.map((room) => {
-                    const isActive = device?.roomId === room.id;
+                    const isActive = displayRoomId === room.id;
                     return (
                       <TouchableOpacity
                         key={room.id}
@@ -1466,6 +1480,7 @@ export default function DeviceControlModal({
                           if (!device || !onUpdateRoom) return;
                           try {
                             await onUpdateRoom(device.id, room.id);
+                            setDisplayRoomId(room.id); // Update local display immediately
                             setShowRoomPicker(false);
                           } catch (error) {
                             console.error('Failed to assign room:', error);
