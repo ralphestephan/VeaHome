@@ -85,9 +85,50 @@ export default function DevicesScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVealiveModal, setShowVealiveModal] = useState(false);
   
+  // Track live online/offline status for hubs
+  const [hubStatuses, setHubStatuses] = useState<Record<string, boolean>>({});
+  
   // Modal state
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // Fetch live status for airguard hubs
+  useEffect(() => {
+    const airguardHubs = hubs.filter(h => h.hubType === 'airguard');
+    if (airguardHubs.length === 0) return;
+
+    const fetchStatuses = async () => {
+      const client = getApiClient(async () => token);
+      const airguardApi = PublicAirguardApi(client);
+      
+      const statusPromises = airguardHubs.map(async (hub) => {
+        try {
+          const smartMonitorId = hub.metadata?.smartMonitorId || 
+                                 (hub.serialNumber?.match(/SM_(\d+)/i)?.[1] ? parseInt(hub.serialNumber.match(/SM_(\d+)/i)![1], 10) : null);
+          if (!smartMonitorId) return { hubId: hub.id, isOnline: false };
+          
+          const statusRes = await airguardApi.getStatus(smartMonitorId);
+          const statusWrapper = statusRes.data?.data;
+          const status = statusWrapper?.data || statusWrapper;
+          const isOnline = status?.online === true || status?.online === 1;
+          return { hubId: hub.id, isOnline };
+        } catch (error) {
+          return { hubId: hub.id, isOnline: false };
+        }
+      });
+
+      const results = await Promise.all(statusPromises);
+      const newStatuses: Record<string, boolean> = {};
+      results.forEach(({ hubId, isOnline }) => {
+        newStatuses[hubId] = isOnline;
+      });
+      setHubStatuses(newStatuses);
+    };
+
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
+  }, [hubs, token]);
 
   // Real-time updates
   useRealtime({
@@ -128,22 +169,25 @@ export default function DevicesScreen() {
   // Map hubs to device format with ALL required Device fields
   const climateDevices = [
     ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
-    ...climateHubs.map(h => ({
-      id: h.id,
-      name: h.name,
-      type: h.hubType || 'airguard',
-      category: 'climate' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
-      roomId: h.roomId || '', // Don't auto-assign to kitchen - leave unassigned
-      homeId: h.homeId,
-      status: h.status,
-      // Pass hub-specific fields for telemetry fetching
-      hubType: h.hubType,
-      serialNumber: h.serialNumber,
-      metadata: h.metadata
-    }))
+    ...climateHubs.map(h => {
+      const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
+      return {
+        id: h.id,
+        name: h.name,
+        type: h.hubType || 'airguard',
+        category: 'climate' as const,
+        isActive: isOnline,
+        value: undefined,
+        unit: undefined,
+        roomId: h.roomId || '', // Don't auto-assign to kitchen - leave unassigned
+        homeId: h.homeId,
+        status: isOnline ? 'online' : 'offline',
+        // Pass hub-specific fields for telemetry fetching
+        hubType: h.hubType,
+        serialNumber: h.serialNumber,
+        metadata: h.metadata
+      };
+    })
   ];
   const securityDevices = [
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
@@ -710,6 +754,57 @@ export default function DevicesScreen() {
               },
             ]);
           }}
+          onUpdateName={async (deviceId, newName) => {
+            if (isDemoMode) return;
+            if (!homeId) return;
+            try {
+              console.log('[DevicesScreen] Updating device name:', deviceId, 'to:', newName);
+              const api = HubApi(getApiClient(async () => token));
+              
+              // Check if this is a hub
+              const isHub = hubs.some(h => h.id === deviceId);
+              
+              if (isHub) {
+                await api.updateHub(homeId, deviceId, { name: newName });
+                console.log('[DevicesScreen] Hub name updated successfully');
+              } else {
+                // Update regular device name (you'll need to add this API method)
+                console.log('[DevicesScreen] Regular device name update not yet implemented');
+              }
+              
+              // Refresh to show updated name
+              await Promise.all([refresh(), refreshHubs()]);
+            } catch (e: any) {
+              console.error('[DevicesScreen] Failed to update device name:', e);
+              Alert.alert('Error', e.response?.data?.error || 'Failed to update device name');
+            }
+          }}
+          onUpdateRoom={async (deviceId, roomId) => {
+            if (isDemoMode) return;
+            if (!homeId) return;
+            try {
+              console.log('[DevicesScreen] Updating device room:', deviceId, 'to:', roomId);
+              const api = HubApi(getApiClient(async () => token));
+              
+              // Check if this is a hub
+              const isHub = hubs.some(h => h.id === deviceId);
+              
+              if (isHub) {
+                await api.updateHub(homeId, deviceId, { roomId });
+                console.log('[DevicesScreen] Hub room updated successfully');
+              } else {
+                // Update regular device room (you'll need to add this API method)
+                console.log('[DevicesScreen] Regular device room update not yet implemented');
+              }
+              
+              // Refresh to show updated room
+              await Promise.all([refresh(), refreshHubs()]);
+            } catch (e: any) {
+              console.error('[DevicesScreen] Failed to update device room:', e);
+              Alert.alert('Error', e.response?.data?.error || 'Failed to update device room');
+            }
+          }}
+          rooms={rooms}
         />
       )}
 

@@ -95,6 +95,8 @@ export const HubApi = (client: AxiosInstance) => ({
   // Get hubs
   listHubs: (homeId: string) => client.get(`/homes/${homeId}/hubs`),
   deleteHub: (homeId: string, hubId: string) => client.delete(`/homes/${homeId}/hubs/${hubId}`),
+  updateHub: (homeId: string, hubId: string, data: { name?: string; roomId?: string | null }) => 
+    client.patch(`/homes/${homeId}/hubs/${hubId}`, data),
 });
 
 // Rooms & energy

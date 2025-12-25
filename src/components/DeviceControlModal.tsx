@@ -41,6 +41,9 @@ import {
   AlertTriangle,
   Wifi,
   WifiOff,
+  Edit2,
+  MapPin,
+  ChevronDown,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
@@ -61,6 +64,9 @@ interface DeviceControlModalProps {
   onSetMode?: (deviceId: string, mode: string) => void;
   onToggleMute?: (deviceId: string, muted: boolean) => void;
   onDelete?: (deviceId: string) => void;
+  onUpdateName?: (deviceId: string, newName: string) => void;
+  onUpdateRoom?: (deviceId: string, roomId: string | null) => void;
+  rooms?: Array<{ id: string; name: string }>;
 }
 
 const iconMap: Record<string, any> = {
@@ -87,6 +93,9 @@ export default function DeviceControlModal({
   onSetMode,
   onToggleMute,
   onDelete,
+  onUpdateName,
+  onUpdateRoom,
+  rooms = [],
 }: DeviceControlModalProps) {
   const { colors, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
@@ -128,6 +137,14 @@ export default function DeviceControlModal({
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [togglingMute, setTogglingMute] = useState(false);
   const [loadingAirguardData, setLoadingAirguardData] = useState(false);
+  
+  // Edit name state
+  const [showEditName, setShowEditName] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  
+  // Room assignment state
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
   
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
@@ -559,12 +576,37 @@ export default function DeviceControlModal({
                 <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
                   <IconComponent size={24} color={isActive ? '#fff' : colors.primary} />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.deviceName}>{device.name}</Text>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={styles.deviceName}>{device.name}</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setEditingName(device.name);
+                        setShowEditName(true);
+                      }}
+                      style={styles.editIconButton}
+                    >
+                      <Edit2 size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
                   {device.roomId ? (
-                    <Text style={styles.deviceRoom}>{device.roomId}</Text>
+                    <TouchableOpacity 
+                      onPress={() => setShowRoomPicker(true)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <MapPin size={12} color={colors.mutedForeground} />
+                      <Text style={styles.deviceRoom}>
+                        {rooms.find(r => r.id === device.roomId)?.name || device.roomId}
+                      </Text>
+                    </TouchableOpacity>
                   ) : (
-                    <Text style={styles.deviceNoRoom}>No room assigned</Text>
+                    <TouchableOpacity 
+                      onPress={() => setShowRoomPicker(true)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <MapPin size={12} color={colors.mutedForeground} />
+                      <Text style={styles.deviceNoRoom}>Assign to room</Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               </View>
@@ -583,20 +625,6 @@ export default function DeviceControlModal({
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
-                  {/* Offline Overlay - Show when device is offline */}
-                  {!liveAirguardData?.isOnline && !loadingAirguardData && (
-                    <View style={styles.offlineOverlay}>
-                      <CloudOff size={48} color={colors.mutedForeground} />
-                      <Text style={styles.offlineTitle}>Device Offline</Text>
-                      <Text style={styles.offlineMessage}>
-                        Sensor data unavailable. Controls are disabled.
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Only show controls when online */}
-                  {liveAirguardData?.isOnline && (
-                    <>
                   {/* Online/Offline Status Badge */}
                   <View style={styles.statusBadgeContainer}>
                     <View style={[
@@ -740,11 +768,9 @@ export default function DeviceControlModal({
                       <TouchableOpacity
                         style={[styles.muteButton, isMuted && styles.muteButtonActive]}
                         onPress={() => {
-                          // If currently muted, we want to unmute (pass false to wantMuted)
-                          // If currently unmuted, we want to mute (pass true to wantMuted)
                           handleMuteToggle(!isMuted);
                         }}
-                        disabled={togglingMute}
+                        disabled={togglingMute || !liveAirguardData?.isOnline}
                         activeOpacity={0.85}
                       >
                         <LinearGradient
@@ -763,8 +789,6 @@ export default function DeviceControlModal({
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
-                    </>
-                  )}
 
                       {/* Threshold Settings Button - Always show even when offline */}
                       <TouchableOpacity
@@ -780,28 +804,31 @@ export default function DeviceControlModal({
                           Threshold Settings
                         </Text>
                       </TouchableOpacity>
+                    </>
+                  );
+                })()}
 
-                      {/* Threshold Settings Popup Modal */}
-                      <Modal
-                        visible={showThresholdSettings}
-                        transparent
-                        animationType="fade"
-                        onRequestClose={() => setShowThresholdSettings(false)}
+                {/* Threshold Settings Popup Modal */}
+                <Modal
+                  visible={showThresholdSettings}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowThresholdSettings(false)}
+                >
+                  <View style={styles.thresholdModalOverlay}>
+                    <TouchableOpacity 
+                      style={StyleSheet.absoluteFill} 
+                      onPress={() => setShowThresholdSettings(false)} 
+                      activeOpacity={1}
+                    >
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
+                    </TouchableOpacity>
+                    
+                    <View style={styles.thresholdModalContent}>
+                      <LinearGradient
+                        colors={[colors.card, colors.cardAlt]}
+                        style={styles.thresholdModalInner}
                       >
-                        <View style={styles.thresholdModalOverlay}>
-                          <TouchableOpacity 
-                            style={StyleSheet.absoluteFill} 
-                            onPress={() => setShowThresholdSettings(false)} 
-                            activeOpacity={1}
-                          >
-                            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
-                          </TouchableOpacity>
-                          
-                          <View style={styles.thresholdModalContent}>
-                            <LinearGradient
-                              colors={[colors.card, colors.cardAlt]}
-                              style={styles.thresholdModalInner}
-                            >
                               {/* Header */}
                               <View style={styles.thresholdModalHeader}>
                                 <Text style={styles.thresholdModalTitle}>Alert Thresholds</Text>
@@ -945,9 +972,6 @@ export default function DeviceControlModal({
                           </View>
                         </View>
                       </Modal>
-                    </>
-                  );
-                })()}
                 </View>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
@@ -1223,6 +1247,163 @@ export default function DeviceControlModal({
                   <Text style={styles.confirmButtonText}>OK</Text>
                 </LinearGradient>
               </TouchableOpacity>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Name Modal */}
+      <Modal
+        visible={showEditName}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEditName(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill} 
+            onPress={() => setShowEditName(false)} 
+            activeOpacity={1}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
+          </TouchableOpacity>
+          
+          <View style={styles.confirmCard}>
+            <LinearGradient
+              colors={[colors.card, colors.cardAlt]}
+              style={styles.confirmContent}
+            >
+              <Text style={styles.confirmTitle}>Edit Device Name</Text>
+              <TextInput
+                style={styles.nameInput}
+                value={editingName}
+                onChangeText={setEditingName}
+                placeholder="Device name"
+                placeholderTextColor={colors.mutedForeground}
+                autoFocus
+              />
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={[styles.confirmButton, { flex: 1 }]}
+                  onPress={() => setShowEditName(false)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.muted, colors.muted]}
+                    style={styles.confirmButtonGradient}
+                  >
+                    <Text style={[styles.confirmButtonText, { color: colors.mutedForeground }]}>Cancel</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmButton, { flex: 1 }]}
+                  onPress={async () => {
+                    if (!device || !editingName.trim()) return;
+                    setSavingName(true);
+                    try {
+                      if (onUpdateName) {
+                        await onUpdateName(device.id, editingName.trim());
+                      }
+                      setShowEditName(false);
+                    } catch (error) {
+                      console.error('Failed to update name:', error);
+                    } finally {
+                      setSavingName(false);
+                    }
+                  }}
+                  disabled={savingName || !editingName.trim()}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.neonCyan]}
+                    style={styles.confirmButtonGradient}
+                  >
+                    {savingName ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.confirmButtonText}>Save</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Room Picker Modal */}
+      <Modal
+        visible={showRoomPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRoomPicker(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill} 
+            onPress={() => setShowRoomPicker(false)} 
+            activeOpacity={1}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
+          </TouchableOpacity>
+          
+          <View style={styles.confirmCard}>
+            <LinearGradient
+              colors={[colors.card, colors.cardAlt]}
+              style={styles.confirmContent}
+            >
+              <Text style={styles.confirmTitle}>Assign to Room</Text>
+              <ScrollView style={{ maxHeight: 300 }}>
+                {device?.roomId && (
+                  <TouchableOpacity
+                    style={styles.roomOption}
+                    onPress={async () => {
+                      if (!device || !onUpdateRoom) return;
+                      try {
+                        await onUpdateRoom(device.id, null);
+                        setShowRoomPicker(false);
+                      } catch (error) {
+                        console.error('Failed to remove from room:', error);
+                      }
+                    }}
+                  >
+                    <MapPin size={18} color={colors.mutedForeground} />
+                    <Text style={styles.roomOptionText}>Remove from room</Text>
+                  </TouchableOpacity>
+                )}
+                {rooms.map((room) => (
+                  <TouchableOpacity
+                    key={room.id}
+                    style={[
+                      styles.roomOption,
+                      device?.roomId === room.id && styles.roomOptionActive
+                    ]}
+                    onPress={async () => {
+                      if (!device || !onUpdateRoom) return;
+                      try {
+                        await onUpdateRoom(device.id, room.id);
+                        setShowRoomPicker(false);
+                      } catch (error) {
+                        console.error('Failed to assign room:', error);
+                      }
+                    }}
+                  >
+                    <MapPin 
+                      size={18} 
+                      color={device?.roomId === room.id ? colors.primary : colors.mutedForeground} 
+                    />
+                    <Text style={[
+                      styles.roomOptionText,
+                      device?.roomId === room.id && styles.roomOptionTextActive
+                    ]}>
+                      {room.name}
+                    </Text>
+                    {device?.roomId === room.id && (
+                      <Check size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </LinearGradient>
           </View>
         </View>
@@ -1973,5 +2154,42 @@ const createStyles = (colors: any, shadows: any) =>
     },
     statusTextOffline: {
       color: '#6B7280',
+    },
+    editIconButton: {
+      padding: 4,
+      borderRadius: 4,
+    },
+    nameInput: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginVertical: spacing.md,
+    },
+    roomOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.muted,
+      marginBottom: spacing.sm,
+    },
+    roomOptionActive: {
+      backgroundColor: colors.primary + '20',
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    roomOptionText: {
+      flex: 1,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    roomOptionTextActive: {
+      color: colors.primary,
+      fontWeight: '600',
     },
   });

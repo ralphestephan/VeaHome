@@ -267,6 +267,87 @@ export async function getHubStatus(req: Request, res: Response) {
   }
 }
 
+export async function updateHub(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, hubId } = req.params;
+    const { name, roomId } = req.body;
+
+    console.log('[updateHub] Updating hub:', hubId, 'in home:', homeId, 'user:', userId, 'data:', { name, roomId });
+
+    // Verify home access
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) {
+      console.log('[updateHub] No home access or home not found');
+      return;
+    }
+
+    // Check if hub exists and belongs to this home
+    const hub = await getHubById(hubId);
+    if (!hub) {
+      console.log('[updateHub] Hub not found:', hubId);
+      return errorResponse(res, 'Hub not found', 404);
+    }
+
+    if (hub.home_id !== homeId) {
+      console.log('[updateHub] Hub does not belong to this home. Hub home:', hub.home_id, 'requested home:', homeId);
+      return errorResponse(res, 'Hub not found', 404);
+    }
+
+    // Build update query dynamically
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(name);
+    }
+
+    if (roomId !== undefined) {
+      updates.push(`room_id = $${paramIndex++}`);
+      values.push(roomId);
+    }
+
+    if (updates.length === 0) {
+      return errorResponse(res, 'No fields to update', 400);
+    }
+
+    // Add updated_at
+    updates.push(`updated_at = NOW()`);
+    values.push(hubId);
+
+    // Execute update
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+
+    const query = `
+      UPDATE hubs 
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+
+    console.log('[updateHub] Executing query:', query, 'with values:', values);
+    const result = await pool.query(query, values);
+    
+    if (result.rows.length === 0) {
+      return errorResponse(res, 'Hub not found', 404);
+    }
+
+    const updatedHub = result.rows[0];
+    console.log('[updateHub] Hub updated successfully:', updatedHub);
+
+    return successResponse(res, updatedHub);
+  } catch (error: any) {
+    console.error('Update hub error:', error);
+    return errorResponse(res, error.message || 'Failed to update hub', 500);
+  }
+}
+
 export async function deleteHub(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;
