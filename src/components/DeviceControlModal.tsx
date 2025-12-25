@@ -1411,7 +1411,12 @@ export default function DeviceControlModal({
               </View>
 
               {/* Room List */}
-              <View style={styles.roomPickerList}>
+              <ScrollView 
+                style={styles.roomPickerScroll}
+                contentContainerStyle={styles.roomPickerList}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
                 {device?.roomId && (
                   <TouchableOpacity
                     style={styles.roomOptionRemove}
@@ -1501,7 +1506,7 @@ export default function DeviceControlModal({
                     );
                   })
                 )}
-              </View>
+              </ScrollView>
             </LinearGradient>
           </View>
         </View>
@@ -2369,17 +2374,17 @@ const createStyles = (colors: any, shadows: any) =>
     },
     roomPickerCard: {
       marginHorizontal: spacing.lg,
-      marginVertical: 'auto',
       borderRadius: borderRadius.xl,
       overflow: 'hidden',
       maxWidth: 500,
+      maxHeight: '80%',
       width: '100%',
       alignSelf: 'center',
       ...shadows.xl,
     },
     roomPickerContent: {
       padding: spacing.lg,
-      maxHeight: '70%',
+      flex: 1,
     },
     roomPickerHeader: {
       flexDirection: 'row',
@@ -2420,8 +2425,13 @@ const createStyles = (colors: any, shadows: any) =>
       padding: spacing.xs,
       marginTop: -4,
     },
+    roomPickerScroll: {
+      flexGrow: 0,
+      flexShrink: 1,
+    },
     roomPickerList: {
       gap: spacing.xs,
+      paddingBottom: spacing.xs,
     },
     roomPickerEmpty: {
       alignItems: 'center',
