@@ -94,14 +94,6 @@ export default function DevicesScreen() {
     onDeviceUpdate: () => refresh(),
   });
 
-  // Auto-refresh when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      console.log('[DevicesScreen] Screen focused - refreshing hubs');
-      refreshHubs();
-    }, [refreshHubs])
-  );
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refresh(), refreshHubs()]);
@@ -133,22 +125,70 @@ export default function DevicesScreen() {
   const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
 
   // Filter devices by category and include relevant hubs (e.g., AirGuard is a hub but shown as device)
-  // Map hubs to device format: hubType -> type for proper rendering
+  // Map hubs to device format with ALL required Device fields
   const climateDevices = [
     ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
-    ...climateHubs.map(h => ({ ...h, type: h.hubType, category: 'climate' })) // Map hubType to type
+    ...climateHubs.map(h => ({
+      id: h.id,
+      name: h.name,
+      type: h.hubType || 'airguard',
+      category: 'climate' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
+      roomId: h.roomId || '', // Don't auto-assign to kitchen - leave unassigned
+      homeId: h.homeId,
+      status: h.status,
+      // Pass hub-specific fields for telemetry fetching
+      hubType: h.hubType,
+      serialNumber: h.serialNumber,
+      metadata: h.metadata
+    }))
   ];
   const securityDevices = [
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
-    ...securityHubs.map(h => ({ ...h, type: h.hubType, category: 'security' }))
+    ...securityHubs.map(h => ({
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'security' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
+      roomId: h.roomId || rooms[0]?.id || '',
+      homeId: h.homeId,
+      status: h.status
+    }))
   ];
   const utilityDevices = [
     ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
-    ...utilityHubs.map(h => ({ ...h, type: h.hubType, category: 'utility' }))
+    ...utilityHubs.map(h => ({
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'utility' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
+      roomId: h.roomId || rooms[0]?.id || '',
+      homeId: h.homeId,
+      status: h.status
+    }))
   ];
   const lightsDevices = [
     ...devices.filter(d => d.category === 'lighting' || d.type === 'light'),
-    ...lightingHubs.map(h => ({ ...h, type: h.hubType, category: 'lighting' }))
+    ...lightingHubs.map(h => ({
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'lighting' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
+      roomId: h.roomId || rooms[0]?.id || '',
+      homeId: h.homeId,
+      status: h.status
+    }))
   ];
 
   // Group devices by room
@@ -269,6 +309,7 @@ export default function DevicesScreen() {
   };
 
   const getRoomName = (roomId: string) => {
+    if (!roomId) return 'No room assigned';
     return rooms.find((r: { id: string; name: string }) => r.id === roomId)?.name || roomId;
   };
 
@@ -321,6 +362,7 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '%'}
                     isActive={device.isActive}
+                    isOnline={device.status === 'online'}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={() => handleDeviceToggle(device)}
@@ -368,6 +410,7 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '°C'}
                     isActive={device.isActive}
+                    isOnline={device.status === 'online'}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={() => handleDeviceToggle(device)}
@@ -415,6 +458,7 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '%'}
                     isActive={device.isActive}
+                    isOnline={device.status === 'online'}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={() => handleDeviceToggle(device)}
@@ -461,6 +505,7 @@ export default function DevicesScreen() {
                     name={device.name}
                     value={device.value}
                     unit={device.unit}
+                    isOnline={device.status === 'online'}
                     isActive={device.isActive}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
@@ -508,6 +553,7 @@ export default function DevicesScreen() {
                     name={device.name}
                     value={device.value}
                     unit={device.unit}
+                    isOnline={device.status === 'online'}
                     isActive={device.isActive}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}

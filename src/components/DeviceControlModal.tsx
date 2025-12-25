@@ -146,13 +146,23 @@ export default function DeviceControlModal({
   // Helper to get smartMonitorId from device (can be in signalMappings or metadata)
   const getSmartMonitorId = useCallback((): string | number | null => {
     if (!device) return null;
-    // Check signalMappings first (this is where device onboarding stores it)
+    
+    // For hubs, check metadata first (hubs have metadata directly)
+    if (device.metadata?.smartMonitorId) {
+      return device.metadata.smartMonitorId;
+    }
+    
+    // Check signalMappings (for regular devices)
     const fromSignalMappings = (device.signalMappings as any)?.smartMonitorId ?? 
                                (device.signalMappings as any)?.smartmonitorId;
     if (fromSignalMappings) return fromSignalMappings;
-    // Fallback to metadata
-    const fromMetadata = device.metadata?.smartMonitorId;
-    if (fromMetadata) return fromMetadata;
+    
+    // Try to extract from serialNumber for hubs (e.g., "SM_1" -> 1)
+    if (device.serialNumber && typeof device.serialNumber === 'string') {
+      const match = device.serialNumber.match(/SM_(\d+)/i);
+      if (match) return parseInt(match[1], 10);
+    }
+    
     return null;
   }, [device]);
 
@@ -549,8 +559,13 @@ export default function DeviceControlModal({
                 <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
                   <IconComponent size={24} color={isActive ? '#fff' : colors.primary} />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.deviceName}>{device.name}</Text>
+                  {device.roomId ? (
+                    <Text style={styles.deviceRoom}>{device.roomId}</Text>
+                  ) : (
+                    <Text style={styles.deviceNoRoom}>No room assigned</Text>
+                  )}
                 </View>
               </View>
               <View style={styles.headerRight}>
@@ -568,6 +583,20 @@ export default function DeviceControlModal({
             {/* Main Control Area */}
             {isAirguard ? (
               <View style={styles.airguardControl}>
+                  {/* Offline Overlay - Show when device is offline */}
+                  {!liveAirguardData?.isOnline && !loadingAirguardData && (
+                    <View style={styles.offlineOverlay}>
+                      <CloudOff size={48} color={colors.mutedForeground} />
+                      <Text style={styles.offlineTitle}>Device Offline</Text>
+                      <Text style={styles.offlineMessage}>
+                        Sensor data unavailable. Controls are disabled.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Only show controls when online */}
+                  {liveAirguardData?.isOnline && (
+                    <>
                   {/* Online/Offline Status Badge */}
                   <View style={styles.statusBadgeContainer}>
                     <View style={[
@@ -734,8 +763,10 @@ export default function DeviceControlModal({
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
+                    </>
+                  )}
 
-                      {/* Threshold Settings Button */}
+                      {/* Threshold Settings Button - Always show even when offline */}
                       <TouchableOpacity
                         style={styles.thresholdToggle}
                         onPress={() => {
@@ -1252,6 +1283,35 @@ const createStyles = (colors: any, shadows: any) =>
     deviceRoom: {
       fontSize: fontSize.sm,
       color: colors.mutedForeground,
+    },
+    deviceNoRoom: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      fontStyle: 'italic',
+    },
+    offlineOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10,
+      gap: spacing.md,
+      padding: spacing.xl,
+      borderRadius: borderRadius.lg,
+    },
+    offlineTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    offlineMessage: {
+      fontSize: fontSize.md,
+      color: colors.mutedForeground,
+      textAlign: 'center',
     },
     closeButton: {
       width: 36,
