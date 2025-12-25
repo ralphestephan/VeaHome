@@ -16,6 +16,7 @@ import {
 import { ensureHomeAccess } from './helpers/homeAccess';
 import { encryptSecret } from '../services/cryptoService';
 import { publishCommand } from '../services/mqttService';
+import pool from '../config/database';
 
 export async function pairHub(req: Request, res: Response) {
   try {
@@ -319,11 +320,6 @@ export async function updateHub(req: Request, res: Response) {
     values.push(hubId);
 
     // Execute update
-    const { Pool } = require('pg');
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
-
     const query = `
       UPDATE hubs 
       SET ${updates.join(', ')}

@@ -2449,13 +2449,14 @@ const createStyles = (colors: any, shadows: any) =>
     // Room Cards - Grid Style
     roomCard: {
       backgroundColor: colors.muted,
-      borderRadius: borderRadius.xl,
-      padding: spacing.lg,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      paddingVertical: spacing.sm + 4,
       alignItems: 'center',
       borderWidth: 2,
       borderColor: 'transparent',
       position: 'relative',
-      ...shadows.md,
+      ...shadows.sm,
     },
     roomCardActive: {
       backgroundColor: colors.primary + '15',
@@ -2479,19 +2480,19 @@ const createStyles = (colors: any, shadows: any) =>
       justifyContent: 'center',
     },
     roomCardIconContainer: {
-      width: 72,
-      height: 72,
-      borderRadius: borderRadius.xxl,
+      width: 56,
+      height: 56,
+      borderRadius: borderRadius.lg,
       backgroundColor: colors.primary + '20',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: spacing.md,
+      marginBottom: spacing.sm,
     },
     roomCardIconContainerActive: {
       backgroundColor: colors.primary,
     },
     roomCardTitle: {
-      fontSize: fontSize.lg,
+      fontSize: fontSize.md,
       fontWeight: '700',
       color: colors.foreground,
       textAlign: 'center',
