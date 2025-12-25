@@ -44,6 +44,8 @@ import {
   Edit2,
   MapPin,
   ChevronDown,
+  Home,
+  Sparkles,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
@@ -1265,38 +1267,65 @@ export default function DeviceControlModal({
             onPress={() => setShowEditName(false)} 
             activeOpacity={1}
           >
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
           </TouchableOpacity>
           
-          <View style={styles.confirmCard}>
+          <View style={styles.editNameCard}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
-              style={styles.confirmContent}
+              style={styles.editNameContent}
             >
-              <Text style={styles.confirmTitle}>Edit Device Name</Text>
-              <TextInput
-                style={styles.nameInput}
-                value={editingName}
-                onChangeText={setEditingName}
-                placeholder="Device name"
-                placeholderTextColor={colors.mutedForeground}
-                autoFocus
-              />
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity
-                  style={[styles.confirmButton, { flex: 1 }]}
+              {/* Header */}
+              <View style={styles.editNameHeader}>
+                <View style={styles.editNameTitleContainer}>
+                  <View style={styles.editNameIconWrapper}>
+                    <LinearGradient
+                      colors={[colors.primary, colors.neonCyan]}
+                      style={styles.editNameIconGradient}
+                    >
+                      <Edit2 size={18} color="#fff" />
+                    </LinearGradient>
+                  </View>
+                  <View>
+                    <Text style={styles.editNameTitle}>Edit Device Name</Text>
+                    <Text style={styles.editNameSubtitle}>Choose a unique name</Text>
+                  </View>
+                </View>
+                <TouchableOpacity 
                   onPress={() => setShowEditName(false)}
-                  activeOpacity={0.8}
+                  style={styles.editNameClose}
                 >
-                  <LinearGradient
-                    colors={[colors.muted, colors.muted]}
-                    style={styles.confirmButtonGradient}
-                  >
-                    <Text style={[styles.confirmButtonText, { color: colors.mutedForeground }]}>Cancel</Text>
-                  </LinearGradient>
+                  <X size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Input Field */}
+              <View style={styles.nameInputWrapper}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={editingName}
+                  onChangeText={setEditingName}
+                  placeholder="e.g., Living Room Monitor"
+                  placeholderTextColor={colors.mutedForeground}
+                  autoFocus
+                  selectionColor={colors.primary}
+                />
+                <View style={styles.nameInputIcon}>
+                  <Sparkles size={16} color={colors.mutedForeground} />
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.editNameActions}>
+                <TouchableOpacity
+                  style={[styles.editNameButton, styles.editNameButtonCancel]}
+                  onPress={() => setShowEditName(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.editNameButtonCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.confirmButton, { flex: 1 }]}
+                  style={[styles.editNameButton, styles.editNameButtonSave]}
                   onPress={async () => {
                     if (!device || !editingName.trim()) return;
                     setSavingName(true);
@@ -1312,16 +1341,21 @@ export default function DeviceControlModal({
                     }
                   }}
                   disabled={savingName || !editingName.trim()}
-                  activeOpacity={0.8}
+                  activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={[colors.primary, colors.neonCyan]}
-                    style={styles.confirmButtonGradient}
+                    colors={savingName || !editingName.trim() 
+                      ? [colors.muted, colors.muted] 
+                      : [colors.primary, colors.neonCyan]}
+                    style={styles.editNameButtonGradient}
                   >
                     {savingName ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={styles.confirmButtonText}>Save</Text>
+                      <>
+                        <Check size={16} color="#fff" />
+                        <Text style={styles.editNameButtonSaveText}>Save Changes</Text>
+                      </>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
@@ -1344,19 +1378,43 @@ export default function DeviceControlModal({
             onPress={() => setShowRoomPicker(false)} 
             activeOpacity={1}
           >
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
           </TouchableOpacity>
           
-          <View style={styles.confirmCard}>
+          <View style={styles.roomPickerCard}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
-              style={styles.confirmContent}
+              style={styles.roomPickerContent}
             >
-              <Text style={styles.confirmTitle}>Assign to Room</Text>
-              <ScrollView style={{ maxHeight: 300 }}>
+              {/* Header */}
+              <View style={styles.roomPickerHeader}>
+                <View style={styles.roomPickerTitleContainer}>
+                  <View style={styles.roomPickerIconWrapper}>
+                    <LinearGradient
+                      colors={[colors.primary, colors.neonCyan]}
+                      style={styles.roomPickerIconGradient}
+                    >
+                      <Home size={20} color="#fff" />
+                    </LinearGradient>
+                  </View>
+                  <View>
+                    <Text style={styles.roomPickerTitle}>Assign to Room</Text>
+                    <Text style={styles.roomPickerSubtitle}>Choose a room for this device</Text>
+                  </View>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setShowRoomPicker(false)}
+                  style={styles.roomPickerClose}
+                >
+                  <X size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Room List */}
+              <View style={styles.roomPickerList}>
                 {device?.roomId && (
                   <TouchableOpacity
-                    style={styles.roomOption}
+                    style={styles.roomOptionRemove}
                     onPress={async () => {
                       if (!device || !onUpdateRoom) return;
                       try {
@@ -1366,44 +1424,84 @@ export default function DeviceControlModal({
                         console.error('Failed to remove from room:', error);
                       }
                     }}
+                    activeOpacity={0.7}
                   >
-                    <MapPin size={18} color={colors.mutedForeground} />
-                    <Text style={styles.roomOptionText}>Remove from room</Text>
+                    <View style={styles.roomOptionIcon}>
+                      <X size={18} color={colors.destructive} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.roomOptionRemoveText}>Remove from room</Text>
+                      <Text style={styles.roomOptionRemoveSubtext}>Unassign this device</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
-                {rooms.map((room) => (
-                  <TouchableOpacity
-                    key={room.id}
-                    style={[
-                      styles.roomOption,
-                      device?.roomId === room.id && styles.roomOptionActive
-                    ]}
-                    onPress={async () => {
-                      if (!device || !onUpdateRoom) return;
-                      try {
-                        await onUpdateRoom(device.id, room.id);
-                        setShowRoomPicker(false);
-                      } catch (error) {
-                        console.error('Failed to assign room:', error);
-                      }
-                    }}
-                  >
-                    <MapPin 
-                      size={18} 
-                      color={device?.roomId === room.id ? colors.primary : colors.mutedForeground} 
-                    />
-                    <Text style={[
-                      styles.roomOptionText,
-                      device?.roomId === room.id && styles.roomOptionTextActive
-                    ]}>
-                      {room.name}
-                    </Text>
-                    {device?.roomId === room.id && (
-                      <Check size={18} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+
+                {rooms.length === 0 ? (
+                  <View style={styles.roomPickerEmpty}>
+                    <MapPin size={32} color={colors.mutedForeground} />
+                    <Text style={styles.roomPickerEmptyText}>No rooms available</Text>
+                    <Text style={styles.roomPickerEmptySubtext}>Create a room first to assign devices</Text>
+                  </View>
+                ) : (
+                  rooms.map((room, index) => {
+                    const isActive = device?.roomId === room.id;
+                    return (
+                      <TouchableOpacity
+                        key={room.id}
+                        style={[
+                          styles.roomOption,
+                          isActive && styles.roomOptionActive,
+                          index === 0 && device?.roomId && { marginTop: spacing.md }
+                        ]}
+                        onPress={async () => {
+                          if (!device || !onUpdateRoom) return;
+                          try {
+                            await onUpdateRoom(device.id, room.id);
+                            setShowRoomPicker(false);
+                          } catch (error) {
+                            console.error('Failed to assign room:', error);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.roomOptionIcon,
+                          isActive && styles.roomOptionIconActive
+                        ]}>
+                          <Home 
+                            size={18} 
+                            color={isActive ? '#fff' : colors.primary} 
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[
+                            styles.roomOptionText,
+                            isActive && styles.roomOptionTextActive
+                          ]}>
+                            {room.name}
+                          </Text>
+                          {isActive && (
+                            <View style={styles.roomOptionBadge}>
+                              <Sparkles size={10} color={colors.primary} />
+                              <Text style={styles.roomOptionBadgeText}>Currently assigned</Text>
+                            </View>
+                          )}
+                        </View>
+                        {isActive && (
+                          <View style={styles.roomOptionCheck}>
+                            <LinearGradient
+                              colors={[colors.primary, colors.neonCyan]}
+                              style={styles.roomOptionCheckGradient}
+                            >
+                              <Check size={14} color="#fff" />
+                            </LinearGradient>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
             </LinearGradient>
           </View>
         </View>
@@ -2159,37 +2257,269 @@ const createStyles = (colors: any, shadows: any) =>
       padding: 4,
       borderRadius: 4,
     },
+    editNameCard: {
+      marginHorizontal: spacing.lg,
+      marginVertical: 'auto',
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+      maxWidth: 500,
+      width: '100%',
+      alignSelf: 'center',
+      ...shadows.xl,
+    },
+    editNameContent: {
+      padding: spacing.xl,
+    },
+    editNameHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: spacing.lg,
+    },
+    editNameTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      flex: 1,
+    },
+    editNameIconWrapper: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      ...shadows.md,
+    },
+    editNameIconGradient: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editNameTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    editNameSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginTop: 2,
+    },
+    editNameClose: {
+      padding: spacing.xs,
+      marginTop: -4,
+    },
+    nameInputWrapper: {
+      position: 'relative',
+      marginBottom: spacing.lg,
+    },
     nameInput: {
       backgroundColor: colors.muted,
-      borderRadius: borderRadius.md,
+      borderRadius: borderRadius.lg,
       padding: spacing.md,
+      paddingRight: spacing.xl * 2,
       fontSize: fontSize.md,
       color: colors.foreground,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      fontWeight: '500',
+    },
+    nameInputIcon: {
+      position: 'absolute',
+      right: spacing.md,
+      top: '50%',
+      transform: [{ translateY: -8 }],
+    },
+    editNameActions: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    editNameButton: {
+      flex: 1,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    editNameButtonCancel: {
+      backgroundColor: colors.muted,
+      padding: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      marginVertical: spacing.md,
+    },
+    editNameButtonCancelText: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.mutedForeground,
+    },
+    editNameButtonSave: {
+      flex: 1.5,
+    },
+    editNameButtonGradient: {
+      padding: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    editNameButtonSaveText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    roomPickerCard: {
+      marginHorizontal: spacing.lg,
+      marginVertical: 'auto',
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+      maxWidth: 500,
+      width: '100%',
+      alignSelf: 'center',
+      ...shadows.xl,
+    },
+    roomPickerContent: {
+      padding: spacing.lg,
+      maxHeight: '70%',
+    },
+    roomPickerHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: spacing.lg,
+    },
+    roomPickerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      flex: 1,
+    },
+    roomPickerIconWrapper: {
+      width: 44,
+      height: 44,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      ...shadows.md,
+    },
+    roomPickerIconGradient: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomPickerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '700',
+      color: colors.foreground,
+      marginBottom: 2,
+    },
+    roomPickerSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    roomPickerClose: {
+      padding: spacing.xs,
+      marginTop: -4,
+    },
+    roomPickerList: {
+      gap: spacing.xs,
+    },
+    roomPickerEmpty: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.xl * 2,
+      gap: spacing.sm,
+    },
+    roomPickerEmptyText: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.foreground,
+      marginTop: spacing.sm,
+    },
+    roomPickerEmptySubtext: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      textAlign: 'center',
     },
     roomOption: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
+      gap: spacing.md,
       padding: spacing.md,
-      borderRadius: borderRadius.md,
+      paddingRight: spacing.lg,
+      borderRadius: borderRadius.lg,
       backgroundColor: colors.muted,
       marginBottom: spacing.sm,
+      borderWidth: 1.5,
+      borderColor: 'transparent',
+      ...shadows.sm,
     },
     roomOptionActive: {
-      backgroundColor: colors.primary + '20',
-      borderWidth: 1,
-      borderColor: colors.primary,
+      backgroundColor: colors.primary + '15',
+      borderColor: colors.primary + '40',
+    },
+    roomOptionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomOptionIconActive: {
+      backgroundColor: colors.primary,
     },
     roomOptionText: {
-      flex: 1,
       fontSize: fontSize.md,
+      fontWeight: '600',
       color: colors.foreground,
     },
     roomOptionTextActive: {
       color: colors.primary,
+      fontWeight: '700',
+    },
+    roomOptionBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 4,
+    },
+    roomOptionBadgeText: {
+      fontSize: fontSize.xs,
+      color: colors.primary,
+      fontWeight: '500',
+    },
+    roomOptionCheck: {
+      width: 24,
+      height: 24,
+      borderRadius: borderRadius.full,
+      overflow: 'hidden',
+    },
+    roomOptionCheckGradient: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomOptionRemove: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      padding: spacing.md,
+      paddingRight: spacing.lg,
+      borderRadius: borderRadius.lg,
+      backgroundColor: colors.destructive + '10',
+      marginBottom: spacing.sm,
+      borderWidth: 1.5,
+      borderColor: colors.destructive + '30',
+    },
+    roomOptionRemoveText: {
+      fontSize: fontSize.md,
       fontWeight: '600',
+      color: colors.destructive,
+    },
+    roomOptionRemoveSubtext: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginTop: 2,
     },
   });
