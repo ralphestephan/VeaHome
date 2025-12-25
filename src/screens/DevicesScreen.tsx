@@ -133,21 +133,22 @@ export default function DevicesScreen() {
   const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
 
   // Filter devices by category and include relevant hubs (e.g., AirGuard is a hub but shown as device)
+  // Map hubs to device format: hubType -> type for proper rendering
   const climateDevices = [
     ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
-    ...climateHubs as any[] // AirGuard hubs shown as climate devices
+    ...climateHubs.map(h => ({ ...h, type: h.hubType, category: 'climate' })) // Map hubType to type
   ];
   const securityDevices = [
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
-    ...securityHubs as any[]
+    ...securityHubs.map(h => ({ ...h, type: h.hubType, category: 'security' }))
   ];
   const utilityDevices = [
     ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
-    ...utilityHubs as any[]
+    ...utilityHubs.map(h => ({ ...h, type: h.hubType, category: 'utility' }))
   ];
   const lightsDevices = [
     ...devices.filter(d => d.category === 'lighting' || d.type === 'light'),
-    ...lightingHubs as any[]
+    ...lightingHubs.map(h => ({ ...h, type: h.hubType, category: 'lighting' }))
   ];
 
   // Group devices by room
