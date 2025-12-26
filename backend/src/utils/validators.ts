@@ -57,7 +57,7 @@ export const homeSchemas = {
   createRoom: Joi.object({
     name: Joi.string().required(),
     scene: Joi.string().allow(null).optional(),
-    image: Joi.string().uri().optional(),
+    image: Joi.string().optional(),
     layoutPath: Joi.string().optional(),
     accentColor: Joi.string().pattern(colorPattern).optional(),
     metadata: Joi.object().optional(),
@@ -65,7 +65,7 @@ export const homeSchemas = {
   updateRoom: Joi.object({
     name: Joi.string().optional(),
     scene: Joi.string().allow(null).optional(),
-    image: Joi.string().uri().optional(),
+    image: Joi.string().optional(),
     layoutPath: Joi.string().optional(),
     accentColor: Joi.string().pattern(colorPattern).optional(),
     metadata: Joi.object().optional(),

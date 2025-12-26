@@ -84,6 +84,7 @@ export const HubApi = (client: AxiosInstance) => ({
   addHub: (homeId: string, payload: any) => client.post(`/homes/${homeId}/hubs`, payload),
   listDevices: (homeId: string) => client.get(`/homes/${homeId}/devices`),
   addDevice: (homeId: string, payload: any) => client.post(`/homes/${homeId}/devices`, payload),
+  updateDevice: (homeId: string, deviceId: string, updates: any) => client.patch(`/homes/${homeId}/devices/${deviceId}`, updates),
   learnSignal: (hubId: string, deviceId: string, action: string) => client.post(`/hubs/${hubId}/devices/${deviceId}/learn`, { action }),
   controlDevice: (homeId: string, deviceId: string, payload: any) => client.put(`/homes/${homeId}/devices/${deviceId}/control`, payload),
   getDevice: (homeId: string, deviceId: string) => client.get(`/homes/${homeId}/devices/${deviceId}`),

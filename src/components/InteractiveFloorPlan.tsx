@@ -372,7 +372,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
         roomToAdd = maybeCreated as Room;
       }
     } catch (error) {
-      console.warn('Unable to persist new room yet:', error);
+      console.error('[FloorPlan] Unable to persist new room:', error);
     }
 
     setLocalRooms((prev) => [...prev, roomToAdd]);

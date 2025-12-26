@@ -77,7 +77,7 @@ export async function updateDevice(id: string, updates: Partial<DeviceInput>) {
   if (typeof updates.value === 'number') push('value', updates.value);
   if (updates.unit) push('unit', updates.unit);
   if (updates.signalMappings) push('signal_mappings', JSON.stringify(updates.signalMappings));
-  if (updates.roomId) push('room_id', updates.roomId);
+  if ('roomId' in updates) push('room_id', updates.roomId);
 
   if (!fields.length) return;
 

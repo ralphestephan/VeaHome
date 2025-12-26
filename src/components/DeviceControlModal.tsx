@@ -213,7 +213,6 @@ export default function DeviceControlModal({
         airguardApi.getStatus(smartMonitorId),
       ]);
       
-      // Backend response: { success: true, data: { data: {...} } }
       const latestWrapper = latestRes.data?.data;
       const statusWrapper = statusRes.data?.data;
       
@@ -221,16 +220,11 @@ export default function DeviceControlModal({
       const latest = latestWrapper?.data || latestWrapper;
       const status = statusWrapper?.data || statusWrapper;
       
-      console.log('[Airguard] Raw response:', { latestWrapper, statusWrapper });
-      console.log('[Airguard] Extracted data:', { latest, status });
-      
       if (!latest) {
-        console.error('[Airguard] No data in response:', latestRes.data);
         setLiveAirguardData(null);
         return;
       }
       
-      // Map backend fields
       const newData = {
         temperature: latest.temperature,
         humidity: latest.humidity,
@@ -242,8 +236,6 @@ export default function DeviceControlModal({
         rssi: latest.rssi,
       };
       
-      console.log('[Airguard] Mapped data:', newData);
-      console.log('[Airguard] AlertFlags value:', newData.alertFlags, 'Type:', typeof newData.alertFlags);
       setLiveAirguardData(newData);
     } catch (error) {
       console.error('[Airguard] Failed to fetch data:', error);
@@ -261,20 +253,11 @@ export default function DeviceControlModal({
     if (!smartMonitorId) return;
     
     try {
-      console.log('[Thresholds] Fetching for device:', smartMonitorId);
       const res = await airguardApi.getThresholds(smartMonitorId);
-      console.log('[Thresholds] API response:', JSON.stringify(res, null, 2));
       
-      // Handle nested data structure: res.data = { data: { tempMin, tempMax, ... } }
       const data = res.data?.data?.data || res.data?.data;
-      console.log('[Thresholds] Extracted data:', JSON.stringify(data, null, 2));
       
       if (data && typeof data === 'object') {
-        // Check if we actually got real data or just defaults
-        const hasRealData = data.time || data.isDefault === false;
-        console.log('[Thresholds] Has real data?', hasRealData, 'Data:', data);
-        
-        // Backend returns: tempMin, tempMax, humMin, humMax, dustHigh, mq2High
         const newThresholds = {
           tempHigh: data.tempMax ?? 35,
           tempLow: data.tempMin ?? 10,
@@ -283,7 +266,6 @@ export default function DeviceControlModal({
           dustHigh: data.dustHigh ?? 400,
           mq2High: data.mq2High ?? 60,
         };
-        console.log('[Thresholds] Applied:', newThresholds);
         setThresholds(newThresholds);
         setEditingThresholds({
           tempHigh: String(newThresholds.tempHigh),
@@ -503,13 +485,6 @@ export default function DeviceControlModal({
   }, [visible]);
 
   if (!device) return null;
-
-  console.log('[DeviceControlModal] Device:', {
-    id: device.id,
-    name: device.name,
-    type: device.type,
-    isAirguard: device.type === 'airguard'
-  });
 
   const IconComponent = iconMap[device.type] || Lightbulb;
   const isClimateDevice = device.type === 'thermostat' || device.type === 'ac';
@@ -804,13 +779,14 @@ export default function DeviceControlModal({
                         </LinearGradient>
                       </TouchableOpacity>
 
-                      {/* Threshold Settings Button - Always show even when offline */}
+                      {/* Threshold Settings Button */}
                       <TouchableOpacity
-                        style={styles.thresholdToggle}
+                        style={[styles.thresholdToggle, !liveAirguardData?.isOnline && { opacity: 0.5 }]}
                         onPress={() => {
                           fetchThresholds(); // Fetch current thresholds before opening
                           setShowThresholdSettings(true);
                         }}
+                        disabled={!liveAirguardData?.isOnline}
                         activeOpacity={0.8}
                       >
                         <Settings size={18} color={colors.mutedForeground} />

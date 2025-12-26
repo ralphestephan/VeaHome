@@ -409,7 +409,7 @@ export default function DevicesScreen() {
                     isOnline={device.status === 'online'}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={() => handleDeviceToggle(device)}
+                    onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
                   />
                 </View>
               ))}
@@ -457,7 +457,7 @@ export default function DevicesScreen() {
                     isOnline={device.status === 'online'}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={() => handleDeviceToggle(device)}
+                    onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
                   />
                 </View>
               ))}
@@ -784,17 +784,19 @@ export default function DevicesScreen() {
             if (!homeId) return;
             try {
               console.log('[DevicesScreen] Updating device room:', deviceId, 'to:', roomId);
-              const api = HubApi(getApiClient(async () => token));
               
               // Check if this is a hub
               const isHub = hubs.some(h => h.id === deviceId);
               
               if (isHub) {
-                await api.updateHub(homeId, deviceId, { roomId });
+                const hubApi = HubApi(getApiClient(async () => token));
+                await hubApi.updateHub(homeId, deviceId, { roomId });
                 console.log('[DevicesScreen] Hub room updated successfully');
               } else {
-                // Update regular device room (you'll need to add this API method)
-                console.log('[DevicesScreen] Regular device room update not yet implemented');
+                // Update regular device room
+                const deviceApi = DevicesApi(getApiClient(async () => token));
+                await deviceApi.updateDevice(homeId, deviceId, { roomId });
+                console.log('[DevicesScreen] Device room updated successfully');
               }
               
               // Refresh to show updated room

@@ -3,6 +3,7 @@ import {
   listDevices, 
   addDevice, 
   getDevice, 
+  updateDeviceHandler,
   controlDevice, 
   learnSignal,
   getDeviceHistory,
@@ -19,6 +20,7 @@ const router = Router();
 router.get('/:homeId/devices', authenticateToken, listDevices);
 router.post('/:homeId/devices', authenticateToken, validate(deviceSchemas.addDevice), addDevice);
 router.get('/:homeId/devices/:deviceId', authenticateToken, getDevice);
+router.patch('/:homeId/devices/:deviceId', authenticateToken, updateDeviceHandler);
 router.delete('/:homeId/devices/:deviceId', authenticateToken, removeDevice);
 router.put('/:homeId/devices/:deviceId/control', authenticateToken, validate(deviceSchemas.controlDevice), controlDevice);
 router.post('/:hubId/devices/:deviceId/learn', authenticateToken, validate(deviceSchemas.learnSignal), learnSignal);

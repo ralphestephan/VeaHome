@@ -120,6 +120,39 @@ export async function getDevice(req: Request, res: Response) {
   }
 }
 
+export async function updateDeviceHandler(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, deviceId } = req.params;
+    const updates = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const device = await getDeviceById(deviceId);
+    if (!device || device.home_id !== home.id) {
+      return errorResponse(res, 'Device not found', 404);
+    }
+
+    // Validate roomId if provided
+    if ('roomId' in updates && updates.roomId !== null) {
+      const room = await getRoomById(updates.roomId);
+      if (!room || room.home_id !== home.id) {
+        return errorResponse(res, 'Invalid room ID', 400);
+      }
+    }
+
+    await updateDevice(deviceId, updates);
+
+    const updatedDevice = await getDeviceById(deviceId);
+    return successResponse(res, { device: updatedDevice, message: 'Device updated successfully' });
+  } catch (error: any) {
+    console.error('Update device error:', error);
+    return errorResponse(res, error.message || 'Failed to update device', 500);
+  }
+}
+
 export async function controlDevice(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;
