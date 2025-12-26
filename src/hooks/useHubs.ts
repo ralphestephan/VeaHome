@@ -3,6 +3,26 @@ import { useAuth } from '../context/AuthContext';
 import { getApiClient, HubApi } from '../services/api';
 import type { Hub } from '../types';
 
+const mapHub = (raw: any): Hub => {
+  return {
+    id: raw.id,
+    name: raw.name,
+    brand: raw.brand || 'vealive',
+    hubType: raw.hubType || raw.hub_type || 'airguard',
+    serialNumber: raw.serialNumber || raw.serial_number || '',
+    status: raw.status || 'offline',
+    roomId: raw.roomId || raw.room_id,
+    homeId: raw.homeId || raw.home_id,
+    wifiSsid: raw.wifiSsid || raw.wifi_ssid,
+    wifiConnected: raw.wifiConnected ?? raw.wifi_connected,
+    firmwareVersion: raw.firmwareVersion || raw.firmware_version,
+    lastSeenAt: raw.lastSeenAt || raw.last_seen_at,
+    metadata: raw.metadata,
+    airQualityData: raw.airQualityData,
+    devices: raw.devices,
+  };
+};
+
 export const useHubs = (homeId: string | null | undefined) => {
   const { token } = useAuth();
   const [hubs, setHubs] = useState<Hub[]>([]);
@@ -27,7 +47,8 @@ export const useHubs = (homeId: string | null | undefined) => {
         // Axios wraps in response.data, backend returns { success: true, data: { hubs: [...] } }
         // So full path is: response.data.data.hubs
         const hubsArray = response.data?.data?.hubs || [];
-        setHubs(hubsArray);
+        const mappedHubs = hubsArray.map(mapHub);
+        setHubs(mappedHubs);
       } catch (e: any) {
         setError(e?.response?.data?.message || 'Failed to load hubs');
         setHubs([]);
