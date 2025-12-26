@@ -250,7 +250,9 @@ export default function DashboardScreen() {
         demoAddRoom(room);
         return room;
       }
-      return await createRoom(room);
+      const created = await createRoom(room);
+      await refresh(); // Refresh to sync with backend
+      return created;
     } catch (error) {
       console.error('Room creation error:', error);
       return room;
