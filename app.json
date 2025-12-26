@@ -26,6 +26,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "icon": "./assets/adaptive-icon.png",
       "bundleIdentifier": "com.vealive.veahome",
       "infoPlist": {
         "NSCameraUsageDescription": "VeaHome uses the camera to scan your hub's QR code for secure pairing.",
