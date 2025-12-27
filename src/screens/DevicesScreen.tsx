@@ -50,6 +50,7 @@ import {
   SectionHeader, 
   SkeletonLoader, 
   EmptyState,
+  StatusBadge,
 } from '../components/ui';
 import type { RootStackParamList, Device } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -126,7 +127,7 @@ export default function DevicesScreen() {
     };
 
     fetchStatuses();
-    const interval = setInterval(fetchStatuses, 10000); // Update every 10 seconds
+    const interval = setInterval(fetchStatuses, 3000); // Update every 3 seconds for faster refresh
     return () => clearInterval(interval);
   }, [hubs, token]);
 
@@ -241,6 +242,31 @@ export default function DevicesScreen() {
       status: h.status
     }))
   ];
+
+  // Calculate device counts: total and online
+  const deviceCounts = useMemo(() => {
+    // Count all regular devices
+    const regularDeviceCount = devices.length;
+    // Count all hubs (hubs are shown as devices in the UI)
+    const hubCount = hubs.length;
+    const total = regularDeviceCount + hubCount;
+    
+    // Count online devices (devices that are online)
+    const onlineDevices = devices.filter(d => d.isOnline !== false).length;
+    // Count online hubs (check live status for AirGuard, backend status for others)
+    const onlineHubs = hubs.filter(h => {
+      if (h.hubType === 'airguard') {
+        const liveStatus = hubStatuses[h.id];
+        if (liveStatus !== undefined) return liveStatus;
+        return false; // Default to offline if live status not available
+      }
+      return h.status === 'online';
+    }).length;
+    
+    const online = onlineDevices + onlineHubs;
+    
+    return { total, online };
+  }, [devices, hubs, hubStatuses]);
 
   // Group devices by room
   const devicesByRoom = (deviceList: typeof devices) => {
@@ -379,6 +405,19 @@ export default function DevicesScreen() {
     };
     return iconMap[type] || 'lightbulb';
   };
+
+  // Calculate overall hub status - check if any hub is online
+  const overallHubStatus = useMemo(() => {
+    if (hubs.length === 0) return 'offline';
+    // Check both hub.status and hubStatuses (for airguard hubs with live status)
+    const hasOnlineHub = hubs.some((hub) => {
+      const liveStatus = hubStatuses[hub.id];
+      if (liveStatus !== undefined) return liveStatus;
+      return hub.status === 'online';
+    });
+    return hasOnlineHub ? 'online' : 'offline';
+  }, [hubs, hubStatuses]);
+
   const LightsRoute = () => {
     const groupedDevices = devicesByRoom(lightsDevices);
     
@@ -656,7 +695,27 @@ export default function DevicesScreen() {
     <View style={styles.container}>
       <Header title="Devices" />
       <View style={styles.subHeader}>
-        <Text style={styles.subtitle}>{devices.length} devices connected</Text>
+        <View style={styles.subHeaderLeft}>
+          <Text style={styles.subtitle}>
+            {deviceCounts.online === 0 
+              ? `0 devices connected`
+              : deviceCounts.online === deviceCounts.total
+              ? `${deviceCounts.online} ${deviceCounts.online === 1 ? 'device' : 'devices'} connected`
+              : `${deviceCounts.online} ${deviceCounts.online === 1 ? 'device' : 'devices'} out of ${deviceCounts.total} ${deviceCounts.total === 1 ? 'device' : 'devices'} connected`
+            }
+          </Text>
+          <View style={[
+            styles.statusCard,
+            overallHubStatus === 'online' ? styles.statusCardOnline : styles.statusCardOffline
+          ]}>
+            <StatusBadge 
+              variant={overallHubStatus === 'online' ? 'online' : 'offline'} 
+              size="sm" 
+              label={overallHubStatus === 'online' ? 'Online' : 'Offline'}
+              pulse={overallHubStatus === 'online'}
+            />
+          </View>
+        </View>
         <TouchableOpacity 
           style={styles.addButtonWrapper}
           onPress={() => setShowAddModal(true)}
@@ -959,6 +1018,26 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.md,
       paddingBottom: spacing.md,
+    },
+    subHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    statusCard: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+    },
+    statusCardOnline: {
+      backgroundColor: colors.success + '15',
+      borderColor: colors.success + '30',
+    },
+    statusCardOffline: {
+      backgroundColor: colors.offline + '15',
+      borderColor: colors.offline + '30',
+      opacity: 0.6,
     },
     title: {
       fontSize: 22,

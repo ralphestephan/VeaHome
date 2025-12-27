@@ -89,6 +89,53 @@ export default function DashboardScreen() {
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
   const { hubs: fetchedHubs } = useHubs(homeId);
   const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
+  
+  // Track live online/offline status for AirGuard hubs
+  const [hubStatuses, setHubStatuses] = useState<Record<string, boolean>>({});
+  
+  // Fetch live status for airguard hubs (like on devices page)
+  useEffect(() => {
+    const airguardHubs = hubs.filter(h => h.hubType === 'airguard');
+    if (airguardHubs.length === 0) {
+      setHubStatuses({});
+      return;
+    }
+
+    const fetchStatuses = async () => {
+      const client = getApiClient(async () => token);
+      const airguardApi = PublicAirguardApi(client);
+      
+      const statusPromises = airguardHubs.map(async (hub) => {
+        try {
+          const smartMonitorId = hub.metadata?.smartMonitorId || 
+                                 (hub.serialNumber?.match(/SM_(\d+)/i)?.[1] ? parseInt(hub.serialNumber.match(/SM_(\d+)/i)![1], 10) : null);
+          if (!smartMonitorId) return { hubId: hub.id, isOnline: false };
+          
+          const statusRes = await airguardApi.getStatus(smartMonitorId);
+          const statusWrapper = statusRes.data?.data;
+          const status = statusWrapper?.data || statusWrapper;
+          const isOnline = status?.online === true || status?.online === 1;
+          return { hubId: hub.id, isOnline };
+        } catch (error) {
+          return { hubId: hub.id, isOnline: false };
+        }
+      });
+
+      const results = await Promise.all(statusPromises);
+      const newStatuses: Record<string, boolean> = {};
+      results.forEach(({ hubId, isOnline }) => {
+        newStatuses[hubId] = isOnline;
+        console.log(`[Dashboard] Hub ${hubId} live status: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      });
+      console.log(`[Dashboard] Updated hubStatuses:`, newStatuses);
+      setHubStatuses(newStatuses);
+    };
+
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, [hubs, token]);
+  
   // Aggregate alertFlags from hubs so we can show a global alert badge in the hero
   const mergedHubAlertFlags = hubs.reduce((acc, h) => {
     const airQualityData = h?.airQualityData as any;
@@ -441,7 +488,34 @@ export default function DashboardScreen() {
   const selectedRoomData = selectedRoom ? rooms.find((room: Room) => room.id === selectedRoom) : null;
   const activeDevicesCount = devices.filter((device: Device) => device.isActive).length;
   const onlineDevicesCount = devices.filter((device: Device) => device.isOnline !== false).length;
-  const isHomeOnline = hubs.length > 0;
+  // Check if any hub is actually online - use live status for AirGuard hubs, backend status for others
+  const isHomeOnline = useMemo(() => {
+    if (hubs.length === 0) {
+      return false;
+    }
+    
+    // Check each hub - for AirGuard hubs, prioritize live status over backend status
+    const hubStatusChecks = hubs.map((hub) => {
+      // For AirGuard hubs, always check live status first (it's more accurate)
+      if (hub.hubType === 'airguard') {
+        const liveStatus = hubStatuses[hub.id];
+        // If we have live status data, use it (even if it's false/offline)
+        // For AirGuard hubs, we trust live status over backend status
+        if (liveStatus !== undefined) {
+          return liveStatus; // Use live status from API (true = online, false = offline)
+        }
+        // If live status not fetched yet, default to offline (don't trust backend status for AirGuard)
+        // This prevents showing "online" when hub is actually offline
+        return false;
+      }
+      // For non-AirGuard hubs, use backend status
+      const status = hub.status?.toLowerCase();
+      return status === 'online';
+    });
+    
+    const hasOnlineHub = hubStatusChecks.some(status => status === true);
+    return hasOnlineHub;
+  }, [hubs, hubStatuses]);
   const lightsOnCount = devices.filter((d: Device) => d.type === 'light' && d.isActive).length;
   const totalLights = devices.filter((d: Device) => d.type === 'light').length;
   const avgTemperature = rooms.length
@@ -594,6 +668,7 @@ export default function DashboardScreen() {
                   <Text style={styles.heroHomeName}>{home?.name || 'My Home'}</Text>
                 </View>
                 <StatusBadge 
+                  key={`home-status-${isHomeOnline ? 'online' : 'offline'}-${Object.keys(hubStatuses).length}`}
                   variant={isHomeOnline ? 'online' : 'offline'} 
                   size="sm" 
                   label={isHomeOnline ? 'Connected' : 'Offline'}
@@ -608,7 +683,7 @@ export default function DashboardScreen() {
                   {!isHomeOnline ? (
                     <View style={styles.heroStatusBadge}>
                       <View style={[styles.heroStatusDot, { backgroundColor: colors.offline }]} />
-                      <Text style={[styles.heroStatusText, { color: colors.offline }]}>
+                      <Text style={[styles.heroStatusText, { color: colors.foreground }]}>
                         System offline • No active connections
                       </Text>
                     </View>
@@ -650,7 +725,7 @@ export default function DashboardScreen() {
                   >
                     <Cpu size={16} color={colors.primary} />
                   </LinearGradient>
-                  <Text style={styles.heroStatValue}>{devices.length}</Text>
+                  <Text style={styles.heroStatValue}>{hubs.length}</Text>
                   <Text style={styles.heroStatLabel}>Devices</Text>
                 </View>
                 <View style={styles.heroStatDivider} />

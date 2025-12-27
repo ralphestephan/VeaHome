@@ -50,7 +50,7 @@ export const darkColors: ThemeColors = {
   neonCyan: '#00FFF0',
   neonPink: '#FF66B2',
   online: '#00E5A0',
-  offline: '#6B7280',
+  offline: '#374151', // Darker grey for better contrast with online green
 };
 
 // Light theme variant (kept for compatibility but not primary)
@@ -77,7 +77,7 @@ export const lightColors: ThemeColors = {
   neonCyan: '#06B6D4',
   neonPink: '#EC4899',
   online: '#13A480',
-  offline: '#9CA3AF',
+  offline: '#374151', // Darker grey for better contrast with online green
 };
 
 export const getThemeColors = (mode: ThemeMode): ThemeColors =>

@@ -372,11 +372,11 @@ export const useHomeData = (homeId: string | null | undefined) => {
     }
 
     const payload: any = {
-      name: room.name,
+      name: room.name?.trim() || '',
       metadata: {
-        temperature: room.temperature,
-        humidity: room.humidity,
-        lights: room.lights,
+        temperature: room.temperature || 22,
+        humidity: room.humidity || 55,
+        lights: room.lights || 1,
       },
     };
     
@@ -387,12 +387,16 @@ export const useHomeData = (homeId: string | null | undefined) => {
       payload.scene = null;
     }
     
-    if (room.image && room.image.trim()) {
-      payload.image = room.image.trim();
+    // Only include image if it's a valid non-empty string
+    const imageValue = room.image?.trim();
+    if (imageValue && imageValue.length > 0) {
+      payload.image = imageValue;
     }
     
-    if (room.layoutPath && room.layoutPath.trim()) {
-      payload.layoutPath = room.layoutPath.trim();
+    // Only include layoutPath if it's a valid non-empty string (and not too long)
+    const layoutPathValue = room.layoutPath?.trim();
+    if (layoutPathValue && layoutPathValue.length > 0 && layoutPathValue.length < 10000) {
+      payload.layoutPath = layoutPathValue;
     }
     
     // Validate accentColor is a valid hex color before including it
@@ -419,12 +423,19 @@ export const useHomeData = (homeId: string | null | undefined) => {
     } catch (e: any) {
       console.error('[useHomeData] createRoom failed:', e);
       if (e?.response?.data?.errors) {
-        console.error('[useHomeData] Validation errors:', e.response.data.errors);
+        console.error('[useHomeData] Validation errors:', JSON.stringify(e.response.data.errors, null, 2));
       }
       if (e?.response?.data?.error) {
         console.error('[useHomeData] Error message:', e.response.data.error);
       }
-      throw e;
+      // Provide more helpful error message
+      const errorMessage = e?.response?.data?.error || e?.message || 'Failed to create room';
+      const validationErrors = e?.response?.data?.errors;
+      if (validationErrors && Array.isArray(validationErrors)) {
+        const errorDetails = validationErrors.map((err: any) => `${err.path || err.field}: ${err.message || err.msg || 'Invalid'}`).join(', ');
+        throw new Error(`Room creation failed: ${errorDetails}`);
+      }
+      throw new Error(errorMessage);
     }
   }, [currentHomeId, homeApi, homeId, isDemoMode]);
 

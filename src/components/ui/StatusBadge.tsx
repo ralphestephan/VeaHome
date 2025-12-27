@@ -59,8 +59,35 @@ export default function StatusBadge({
 
   const displayLabel = label ?? defaultLabels[variant];
 
+  // Use lighter text color for offline to ensure visibility
+  const textColor = useMemo(() => {
+    if (variant === 'offline') {
+      return colors.foreground; // Use foreground color for better visibility
+    }
+    return statusColor;
+  }, [variant, statusColor, colors.foreground]);
+
+  // Background color for the badge container (dynamic based on status)
+  const backgroundColor = useMemo(() => {
+    if (variant === 'online') {
+      return statusColor + '15'; // Light green background when online
+    } else if (variant === 'offline') {
+      return statusColor + '20'; // Light grey background when offline
+    }
+    return 'transparent';
+  }, [variant, statusColor]);
+
   return (
-    <View style={[styles.container, style]}>
+    <View style={[
+      styles.container, 
+      { 
+        backgroundColor,
+        paddingHorizontal: spacing.xs,
+        paddingVertical: spacing.xs / 2,
+        borderRadius: borderRadius.md,
+      },
+      style
+    ]}>
       <View style={styles.dotContainer}>
         <View
           style={[
@@ -68,7 +95,10 @@ export default function StatusBadge({
             {
               width: sizeConfig.dot,
               height: sizeConfig.dot,
-              backgroundColor: statusColor,
+              backgroundColor: variant === 'offline' 
+                ? '#9CA3AF' // Use lighter grey for offline dot visibility
+                : statusColor,
+              opacity: 1, // Full opacity for visibility
             },
           ]}
         />
@@ -90,7 +120,7 @@ export default function StatusBadge({
           style={[
             styles.label,
             { 
-              color: statusColor, 
+              color: textColor, 
               fontSize: sizeConfig.fontSize,
               marginLeft: sizeConfig.gap,
             },
