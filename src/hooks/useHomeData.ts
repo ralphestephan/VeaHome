@@ -92,26 +92,34 @@ const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] =
   return baseRooms.map((room) => {
     // Use String() comparison to handle type mismatches (UUID strings)
     const roomDevices = baseDevices.filter((d) => String(d.roomId) === String(room.id));
-    const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
+    
+    // Find AirGuard device (even if offline, it should still be in the list)
+    // Don't require airQualityData to exist - device might be offline
+    const airguard = roomDevices.find((d) => d.type === 'airguard');
     
     // Debug logging for room device assignment
     if (roomDevices.length > 0) {
-      console.log('[applyDevicesToRooms] Room:', room.name, 'has', roomDevices.length, 'devices:', roomDevices.map(d => ({ id: d.id, name: d.name, roomId: d.roomId })));
+      console.log('[applyDevicesToRooms] Room:', room.name, 'has', roomDevices.length, 'devices:', roomDevices.map(d => ({ id: d.id, name: d.name, type: d.type, roomId: d.roomId, hasAirQualityData: !!d.airQualityData })));
+    } else {
+      console.log('[applyDevicesToRooms] Room:', room.name, 'has NO devices. All devices:', baseDevices.map(d => ({ id: d.id, name: d.name, roomId: d.roomId })));
     }
     
     // Use room power from backend, default to '0W' if not provided
     const roomPower = room.power || '0W';
     
+    // Get stats from AirGuard if available (even if offline, we might have cached data)
+    const airguardData = airguard?.airQualityData;
+    
     return {
       ...room,
-      devices: roomDevices,
-      temperature: airguard?.airQualityData?.temperature ?? room.temperature,
-      humidity: airguard?.airQualityData?.humidity ?? room.humidity,
-      airQuality: airguard?.airQualityData?.aqi ?? room.airQuality,
-      pm25: airguard?.airQualityData?.pm25 ?? room.pm25,
-      mq2: airguard?.airQualityData?.mq2 ?? room.mq2,
-      alert: airguard?.airQualityData?.alert ?? room.alert,
-      alertFlags: airguard?.airQualityData?.alertFlags ?? room.alertFlags,
+      devices: roomDevices, // Always include devices array, even if empty
+      temperature: airguardData?.temperature ?? room.temperature,
+      humidity: airguardData?.humidity ?? room.humidity,
+      airQuality: airguardData?.aqi ?? room.airQuality,
+      pm25: airguardData?.pm25 ?? room.pm25,
+      mq2: airguardData?.mq2 ?? room.mq2,
+      alert: airguardData?.alert ?? room.alert,
+      alertFlags: airguardData?.alertFlags ?? room.alertFlags,
       lights: roomDevices.filter((d) => d.type === 'light').length,
       power: roomPower,
     };

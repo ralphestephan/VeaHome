@@ -437,17 +437,32 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         }),
       );
 
-      const airguard = enrichedDevices.find((d: any) => d.type === 'airguard' && d.airQualityData);
+      // Find AirGuard device (even if offline, it should still be in the list)
+      const airguard = enrichedDevices.find((d: any) => d.type === 'airguard');
+      
+      // Get stats from AirGuard if available (even if offline, we might have cached data)
+      const airguardData = airguard?.airQualityData;
+      
       const nextRoom = {
         ...baseRoom,
-        temperature: airguard?.airQualityData?.temperature ?? baseRoom?.temperature,
-        humidity: airguard?.airQualityData?.humidity ?? baseRoom?.humidity,
-        airQuality: airguard?.airQualityData?.aqi ?? baseRoom?.airQuality,
-        pm25: airguard?.airQualityData?.pm25 ?? baseRoom?.pm25,
-        mq2: airguard?.airQualityData?.mq2 ?? baseRoom?.mq2,
-        alertFlags: airguard?.airQualityData?.alertFlags ?? (baseRoom as any)?.alertFlags ?? 0,
-        alert: airguard?.airQualityData?.alert ?? baseRoom?.alert,
+        devices: enrichedDevices, // Include devices in room object for device count
+        temperature: airguardData?.temperature ?? baseRoom?.temperature,
+        humidity: airguardData?.humidity ?? baseRoom?.humidity,
+        airQuality: airguardData?.aqi ?? baseRoom?.airQuality,
+        pm25: airguardData?.pm25 ?? baseRoom?.pm25,
+        mq2: airguardData?.mq2 ?? baseRoom?.mq2,
+        alertFlags: airguardData?.alertFlags ?? (baseRoom as any)?.alertFlags ?? 0,
+        alert: airguardData?.alert ?? baseRoom?.alert,
       };
+
+      console.log('[RoomDetailScreen] Setting room with devices:', {
+        roomId: nextRoom.id,
+        roomName: nextRoom.name,
+        deviceCount: enrichedDevices.length,
+        devices: enrichedDevices.map(d => ({ id: d.id, name: d.name, type: d.type })),
+        temperature: nextRoom.temperature,
+        humidity: nextRoom.humidity,
+      });
 
       setRoom(nextRoom);
       setDevices(enrichedDevices);
