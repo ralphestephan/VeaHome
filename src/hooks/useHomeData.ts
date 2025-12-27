@@ -373,7 +373,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
 
     const payload = {
       name: room.name,
-      scene: room.scene,
+      scene: room.scene && room.scene.trim() ? room.scene : null,
       image: room.image,
       layoutPath: room.layoutPath,
       accentColor: room.accentColor,

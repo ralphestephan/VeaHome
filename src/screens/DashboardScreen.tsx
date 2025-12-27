@@ -48,6 +48,7 @@ import { useEnergyData } from '../hooks/useEnergyData';
 import { useRealtime } from '../hooks/useRealtime';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useAirguardAlerts } from '../hooks/useAirguardAlerts';
+import AirguardAlertBanner, { decodeAlertFlags } from '../components/AirguardAlertBanner';
 import { useDemo } from '@/context/DemoContext';
 import type { Room, Device, Home } from '../types';
 import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi } from '../services/api';
@@ -88,6 +89,16 @@ export default function DashboardScreen() {
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
   const { hubs: fetchedHubs } = useHubs(homeId);
   const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
+  // Aggregate alertFlags from hubs so we can show a global alert badge in the hero
+  const mergedHubAlertFlags = hubs.reduce((acc, h) => {
+    const airQualityData = h?.airQualityData as any;
+    const flags = Number(airQualityData?.alertFlags ?? h?.metadata?.alertFlags ?? 0) || 0;
+    return acc | flags;
+  }, 0);
+  
+  // Decode alert flags to get status message
+  const alertReasons = decodeAlertFlags(mergedHubAlertFlags);
+  const hasAlerts = alertReasons.length > 0;
   const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene, addRoom: demoAddRoom, setDeviceMuted } = useDemo();
   
   // Use demo data if in demo mode
@@ -158,7 +169,8 @@ export default function DashboardScreen() {
           const homeApi = HomeApi(client);
           const response = await homeApi.getHome(homeId);
           console.log('[DashboardScreen] Loaded home:', response.data);
-          setHome(response.data);
+          const loadedHome = response.data?.data?.home ?? response.data?.home ?? response.data?.data ?? null;
+          setHome(loadedHome);
         } catch (e) {
           console.error('Error loading home:', e);
         }
@@ -176,7 +188,8 @@ export default function DashboardScreen() {
             const client = getApiClient(async () => token);
             const homeApi = HomeApi(client);
             const response = await homeApi.getHome(homeId);
-            setHome(response.data);
+            const loadedHome = response.data?.data?.home ?? response.data?.home ?? response.data?.data ?? null;
+            setHome(loadedHome);
           } catch (e) {
             console.error('Error loading home on focus:', e);
           }
@@ -546,65 +559,117 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Hero Welcome Card */}
+        {/* Hero Welcome Card - Vealive Branded */}
         <Animated.View style={{ 
           transform: [{ scale: heroScale }], 
           opacity: heroOpacity 
         }}>
-          <LinearGradient
-            colors={gradients.accent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroGlowOverlay} />
+          <View style={styles.heroCardContainer}>
+            {/* Animated gradient background with multiple layers */}
+            <LinearGradient
+              colors={['#0F1428', '#141A35', '#0A0E1F']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCardBase}
+            />
+            
+            {/* Neon glow overlays */}
+            <View style={styles.heroGlowTop} />
+            
+            {/* Glass morphism overlay */}
+            <LinearGradient
+              colors={['rgba(79, 110, 247, 0.08)', 'rgba(179, 102, 255, 0.05)', 'rgba(0, 194, 255, 0.06)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroGlassOverlay}
+            />
+            
             <View style={styles.heroContent}>
+              {/* Top row with home name and status */}
               <View style={styles.heroTopRow}>
-                <View style={styles.heroBadge}>
-                  <Text style={styles.heroBadgeText}>{home?.name || 'My Home'}</Text>
+                <View style={styles.heroHomeNameContainer}>
+                  <View style={styles.heroHomeIcon}>
+                    <HomeIcon size={16} color={colors.neonCyan} />
+                  </View>
+                  <Text style={styles.heroHomeName}>{home?.name || 'My Home'}</Text>
                 </View>
                 <StatusBadge 
                   variant={isHomeOnline ? 'online' : 'offline'} 
                   size="sm" 
-                  label={isHomeOnline ? 'Online' : 'Offline'}
+                  label={isHomeOnline ? 'Connected' : 'Offline'}
                   pulse={isHomeOnline}
                 />
               </View>
               
-              <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
-              <Text style={styles.heroSubtitle}>
-                {isHomeOnline 
-                  ? (hubs.length > 0 ? `${hubs.length} hub${hubs.length !== 1 ? 's' : ''} active` : 'No hubs connected')
-                  : 'All devices are offline'}
-              </Text>
+              {/* Greeting and status */}
+              <View style={styles.heroGreetingContainer}>
+                <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
+                <View style={styles.heroStatusContainer}>
+                  {!isHomeOnline ? (
+                    <View style={styles.heroStatusBadge}>
+                      <View style={[styles.heroStatusDot, { backgroundColor: colors.offline }]} />
+                      <Text style={[styles.heroStatusText, { color: colors.offline }]}>
+                        System offline • No active connections
+                      </Text>
+                    </View>
+                  ) : hasAlerts ? (
+                    <View style={[styles.heroStatusBadge, styles.heroStatusBadgeAlert]}>
+                      <View style={[styles.heroStatusDot, { backgroundColor: colors.warning }]} />
+                      <Text style={[styles.heroStatusText, { color: colors.warning }]}>
+                        Active alerts: {alertReasons.join(', ')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.heroStatusBadge, styles.heroStatusBadgeSuccess]}>
+                      <View style={[styles.heroStatusDot, { backgroundColor: colors.success }]} />
+                      <Text style={[styles.heroStatusText, { color: colors.success }]}>
+                        All systems operational • No issues detected
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
               
+              {/* Stats grid with improved design */}
               <View style={styles.heroStats}>
                 <View style={styles.heroStatItem}>
-                  <View style={styles.heroStatIcon}>
-                    <HomeIcon size={14} color={colors.neonCyan} />
-                  </View>
+                  <LinearGradient
+                    colors={[colors.neonCyan + '20', colors.neonCyan + '10']}
+                    style={styles.heroStatIconGradient}
+                  >
+                    <HomeIcon size={16} color={colors.neonCyan} />
+                  </LinearGradient>
                   <Text style={styles.heroStatValue}>{rooms.length}</Text>
                   <Text style={styles.heroStatLabel}>Rooms</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
-                  <View style={styles.heroStatIcon}>
-                    <Cpu size={14} color={colors.warning} />
-                  </View>
-                  <Text style={styles.heroStatValue}>{hubs.length}</Text>
-                  <Text style={styles.heroStatLabel}>Hubs</Text>
+                  <LinearGradient
+                    colors={[colors.primary + '20', colors.primary + '10']}
+                    style={styles.heroStatIconGradient}
+                  >
+                    <Cpu size={16} color={colors.primary} />
+                  </LinearGradient>
+                  <Text style={styles.heroStatValue}>{devices.length}</Text>
+                  <Text style={styles.heroStatLabel}>Devices</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
-                  <View style={styles.heroStatIcon}>
-                    <Zap size={14} color={colors.success} />
-                  </View>
+                  <LinearGradient
+                    colors={[colors.success + '20', colors.success + '10']}
+                    style={styles.heroStatIconGradient}
+                  >
+                    <Zap size={16} color={colors.success} />
+                  </LinearGradient>
                   <Text style={styles.heroStatValue}>{todayEnergy.toFixed(1)}</Text>
-                  <Text style={styles.heroStatLabel}>kWh</Text>
+                  <Text style={styles.heroStatLabel}>kWh Today</Text>
                 </View>
               </View>
             </View>
-          </LinearGradient>
+            
+            {/* Border glow effect */}
+            <View style={styles.heroBorderGlow} />
+          </View>
         </Animated.View>
 
         {/* Spatial View - Moved above Quick Actions */}
@@ -851,92 +916,177 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => {
       justifyContent: 'space-between',
     },
 
-    // Hero Card
-    heroCard: {
+    // Hero Card - Vealive Branded Design
+    heroCardContainer: {
       borderRadius: borderRadius.xxl,
       overflow: 'hidden',
       marginBottom: spacing.lg,
-      ...shadows.glow,
+      position: 'relative',
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.neonPrimary,
     },
-    heroGlowOverlay: {
+    heroCardBase: {
       position: 'absolute',
-      top: -50,
-      right: -50,
-      width: 200,
-      height: 200,
-      borderRadius: 100,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    heroGlowTop: {
+      position: 'absolute',
+      top: -80,
+      right: -80,
+      width: 240,
+      height: 240,
+      borderRadius: borderRadius.full,
       backgroundColor: colors.neonCyan,
-      opacity: 0.1,
+      opacity: 0.15,
+    },
+    heroGlowBottom: {
+      position: 'absolute',
+      bottom: -60,
+      left: -60,
+      width: 180,
+      height: 180,
+      borderRadius: borderRadius.full,
+      backgroundColor: colors.neonPurple,
+      opacity: 0.15,
+    },
+    heroGlassOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    heroBorderGlow: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: borderRadius.xxl,
+      borderWidth: 1,
+      borderColor: colors.primary + '30',
+      pointerEvents: 'none',
     },
     heroContent: {
       padding: spacing.lg,
+      position: 'relative',
+      zIndex: 1,
     },
     heroTopRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: spacing.md,
+      marginBottom: spacing.lg,
     },
-    heroBadge: {
+    heroHomeNameContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      backgroundColor: 'rgba(0, 0, 0, 0.3)',
-      borderRadius: borderRadius.lg,
+      gap: spacing.sm,
     },
-    heroBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.semibold,
-      color: colors.neonCyan,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
+    heroHomeIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.neonCyan + '20',
+      borderWidth: 1,
+      borderColor: colors.neonCyan + '30',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    heroHomeName: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+      letterSpacing: 0.5,
+    },
+    heroGreetingContainer: {
+      marginBottom: spacing.lg,
     },
     heroGreeting: {
-      fontSize: fontSize.xxl,
+      fontSize: fontSize.xxxl,
       fontWeight: fontWeight.bold,
-      color: '#FFFFFF',
-      marginBottom: spacing.xs,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+      letterSpacing: -0.5,
     },
-    heroSubtitle: {
-      fontSize: fontSize.md,
-      color: 'rgba(255, 255, 255, 0.8)',
-      marginBottom: spacing.lg,
+    heroStatusContainer: {
+      marginTop: spacing.xs,
+    },
+    heroStatusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      alignSelf: 'flex-start',
+    },
+    heroStatusBadgeSuccess: {
+      backgroundColor: colors.success + '10',
+      borderColor: colors.success + '20',
+    },
+    heroStatusBadgeAlert: {
+      backgroundColor: colors.warning + '10',
+      borderColor: colors.warning + '20',
+    },
+    heroStatusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    heroStatusText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.mutedForeground,
     },
     heroStats: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.25)',
+      backgroundColor: 'rgba(255, 255, 255, 0.03)',
       borderRadius: borderRadius.xl,
       padding: spacing.md,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.05)',
     },
     heroStatItem: {
       flex: 1,
       alignItems: 'center',
     },
-    heroStatIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    heroStatIconGradient: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.lg,
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: spacing.xs,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     heroStatValue: {
-      fontSize: fontSize.lg,
+      fontSize: fontSize.xl,
       fontWeight: fontWeight.bold,
-      color: '#FFFFFF',
+      color: colors.foreground,
+      marginBottom: spacing.xs,
     },
     heroStatLabel: {
       fontSize: fontSize.xs,
-      color: 'rgba(255, 255, 255, 0.7)',
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     heroStatDivider: {
       width: 1,
-      height: 40,
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      height: 50,
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+      marginHorizontal: spacing.sm,
     },
 
     // Quick Actions

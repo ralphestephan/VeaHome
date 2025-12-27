@@ -362,7 +362,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       humidity: Number(newRoomHumidity) || 55,
       lights: Number(newRoomLights) || 1,
       devices: [],
-      scene: 'Custom Scene',
+      scene: '', // Empty string - will be converted to null by backend
       power: '0.0kW',
       image: (newRoomImage || '').trim() || DEFAULT_ROOM_IMAGE,
       accentColor: visual.color,
