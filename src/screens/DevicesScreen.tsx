@@ -181,6 +181,9 @@ export default function DevicesScreen() {
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
       .map(h => {
         const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
+        // Use roomId from hub, ensuring it's a string
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        console.log('[DevicesScreen] Mapping climate hub:', { hubId: h.id, hubName: h.name, roomId, hasRoomId: !!h.roomId, hasRoom_id: !!h.room_id });
         return {
           id: h.id,
           name: h.name,
@@ -189,7 +192,7 @@ export default function DevicesScreen() {
           isActive: isOnline,
           value: undefined,
           unit: undefined,
-          roomId: h.roomId || '',
+          roomId: roomId, // Use the properly extracted roomId
           homeId: h.homeId,
           status: isOnline ? 'online' : 'offline',
           hubType: h.hubType,
@@ -202,52 +205,61 @@ export default function DevicesScreen() {
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
     ...securityHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
-      .map(h => ({
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'security' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
-      roomId: h.roomId || rooms[0]?.id || '',
-      homeId: h.homeId,
-      status: h.status
-    }))
+      .map(h => {
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'security' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId,
+          homeId: h.homeId,
+          status: h.status
+        };
+      })
   ];
   const utilityDevices = [
     ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
     ...utilityHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
-      .map(h => ({
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'utility' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
-      roomId: h.roomId || rooms[0]?.id || '',
-      homeId: h.homeId,
-      status: h.status
-    }))
+      .map(h => {
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'utility' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId,
+          homeId: h.homeId,
+          status: h.status
+        };
+      })
   ];
   const lightsDevices = [
     ...devices.filter(d => d.category === 'lighting' || d.type === 'light'),
     ...lightingHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
-      .map(h => ({
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'lighting' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
-      roomId: h.roomId || rooms[0]?.id || '',
-      homeId: h.homeId,
-      status: h.status
-    }))
+      .map(h => {
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'lighting' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId,
+          homeId: h.homeId,
+          status: h.status
+        };
+      })
   ];
 
   // Calculate device counts: total and online

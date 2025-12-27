@@ -259,9 +259,10 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     try {
       setLoading(true);
 
-      const [roomsRes, devicesRes] = await Promise.all([
+      const [roomsRes, devicesRes, hubsRes] = await Promise.all([
         homeApi.getRooms(homeId).catch(() => ({ data: [] })),
         hubApi.listDevices(homeId).catch(() => ({ data: [] })),
+        hubApi.listHubs(homeId).catch(() => ({ data: [] })), // Fetch hubs separately
       ]);
 
       const roomsPayload =
@@ -291,26 +292,45 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         };
       };
 
+      // Get hubs from API response (prefer API response over hook to ensure fresh data)
+      const hubsPayload =
+        (hubsRes as any)?.data?.data?.hubs ?? (hubsRes as any)?.data?.hubs ?? (hubsRes as any)?.data ?? [];
+      const hubsList = Array.isArray(hubsPayload) ? hubsPayload : [];
+      
+      // Also use hubs from hook as fallback
+      const allHubs = hubsList.length > 0 ? hubsList : (hubs || []);
+      
       // Map hubs to device format and include them in the device list
-      const hubDevices = (hubs || [])
-        .filter((h: any) => String(h.roomId || h.room_id) === String(roomId))
-        .map((h: any) => ({
-          id: String(h.id),
-          name: h.name,
-          type: h.hubType || 'airguard',
-          category: 'climate' as const,
-          isActive: h.status === 'online',
-          value: undefined,
-          unit: undefined,
-          roomId: h.roomId || h.room_id || '',
-          hubId: h.id,
-          homeId: h.homeId || h.home_id,
-          status: h.status || 'offline',
-          hubType: h.hubType,
-          serialNumber: h.serialNumber || h.serial_number,
-          metadata: h.metadata,
-          airQualityData: h.airQualityData,
-        }));
+      const hubDevices = allHubs
+        .filter((h: any) => {
+          const hubRoomId = h.roomId || h.room_id;
+          const matches = String(hubRoomId) === String(roomId);
+          console.log('[RoomDetailScreen] Checking hub:', { hubId: h.id, hubName: h.name, hubRoomId, roomId, matches });
+          return matches;
+        })
+        .map((h: any) => {
+          const roomIdValue = h.roomId || h.room_id || '';
+          console.log('[RoomDetailScreen] Mapping hub to device:', { hubId: h.id, hubName: h.name, roomId: roomIdValue });
+          return {
+            id: String(h.id),
+            name: h.name,
+            type: h.hubType || h.hub_type || 'airguard',
+            category: 'climate' as const,
+            isActive: h.status === 'online',
+            value: undefined,
+            unit: undefined,
+            roomId: roomIdValue,
+            hubId: h.id,
+            homeId: h.homeId || h.home_id,
+            status: h.status || 'offline',
+            hubType: h.hubType || h.hub_type,
+            serialNumber: h.serialNumber || h.serial_number,
+            metadata: h.metadata,
+            airQualityData: h.airQualityData,
+          };
+        });
+      
+      console.log('[RoomDetailScreen] Hub devices for room:', hubDevices.length, hubDevices.map(d => ({ id: d.id, name: d.name, roomId: d.roomId })));
 
       const baseDevices = [
         ...devicesList
@@ -331,10 +351,35 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       const enrichedDevices = await Promise.all(
         baseDevices.map(async (d: any) => {
           if (d.type !== 'airguard') return d;
-          const smartMonitorId =
-            (d.signalMappings as any)?.smartMonitorId ??
-            (d.signalMappings as any)?.smartmonitorId ??
-            1;
+          
+          // Get smartMonitorId from various sources (hubs have it in metadata or serialNumber)
+          let smartMonitorId: string | number | null = null;
+          
+          // For hubs, check metadata first
+          if (d.metadata?.smartMonitorId) {
+            smartMonitorId = d.metadata.smartMonitorId;
+          }
+          // Check signalMappings (for regular devices)
+          else if ((d.signalMappings as any)?.smartMonitorId) {
+            smartMonitorId = (d.signalMappings as any).smartMonitorId;
+          }
+          else if ((d.signalMappings as any)?.smartmonitorId) {
+            smartMonitorId = (d.signalMappings as any).smartmonitorId;
+          }
+          // Try to extract from serialNumber for hubs (e.g., "SM_1" -> 1)
+          else if (d.serialNumber && typeof d.serialNumber === 'string') {
+            const match = d.serialNumber.match(/SM_(\d+)/i);
+            if (match) {
+              smartMonitorId = parseInt(match[1], 10);
+            }
+          }
+          
+          if (!smartMonitorId) {
+            console.warn('[RoomDetailScreen] No smartMonitorId found for AirGuard device:', d.id, d.name);
+            return d;
+          }
+          
+          console.log('[RoomDetailScreen] Fetching AirGuard data for device:', d.name, 'smartMonitorId:', smartMonitorId);
           try {
             const [latestRes, statusRes] = await Promise.all([
               airguardApi.getLatest(smartMonitorId).catch(() => null),

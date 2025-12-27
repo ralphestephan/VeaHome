@@ -43,6 +43,7 @@ export interface Hub {
   name?: string;
   hub_type?: string;
   status: string;
+  room_id?: string | null;
   wifi_ssid?: string;
   wifi_connected: boolean;
   mqtt_topic?: string;
