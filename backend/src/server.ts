@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, Request, Response, Router } from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -50,7 +50,7 @@ app.use('/auth', authRoutes);
 app.use('/public/airguard', publicAirguardRoutes);
 app.use('/hub', hubRoutes);
 app.use('/hubs', hubRoutes);
-// IMPORTANT: homeRoutes must come before hubRoutes when both use /homes
+// IMPORTANT: homeRoutes must come before any hub routes at /homes
 // to avoid route conflicts (e.g., /homes/:homeId/rooms vs /homes/:hubId/rooms)
 app.use('/homes', homeRoutes);
 app.use('/homes', deviceRoutes);
@@ -60,7 +60,8 @@ app.use('/homes', scheduleRoutes);
 app.use('/homes', deviceGroupRoutes);
 app.use('/homes', automationRoutes);
 // Create a separate router for home-specific hub routes only
-// This prevents :hubId routes from conflicting with :homeId routes
+// This prevents :hubId routes (like /:hubId/rooms) from conflicting with :homeId routes
+// Only mount home-specific routes (/:homeId/hubs) at /homes, NOT hub-specific routes (/:hubId/*)
 const homeHubRoutes = Router();
 homeHubRoutes.get('/:homeId/hubs', authenticateToken, listHubs);
 homeHubRoutes.post('/:homeId/hubs', authenticateToken, createHubDirect);
