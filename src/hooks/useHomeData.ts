@@ -296,24 +296,38 @@ export const useHomeData = (homeId: string | null | undefined) => {
 
           const mappedRooms = (rawRooms || []).map((r: any) => {
             const mapped = mapRoom(r, sceneNameMap);
-            // If room doesn't have a scene assigned, check if it's affected by the globally active scene
-            if (!mapped.scene && activeSceneId) {
+            // Always check for active scene first - it takes priority over assigned scene
+            if (activeSceneId) {
               const activeScene = rawScenes.find((s: any) => String(s.id) === activeSceneId);
               if (activeScene) {
                 const scope = activeScene.scope || 'home';
+                let roomIsAffected = false;
+                
                 // If home-wide, all rooms are affected
                 if (scope === 'home' || !scope) {
-                  mapped.sceneName = activeScene.name;
+                  roomIsAffected = true;
                 } else if (scope === 'rooms') {
                   // Check if this room is in the active scene's room list
                   const roomIds = activeScene.room_ids || activeScene.roomIds || [];
-                  const roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : roomIds;
-                  if (Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === String(r.id))) {
-                    mapped.sceneName = activeScene.name;
+                  let roomIdsArray: any[] = [];
+                  try {
+                    roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : (Array.isArray(roomIds) ? roomIds : []);
+                  } catch (e) {
+                    console.warn('[useHomeData] Error parsing room_ids:', e);
+                    roomIdsArray = Array.isArray(roomIds) ? roomIds : [];
                   }
+                  roomIsAffected = Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === String(r.id));
+                }
+                
+                // If this room is affected by the active scene, use the active scene name
+                if (roomIsAffected) {
+                  mapped.sceneName = activeScene.name;
+                  // Also update scene ID to match active scene for consistency
+                  mapped.scene = String(activeScene.id);
                 }
               }
             }
+            // If no active scene affects this room, keep the scene assigned to the room (already set in mapRoom)
             return mapped;
           });
           console.log('[useHomeData] Mapped rooms:', mappedRooms.map(r => ({ id: r.id, name: r.name, scene: r.scene, sceneName: r.sceneName })));

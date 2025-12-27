@@ -128,7 +128,7 @@ export default function QuickAction({
             style={[
               styles.label,
               variant !== 'default' && styles.labelLight,
-              isActive && styles.labelActive,
+              (isActive && variant === 'default') && styles.labelActive,
             ]} 
             numberOfLines={1}
           >

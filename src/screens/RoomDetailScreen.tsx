@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -64,6 +64,7 @@ import {
   AnimatedPressable,
   Chip,
 } from '../components/ui';
+import { useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
@@ -585,68 +586,60 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
       setRoom(nextRoom);
       setDevices(enrichedDevices);
       
-      // Load active scene name - handle both UUID and corrupted object
-      if (baseRoom?.scene) {
-        try {
+      // Load active scene name - prioritize active scene over assigned scene
+      try {
+        const scenesRes = await scenesApi.listScenes(homeId);
+        const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
+        console.log('[Room Scene] Available scenes:', scenesData);
+        
+        // Filter scenes to only include those that affect this room
+        const roomIdStr = String(roomId);
+        const relevantScenes = Array.isArray(scenesData) ? scenesData.filter((s: any) => {
+          // Home-wide scenes are always relevant
+          if (s.scope === 'home' || !s.scope) return true;
+          
+          // Room-specific scenes - check if this room is included
+          if (s.scope === 'rooms') {
+            const roomIds = s.room_ids || s.roomIds || [];
+            let roomIdsArray: any[] = [];
+            try {
+              roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : (Array.isArray(roomIds) ? roomIds : []);
+            } catch (e) {
+              console.warn('[Room Scene] Error parsing room_ids:', e);
+              roomIdsArray = Array.isArray(roomIds) ? roomIds : [];
+            }
+            return Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === roomIdStr);
+          }
+          
+          return false;
+        }) : [];
+        
+        setScenes(relevantScenes);
+        
+        // FIRST: Check for globally active scene that affects this room (takes priority)
+        let activeScene = relevantScenes.find((s: any) => s.isActive === true || s.is_active === true);
+        
+        // SECOND: If no active scene, check for scene assigned to room
+        if (!activeScene && baseRoom?.scene) {
           let sceneIdToMatch = baseRoom.scene;
-          let sceneNameFromObject = null;
           
           // Check if scene is a corrupted object
           if (typeof baseRoom.scene === 'object' && (baseRoom.scene as any).id) {
             console.log('[Room Scene] Corrupted scene object detected:', baseRoom.scene);
             sceneIdToMatch = (baseRoom.scene as any).id;
-            // If object has name, extract it
-            if ((baseRoom.scene as any).name) {
-              sceneNameFromObject = (baseRoom.scene as any).name;
-            }
           }
           
-          const scenesRes = await scenesApi.listScenes(homeId);
-          const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
-          console.log('[Room Scene] Scene ID to match:', sceneIdToMatch);
-          console.log('[Room Scene] Available scenes:', scenesData);
-          
-          // Filter scenes to only include those that affect this room
-          const roomIdStr = String(roomId);
-          const relevantScenes = Array.isArray(scenesData) ? scenesData.filter((s: any) => {
-            // Home-wide scenes are always relevant
-            if (s.scope === 'home' || !s.scope) return true;
-            
-            // Room-specific scenes - check if this room is included
-            if (s.scope === 'rooms') {
-              const roomIds = s.room_ids || s.roomIds || [];
-              // Parse if string
-              const roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : roomIds;
-              return Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === roomIdStr);
-            }
-            
-            return false;
-          }) : [];
-          
-          setScenes(relevantScenes);
-          
-          // First, try to find scene by ID (scene assigned to room)
-          let activeScene = relevantScenes.find((s: any) => String(s.id) === String(sceneIdToMatch));
-          
-          // If no scene assigned to room, check for globally active scene that affects this room
-          if (!activeScene) {
-            activeScene = relevantScenes.find((s: any) => s.isActive === true || s.is_active === true);
-          }
-          
-          console.log('[Room Scene] Found scene:', activeScene);
-          if (activeScene) {
-            setActiveSceneName(activeScene.name);
-          } else if (sceneNameFromObject) {
-            // Fallback to name from corrupted object if scene not found in list
-            setActiveSceneName(sceneNameFromObject);
-          } else {
-            setActiveSceneName('');
-          }
-        } catch (err) {
-          console.log('Error loading scene name:', err);
+          activeScene = relevantScenes.find((s: any) => String(s.id) === String(sceneIdToMatch));
+        }
+        
+        console.log('[Room Scene] Found scene:', activeScene);
+        if (activeScene) {
+          setActiveSceneName(activeScene.name);
+        } else {
           setActiveSceneName('');
         }
-      } else {
+      } catch (err) {
+        console.log('Error loading scene name:', err);
         setActiveSceneName('');
       }
       

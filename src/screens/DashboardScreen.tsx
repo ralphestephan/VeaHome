@@ -274,9 +274,6 @@ export default function DashboardScreen() {
   // Get time-based scene recommendation
   const getTimeBasedScene = useCallback((scenesArray: any[]) => {
     const hour = new Date().getHours();
-    const sceneName = hour >= 5 && hour < 12 ? 'morning' : 
-                     hour >= 12 && hour < 17 ? 'afternoon' :
-                     hour >= 17 && hour < 21 ? 'evening' : 'night';
     
     // Find scene matching current time of day
     const timeScene = scenesArray.find((s: any) => {
@@ -288,6 +285,15 @@ export default function DashboardScreen() {
     });
     
     return timeScene || null;
+  }, []);
+
+  // Get time period name for display
+  const getTimePeriodName = useCallback(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 17) return 'Afternoon';
+    if (hour >= 17 && hour < 21) return 'Evening';
+    return 'Night';
   }, []);
   
   useEffect(() => {
@@ -309,17 +315,9 @@ export default function DashboardScreen() {
         const scenesArray = Array.isArray(scenesList) ? scenesList : [];
         setScenes(scenesArray);
         
-        // Find active scene (one with isActive: true or is_active: true, or assigned to a room)
-        const active = scenesArray.find((s: any) => s.isActive === true || s.is_active === true) || 
-                      (rooms.find((r: Room) => r.scene) ? 
-                        scenesArray.find((s: any) => rooms.some((r: Room) => {
-                          const roomSceneId = typeof r.scene === 'string' ? r.scene : (r.scene as any)?.id;
-                          return String(roomSceneId) === String(s.id);
-                        })) : null);
-        
-        // If no active scene, suggest time-based scene for quick actions
-        const suggestedScene = active || getTimeBasedScene(scenesArray);
-        setActiveScene(suggestedScene);
+        // Always use time-based scene for quick actions (don't use active scene)
+        const timeBasedScene = getTimeBasedScene(scenesArray);
+        setActiveScene(timeBasedScene);
       } catch (e) {
         console.error('Error loading scenes:', e);
         setScenes([]);
@@ -547,8 +545,9 @@ export default function DashboardScreen() {
         const scenesList = response.data?.scenes || response.data?.data?.scenes || response.data?.data || [];
         const scenesArray = Array.isArray(scenesList) ? scenesList : [];
         setScenes(scenesArray);
-        const updatedActive = scenesArray.find((s: any) => (s.isActive === true || s.is_active === true)) || getTimeBasedScene(scenesArray);
-        setActiveScene(updatedActive || null);
+        // Always use time-based scene for quick actions
+        const timeBasedScene = getTimeBasedScene(scenesArray);
+        setActiveScene(timeBasedScene || null);
         
         setQuickActionLoading(null);
       }
@@ -981,12 +980,12 @@ export default function DashboardScreen() {
             action={{ label: 'All Scenes', onPress: () => navigation.navigate('Scenes') }}
           />
           <View style={styles.quickActionsGrid}>
-            {/* Active Scene - always show, disabled if no active scene */}
+            {/* Time-based Scene - always show, disabled if scene doesn't exist */}
             <View style={styles.quickActionItem}>
               <QuickAction
                 icon={Moon}
-                label={activeScene ? (activeScene.name || 'Active Scene') : 'No Active Scene'}
-                sublabel={activeScene ? `${activeSceneDeviceCount} ${activeSceneDeviceCount === 1 ? 'device' : 'devices'}` : 'Create a scene first'}
+                label={activeScene ? (activeScene.name || 'Scene') : `No ${getTimePeriodName()} Scene`}
+                sublabel={activeScene ? `${activeSceneDeviceCount} ${activeSceneDeviceCount === 1 ? 'device' : 'devices'}` : `Create ${getTimePeriodName()} Scene`}
                 variant={(activeScene?.isActive === true || activeScene?.is_active === true) ? 'primary' : 'default'}
                 onPress={activeScene ? handleSceneActivate : undefined}
                 loading={quickActionLoading === 'scene'}
