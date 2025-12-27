@@ -55,12 +55,12 @@ const colorPattern = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
 
 export const homeSchemas = {
   createRoom: Joi.object({
-    name: Joi.string().required(),
-    scene: Joi.string().allow(null).optional(),
-    image: Joi.string().optional(),
-    layoutPath: Joi.string().optional(),
-    accentColor: Joi.string().pattern(colorPattern).optional(),
-    metadata: Joi.object().optional(),
+    name: Joi.string().trim().required(),
+    scene: Joi.string().allow(null, '').optional(),
+    image: Joi.string().allow('', null).optional(),
+    layoutPath: Joi.string().allow('', null).optional(),
+    accentColor: Joi.string().pattern(colorPattern).allow(null, '').optional(),
+    metadata: Joi.object().unknown(true).optional(),
   }),
   updateRoom: Joi.object({
     name: Joi.string().optional(),

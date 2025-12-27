@@ -48,14 +48,16 @@ app.use('/auth', authRoutes);
 app.use('/public/airguard', publicAirguardRoutes);
 app.use('/hub', hubRoutes);
 app.use('/hubs', hubRoutes);
-app.use('/homes', hubRoutes);  // For /homes/:homeId/hubs endpoint
-app.use('/homes', deviceRoutes);
+// IMPORTANT: homeRoutes must come before hubRoutes when both use /homes
+// to avoid route conflicts (e.g., /homes/:homeId/rooms vs /homes/:hubId/rooms)
 app.use('/homes', homeRoutes);
+app.use('/homes', deviceRoutes);
 app.use('/homes', homeMembersRoutes);
 app.use('/homes', sceneRoutes);
 app.use('/homes', scheduleRoutes);
 app.use('/homes', deviceGroupRoutes);
 app.use('/homes', automationRoutes);
+app.use('/homes', hubRoutes);  // For /homes/:homeId/hubs endpoint - must be last to avoid conflicts
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
