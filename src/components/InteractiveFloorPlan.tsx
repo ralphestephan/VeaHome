@@ -11,7 +11,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Dimensions,
   Alert,
   PanResponder,
@@ -204,7 +204,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       <G
         key={room.id}
         transform={`translate(${offset.x}, ${offset.y})`}
-        {...(isEditMode && Platform.OS !== 'web' ? panResponder.panHandlers : {})}
+        {...(isEditMode && Platform.OS !== 'web' ? panResponder.panHandlers : undefined)}
       >
         <Path
           d={room.path}
@@ -214,13 +214,18 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
           opacity={isHovered || isSelected ? 1 : 0.85}
           onPress={() => {
             if (isEditMode && fullRoom) {
-              // In edit mode, double-tap or show edit option
+              // In edit mode, open edit modal
               openEditRoomModal(fullRoom);
             } else {
               onRoomSelect(room.id);
             }
           }}
-          onPressIn={() => { if (isEditMode) draggingRoomId.current = room.id; }}
+          {...(Platform.OS !== 'web' && isEditMode ? {
+            onLongPress: () => {
+              // On mobile, long press in edit mode starts dragging
+              draggingRoomId.current = room.id;
+            },
+          } : {})}
         />
         {/* Room Labels - positioned with small offset to ensure visibility inside room */}
         <SvgText
@@ -417,33 +422,33 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
             {headerExtras ? (
               <View style={styles.headerExtras}>{headerExtras}</View>
             ) : null}
-            <TouchableOpacity style={styles.addRoomButton} onPress={handleAddRoom}>
+            <Pressable style={styles.addRoomButton} onPress={handleAddRoom}>
               <Plus size={14} color={colors.primary} />
               <Text style={styles.addRoomButtonText}>New Room</Text>
-            </TouchableOpacity>
+            </Pressable>
             {!isEditMode ? (
-              <TouchableOpacity
+              <Pressable
                 style={styles.editButton}
                 onPress={() => setIsEditMode(true)}
               >
                 <Edit2 size={16} color={colors.primary} />
                 <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : (
               <View style={styles.editActions}>
-                <TouchableOpacity
+                <Pressable
                   style={[styles.editButton, styles.cancelButton]}
                   onPress={handleCancelEdit}
                 >
                   <X size={16} color={colors.destructive || '#ef4444'} />
-                </TouchableOpacity>
-                <TouchableOpacity
+                </Pressable>
+                <Pressable
                   style={[styles.editButton, styles.saveButton]}
                   onPress={handleSaveLayout}
                 >
                   <Save size={16} color="white" />
                   <Text style={[styles.editButtonText, styles.saveButtonText]}>Save</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
           </View>
@@ -534,12 +539,12 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
                   <Text style={styles.deviceSummaryLabel}>Devices ready</Text>
                   <Text style={styles.deviceSummaryValue}>{devicesCount}</Text>
                 </View>
-                <TouchableOpacity
+                <Pressable
                   style={styles.detailsButton}
                   onPress={() => onRoomSelect(selectedRoom)}
                 >
                   <Text style={styles.detailsButtonText}>View Details</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -598,7 +603,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
             <Text style={styles.modalLabel}>Room color</Text>
             <View style={styles.colorOptionsRow}>
               {COLOR_PALETTE.map((color) => (
-                <TouchableOpacity
+                <Pressable
                   key={color}
                   style={[
                     styles.colorSwatch,
@@ -610,16 +615,16 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
                   accessibilityLabel={`Select ${color} for room color`}
                 >
                   {newRoomColor === color ? <View style={styles.colorSwatchIndicator} /> : null}
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalButtonSecondary} onPress={resetModalState}>
+              <Pressable style={styles.modalButtonSecondary} onPress={resetModalState}>
                 <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleCreateRoom}>
+              </Pressable>
+              <Pressable style={styles.modalButtonPrimary} onPress={handleCreateRoom}>
                 <Text style={styles.modalButtonPrimaryText}>Add Room</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -652,7 +657,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
             <Text style={styles.modalLabel}>Room color</Text>
             <View style={styles.colorOptionsRow}>
               {COLOR_PALETTE.map((color) => (
-                <TouchableOpacity
+                <Pressable
                   key={color}
                   style={[
                     styles.colorSwatch,
@@ -664,16 +669,16 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
                   accessibilityLabel={`Select ${color} for room color`}
                 >
                   {editRoomColor === color ? <View style={styles.colorSwatchIndicator} /> : null}
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalButtonSecondary} onPress={resetEditModalState}>
+              <Pressable style={styles.modalButtonSecondary} onPress={resetEditModalState}>
                 <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButtonPrimary} onPress={handleSaveRoomEdit}>
+              </Pressable>
+              <Pressable style={styles.modalButtonPrimary} onPress={handleSaveRoomEdit}>
                 <Text style={styles.modalButtonPrimaryText}>Save Changes</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>

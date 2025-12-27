@@ -20,6 +20,8 @@ import deviceGroupRoutes from './routes/deviceGroup.routes';
 import automationRoutes from './routes/automation.routes';
 import publicAirguardRoutes from './routes/publicAirguard.routes';
 import homeMembersRoutes from './routes/homeMembers.routes';
+import { listHubs, createHubDirect, updateHub, deleteHub } from './controllers/hub.controller';
+import { authenticateToken } from './middleware/auth';
 
 // Load environment variables
 dotenv.config();
@@ -57,7 +59,14 @@ app.use('/homes', sceneRoutes);
 app.use('/homes', scheduleRoutes);
 app.use('/homes', deviceGroupRoutes);
 app.use('/homes', automationRoutes);
-app.use('/homes', hubRoutes);  // For /homes/:homeId/hubs endpoint - must be last to avoid conflicts
+// Create a separate router for home-specific hub routes only
+// This prevents :hubId routes from conflicting with :homeId routes
+const homeHubRoutes = Router();
+homeHubRoutes.get('/:homeId/hubs', authenticateToken, listHubs);
+homeHubRoutes.post('/:homeId/hubs', authenticateToken, createHubDirect);
+homeHubRoutes.patch('/:homeId/hubs/:hubId', authenticateToken, updateHub);
+homeHubRoutes.delete('/:homeId/hubs/:hubId', authenticateToken, deleteHub);
+app.use('/homes', homeHubRoutes);
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
