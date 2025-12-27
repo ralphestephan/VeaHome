@@ -451,21 +451,32 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       )}
 
       <View style={styles.floorPlanContainer}>
-        <Svg
-          width={SVG_WIDTH * SCALE}
-          height={SVG_HEIGHT * SCALE}
-          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        >
-          {/* Grid Background */}
-          <Path
-            d="M0,0 L500,0 L500,500 L0,500 Z"
-            fill={colors.secondary}
-            opacity={0.3}
-          />
+        {roomsToRender.length === 0 && homeId ? (
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg, width: '100%' }}>
+            <Text style={{ fontSize: 16, color: colors.mutedForeground, marginBottom: spacing.sm }}>
+              No rooms yet
+            </Text>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: 'center' }}>
+              Create your first room to get started
+            </Text>
+          </View>
+        ) : (
+          <Svg
+            width={SVG_WIDTH * SCALE}
+            height={SVG_HEIGHT * SCALE}
+            viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+          >
+            {/* Grid Background */}
+            <Path
+              d="M0,0 L500,0 L500,500 L0,500 Z"
+              fill={colors.secondary}
+              opacity={0.3}
+            />
 
-          {/* Render all rooms */}
-          {roomsToRender.map(renderRoom)}
-        </Svg>
+            {/* Render all rooms */}
+            {roomsToRender.map(renderRoom)}
+          </Svg>
+        )}
       </View>
 
       {/* Selected Room Info */}

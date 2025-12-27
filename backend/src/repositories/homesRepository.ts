@@ -46,6 +46,30 @@ export async function saveModel3dUrl(homeId: string, model3dUrl: string | null) 
   await query('UPDATE homes SET model3d_url = $2 WHERE id = $1', [homeId, model3dUrl]);
 }
 
+export async function updateHome(homeId: string, updates: { name?: string; model3dUrl?: string }): Promise<Home> {
+  const setClauses: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 2;
+
+  if (updates.name !== undefined) {
+    setClauses.push(`name = $${paramIndex++}`);
+    values.push(updates.name);
+  }
+  if (updates.model3dUrl !== undefined) {
+    setClauses.push(`model3d_url = $${paramIndex++}`);
+    values.push(updates.model3dUrl);
+  }
+
+  if (setClauses.length === 0) {
+    return getHomeById(homeId) as Promise<Home>;
+  }
+
+  setClauses.push('updated_at = CURRENT_TIMESTAMP');
+  const queryStr = `UPDATE homes SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`;
+  const { rows } = await query(queryStr, [homeId, ...values]);
+  return rows[0] as Home;
+}
+
 export async function deleteHome(homeId: string) {
   console.log('[REPO] deleteHome called for homeId:', homeId);
   

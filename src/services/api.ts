@@ -103,6 +103,7 @@ export const HubApi = (client: AxiosInstance) => ({
 // Rooms & energy
 export const HomeApi = (client: AxiosInstance) => ({
   getHome: (homeId: string) => client.get(`/homes/${homeId}`),
+  updateHome: (homeId: string, payload: any) => client.patch(`/homes/${homeId}`, payload),
   deleteHome: (homeId: string) => client.delete(`/homes/${homeId}`),
   getRooms: (homeId: string) => client.get(`/homes/${homeId}/rooms`),
   createRoom: (homeId: string, payload: any) => client.post(`/homes/${homeId}/rooms`, payload),

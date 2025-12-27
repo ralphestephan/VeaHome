@@ -135,6 +135,13 @@ export default function DevicesScreen() {
     onDeviceUpdate: () => refresh(),
   });
 
+  // Auto-refresh when screen gains focus (e.g., after adding a device)
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refresh(), refreshHubs()]);

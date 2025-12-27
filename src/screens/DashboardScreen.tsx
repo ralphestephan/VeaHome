@@ -251,11 +251,13 @@ export default function DashboardScreen() {
         return room;
       }
       const created = await createRoom(room);
-      await refresh(); // Refresh to sync with backend
+      showToast('Room created successfully!', { type: 'success' });
       return created;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Room creation error:', error);
-      return room;
+      const message = error?.message || 'Failed to create room';
+      showToast(message, { type: 'error' });
+      throw error;
     }
   };
 
@@ -619,6 +621,7 @@ export default function DashboardScreen() {
                 showToolbar={false}
                 onEditModeChange={setIsFloorPlanEditing}
                 showSelectedRoomInfo={false}
+                homeId={homeId}
               />
             ) : (
               <NeonCard style={styles.model3dCard}>

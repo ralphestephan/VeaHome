@@ -366,37 +366,39 @@ export const useHomeData = (homeId: string | null | undefined) => {
       setRooms((prev) => [...prev, room]);
       return room;
     }
-
     const effectiveHomeId = homeId || currentHomeId;
     if (!effectiveHomeId) {
-      setRooms((prev) => [...prev, room]);
-      return room;
+      throw new Error('No home selected');
     }
 
-    try {
-      const payload = {
-        name: room.name,
-        scene: room.scene,
-        image: room.image,
-        layoutPath: room.layoutPath,
-        accentColor: room.accentColor,
-        metadata: {
-          temperature: room.temperature,
-          humidity: room.humidity,
-          lights: room.lights,
-        },
-      };
+    const payload = {
+      name: room.name,
+      scene: room.scene,
+      image: room.image,
+      layoutPath: room.layoutPath,
+      accentColor: room.accentColor,
+      metadata: {
+        temperature: room.temperature,
+        humidity: room.humidity,
+        lights: room.lights,
+      },
+    };
 
+    try {
       const res = await homeApi.createRoom(effectiveHomeId, payload);
       const createdRaw = unwrap<any>(res, 'room');
-      const created = createdRaw ? mapRoom(createdRaw) : room;
+      const created = createdRaw ? mapRoom(createdRaw) : null;
 
-      setRooms((prev) => [...prev, created]);
+      if (!created) {
+        throw new Error('Invalid response from createRoom');
+      }
+
+      // Refresh to ensure we have canonical data from the backend
+      await refresh();
       return created;
     } catch (e) {
-      setRooms((prev) => [...prev, room]);
-      console.warn('Room creation API failed. Showing temporary room locally.');
-      return room;
+      console.error('[useHomeData] createRoom failed:', e);
+      throw e;
     }
   }, [currentHomeId, homeApi, homeId, isDemoMode]);
 

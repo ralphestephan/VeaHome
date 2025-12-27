@@ -5,6 +5,7 @@ import {
   getHomesByUserId,
   createHome as createHomeRecord,
   getHomeById,
+  updateHome as updateHomeRecord,
   updateHomeLayout as saveHomeLayout,
   deleteHome as deleteHomeRecord,
 } from '../repositories/homesRepository';
@@ -78,6 +79,28 @@ export async function getHome(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Get home error:', error);
     return errorResponse(res, error.message || 'Failed to get home', 500);
+  }
+}
+
+export async function updateHome(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId } = req.params;
+    const { name, model3dUrl } = req.body;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    if (!name && !model3dUrl) {
+      return errorResponse(res, 'At least one field (name or model3dUrl) is required', 400);
+    }
+
+    const updated = await updateHomeRecord(home.id, { name, model3dUrl });
+    return successResponse(res, { home: updated });
+  } catch (error: any) {
+    console.error('Update home error:', error);
+    return errorResponse(res, error.message || 'Failed to update home', 500);
   }
 }
 
