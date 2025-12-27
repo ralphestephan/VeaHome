@@ -176,16 +176,39 @@ export async function activateScene(req: Request, res: Response) {
       const allHubs = await getHubsByHomeId(home.id);
       
       // Map hubs to device format for processing
-      const hubDevices = allHubs.map((h: any) => ({
-        id: h.id,
-        type: h.hub_type || 'airguard',
-        room_id: h.room_id,
-        home_id: h.home_id,
-        metadata: h.metadata,
-        signal_mappings: h.metadata,
-        mqtt_topic: h.mqtt_topic,
-        hub_id: h.id,
-      }));
+      const hubDevices = allHubs.map((h: any) => {
+        // Parse metadata if it's a string
+        let metadata = h.metadata;
+        if (typeof metadata === 'string') {
+          try {
+            metadata = JSON.parse(metadata);
+          } catch (e) {
+            metadata = {};
+          }
+        }
+        
+        // Parse signal_mappings if it exists
+        let signalMappings = h.signal_mappings || metadata;
+        if (typeof signalMappings === 'string') {
+          try {
+            signalMappings = JSON.parse(signalMappings);
+          } catch (e) {
+            signalMappings = metadata;
+          }
+        }
+        
+        return {
+          id: h.id,
+          type: (h.hub_type === 'airguard' || h.hubType === 'airguard') ? 'airguard' : (h.hub_type || 'airguard'),
+          room_id: h.room_id,
+          home_id: h.home_id,
+          metadata: metadata || {},
+          signal_mappings: signalMappings || metadata || {},
+          mqtt_topic: h.mqtt_topic,
+          hub_id: h.id,
+          serial_number: h.serial_number,
+        };
+      });
       
       // Combine devices and hubs
       const allDevicesIncludingHubs = [...allDevices, ...hubDevices];
@@ -265,22 +288,58 @@ async function applyStateToDevice(device: any, state: any, homeId: string, scene
   await updateDevice(device.id, normalized.update);
 
   // Handle AirGuard buzzer control via MQTT
-  if (device.type === 'airguard' && normalized.command.action?.startsWith('BUZZER_')) {
-    const metadata = device.metadata as any;
-    const signalMappings = device.signal_mappings as any;
-    const smartMonitorId = metadata?.smartMonitorId || 
-                          signalMappings?.smartMonitorId || 
-                          signalMappings?.smartmonitorId;
+  const isAirguard = device.type === 'airguard' || 
+                     (device as any).hub_type === 'airguard' ||
+                     (device as any).hubType === 'airguard';
+  
+  if (isAirguard && normalized.command.action?.startsWith('BUZZER_')) {
+    const metadata = device.metadata as any || {};
+    const signalMappings = device.signal_mappings as any || {};
+    
+    // Try multiple ways to get smartMonitorId
+    let smartMonitorId = metadata?.smartMonitorId || 
+                        signalMappings?.smartMonitorId || 
+                        signalMappings?.smartmonitorId ||
+                        metadata?.smartmonitorId;
+    
+    // If still not found, try to extract from serial number (e.g., "SM_1" -> 1)
+    if (!smartMonitorId && (device as any).serial_number) {
+      const match = String((device as any).serial_number).match(/SM[_-]?(\d+)/i);
+      if (match) {
+        smartMonitorId = match[1];
+      }
+    }
+    
+    // If still not found, try device ID as fallback (if it's numeric)
+    if (!smartMonitorId && /^\d+$/.test(String(device.id))) {
+      smartMonitorId = device.id;
+    }
+    
+    // Last resort: try to get from hub metadata if device is a hub
+    if (!smartMonitorId && (device as any).hub_id === device.id) {
+      // This is a hub device, try to get from hub metadata
+      const { getHubById } = await import('../repositories/hubsRepository');
+      try {
+        const hub = await getHubById(device.id);
+        if (hub) {
+          const hubMetadata = typeof hub.metadata === 'string' ? JSON.parse(hub.metadata) : (hub.metadata || {});
+          smartMonitorId = hubMetadata?.smartMonitorId || hubMetadata?.smartmonitorId;
+        }
+      } catch (e) {
+        console.warn(`[Scene] Error fetching hub for buzzer control:`, e);
+      }
+    }
     
     if (!smartMonitorId) {
-      console.warn(`[Scene] No smartMonitorId found for AirGuard device ${device.id}`);
-      return;
+      console.warn(`[Scene] No smartMonitorId found for AirGuard device ${device.id}. Metadata:`, metadata, 'SignalMappings:', signalMappings, 'Serial:', (device as any).serial_number);
+      // Still try to publish with device ID as fallback
+      smartMonitorId = device.id;
     }
     
     const buzzerState = normalized.command.action === 'BUZZER_ON' ? 'ON' : 'OFF';
     const topic = `vealive/smartmonitor/${smartMonitorId}/command/buzzer`;
     publishCommand(topic, { state: buzzerState });
-    console.log(`[Scene] Published to ${topic}: ${buzzerState}`);
+    console.log(`[Scene] Published buzzer command to ${topic}: ${buzzerState} for device ${device.id} (smartMonitorId: ${smartMonitorId})`);
   } else {
     // Regular device MQTT control
     const mqttTopic = device.mqtt_topic || `hubs/${device.hub_id}`;

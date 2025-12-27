@@ -605,7 +605,15 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           const scenesData = (scenesRes?.data?.data?.scenes ?? scenesRes?.data?.scenes ?? scenesRes?.data?.data ?? scenesRes?.data) || [];
           console.log('[Room Scene] Scene ID to match:', sceneIdToMatch);
           console.log('[Room Scene] Available scenes:', scenesData);
-          const activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(sceneIdToMatch)) : null;
+          
+          // First, try to find scene by ID (scene assigned to room)
+          let activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(sceneIdToMatch)) : null;
+          
+          // If no scene assigned to room, check for globally active scene
+          if (!activeScene) {
+            activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => s.isActive === true || s.is_active === true) : null;
+          }
+          
           console.log('[Room Scene] Found scene:', activeScene);
           if (activeScene) {
             setActiveSceneName(activeScene.name);

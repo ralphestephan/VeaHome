@@ -309,8 +309,8 @@ export default function DashboardScreen() {
         const scenesArray = Array.isArray(scenesList) ? scenesList : [];
         setScenes(scenesArray);
         
-        // Find active scene (one with isActive: true, or assigned to a room)
-        const active = scenesArray.find((s: any) => s.isActive === true) || 
+        // Find active scene (one with isActive: true or is_active: true, or assigned to a room)
+        const active = scenesArray.find((s: any) => s.isActive === true || s.is_active === true) || 
                       (rooms.find((r: Room) => r.scene) ? 
                         scenesArray.find((s: any) => rooms.some((r: Room) => {
                           const roomSceneId = typeof r.scene === 'string' ? r.scene : (r.scene as any)?.id;
@@ -657,9 +657,29 @@ export default function DashboardScreen() {
   // Get active scene device count
   const activeSceneDeviceCount = useMemo(() => {
     if (!activeScene) return 0;
+    
+    // Check for new format (deviceTypeRules)
+    if (activeScene.deviceTypeRules || activeScene.device_type_rules) {
+      const rules = activeScene.deviceTypeRules || activeScene.device_type_rules || [];
+      let totalDevices = 0;
+      
+      rules.forEach((rule: any) => {
+        if (rule.mode === 'specific' && rule.deviceIds) {
+          totalDevices += rule.deviceIds.length;
+        } else if (rule.mode === 'all') {
+          // Count all devices of this type
+          const typeDevices = devices.filter((d: Device) => d.type === rule.type);
+          totalDevices += typeDevices.length;
+        }
+      });
+      
+      return totalDevices;
+    }
+    
+    // Fallback to old format (deviceStates)
     const deviceStates = activeScene.deviceStates || activeScene.device_states || {};
     return Object.keys(deviceStates).length;
-  }, [activeScene]);
+  }, [activeScene, devices]);
   
   const avgTemperature = rooms.length
     ? rooms.reduce((sum: number, room: Room) => sum + (room.temperature || 0), 0) / rooms.length
