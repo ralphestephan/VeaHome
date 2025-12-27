@@ -148,6 +148,32 @@ export async function deleteScene(req: Request, res: Response) {
   }
 }
 
+export async function deactivateScene(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+    const { homeId, sceneId } = req.params;
+
+    const home = await ensureHomeAccess(res, homeId, userId);
+    if (!home) return;
+
+    const scene = await getSceneById(sceneId);
+    if (!scene || scene.home_id !== home.id) {
+      return errorResponse(res, 'Scene not found', 404);
+    }
+
+    await deactivateScenes(home.id);
+
+    return successResponse(res, {
+      message: 'Scene deactivated successfully',
+      sceneId,
+    });
+  } catch (error: any) {
+    console.error('Deactivate scene error:', error);
+    return errorResponse(res, error.message || 'Failed to deactivate scene', 500);
+  }
+}
+
 export async function activateScene(req: Request, res: Response) {
   try {
     const authReq = req as AuthRequest;

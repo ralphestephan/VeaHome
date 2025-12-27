@@ -527,8 +527,18 @@ export default function DashboardScreen() {
         const client = getApiClient(async () => token);
         const scenesApi = ScenesApi(client);
         
-        await scenesApi.activateScene(homeId, sceneId);
-        showToast(`${activeScene.name} activated`, { type: 'success' });
+        // Check if scene is currently active
+        const isCurrentlyActive = activeScene.isActive === true || activeScene.is_active === true;
+        
+        if (isCurrentlyActive) {
+          // Deactivate scene
+          await scenesApi.deactivateScene(homeId, sceneId);
+          showToast(`${activeScene.name} deactivated`, { type: 'info' });
+        } else {
+          // Activate scene
+          await scenesApi.activateScene(homeId, sceneId);
+          showToast(`${activeScene.name} activated`, { type: 'success' });
+        }
         
         // Refresh scenes and home data to update UI
         await refresh();
@@ -537,8 +547,8 @@ export default function DashboardScreen() {
         const scenesList = response.data?.scenes || response.data?.data?.scenes || response.data?.data || [];
         const scenesArray = Array.isArray(scenesList) ? scenesList : [];
         setScenes(scenesArray);
-        const updatedActive = scenesArray.find((s: any) => s.id === sceneId);
-        setActiveScene(updatedActive || activeScene);
+        const updatedActive = scenesArray.find((s: any) => (s.isActive === true || s.is_active === true)) || getTimeBasedScene(scenesArray);
+        setActiveScene(updatedActive || null);
         
         setQuickActionLoading(null);
       }
@@ -546,7 +556,7 @@ export default function DashboardScreen() {
       console.error('Scene activation error:', error);
       console.error('Scene activation error response:', error?.response?.data);
       setQuickActionLoading(null);
-      showToast(error?.response?.data?.message || 'Failed to activate scene', { type: 'error' });
+      showToast(error?.response?.data?.message || 'Failed to toggle scene', { type: 'error' });
     }
   };
 
@@ -977,10 +987,11 @@ export default function DashboardScreen() {
                 icon={Moon}
                 label={activeScene ? (activeScene.name || 'Active Scene') : 'No Active Scene'}
                 sublabel={activeScene ? `${activeSceneDeviceCount} ${activeSceneDeviceCount === 1 ? 'device' : 'devices'}` : 'Create a scene first'}
-                variant="default"
+                variant={(activeScene?.isActive === true || activeScene?.is_active === true) ? 'primary' : 'default'}
                 onPress={activeScene ? handleSceneActivate : undefined}
                 loading={quickActionLoading === 'scene'}
                 disabled={!activeScene}
+                isActive={activeScene?.isActive === true || activeScene?.is_active === true}
               />
             </View>
             

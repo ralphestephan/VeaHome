@@ -50,7 +50,12 @@ import {
   UserX,
   BedDouble,
   Briefcase,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Thermometer,
+  Lock,
+  Camera,
+  Speaker,
+  Power,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import Header from '../components/Header';
@@ -59,8 +64,8 @@ import { useToast } from '../components/Toast';
 // Icon mapping for scenes
 const sceneIconMap: Record<string, LucideIcon> = {
   'weather-sunset-up': Sun,
-  'sun': Sun,
-  'weather-sunset': Sun,
+  'sun': Clock,
+  'weather-sunset': UtensilsCrossed,
   'weather-night': Moon,
   'movie': Film,
   'party-popper': PartyPopper,
@@ -92,6 +97,20 @@ const sceneIconMap: Record<string, LucideIcon> = {
   'power': Zap,
   'Sun': Sun,
   'Moon': Moon,
+};
+
+// Icon mapping for device types in scene actions
+const deviceTypeIconMap: Record<string, LucideIcon> = {
+  light: Lightbulb,
+  ac: Thermometer,
+  thermostat: Thermometer,
+  airguard: Wind,
+  fan: Fan,
+  lock: Lock,
+  camera: Camera,
+  tv: Tv,
+  speaker: Speaker,
+  music: Music,
 };
 
 interface Scene {
@@ -338,26 +357,23 @@ export default function ScenesScreen() {
       const scene = scenes.find(s => s.id === id);
       const isCurrentlyActive = scene?.isActive === true || scene?.is_active === true;
       
-      if (scene && !isCurrentlyActive) {
+      if (scene && isCurrentlyActive) {
+        // Deactivate scene
+        await scenesApi.deactivateScene(homeId, id);
+        showToast(`"${scene.name}" deactivated`, { type: 'info' });
+      } else if (scene) {
         // Activate scene
         await scenesApi.activateScene(homeId, id);
         showToast(`"${scene.name}" activated`, { type: 'success' });
-        
-        // Refresh scenes to get updated state from backend
-        await loadScenes();
-        // Also refresh home data to update rooms with active scene
-        await refreshHomeData();
-        // Refresh scenes one more time to ensure sync
-        await new Promise(resolve => setTimeout(resolve, 300));
-        await loadScenes();
-      } else if (scene) {
-        showToast(`"${scene.name}" is already active`, { type: 'info' });
-        // Still refresh to ensure UI is in sync
-        await loadScenes();
-      } else {
-        // Scene not found, refresh to get latest data
-        await loadScenes();
       }
+      
+      // Refresh scenes to get updated state from backend
+      await loadScenes();
+      // Also refresh home data to update rooms with active scene
+      await refreshHomeData();
+      // Refresh scenes one more time to ensure sync
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await loadScenes();
     } catch (e: any) {
       console.error('[ScenesScreen] Scene activation error:', e);
       console.error('[ScenesScreen] Error response:', e?.response?.data);
@@ -502,26 +518,95 @@ export default function ScenesScreen() {
                       </Text>
                     </View>
                   </View>
-                  <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => handleEditScene(scene.id)}
-                  >
-                    <Edit size={16} color="white" />
-                  </TouchableOpacity>
+                  <View style={styles.activeSceneActions}>
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={() => toggleScene(scene.id)}
+                    >
+                      <Power size={16} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={() => handleEditScene(scene.id)}
+                    >
+                      <Edit size={16} color="white" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <View style={styles.activeSceneControls}>
-                  <View style={styles.controlItem}>
-                    <Lightbulb size={16} color="white" />
-                    <Text style={styles.controlText}>Lights: 50%</Text>
-                  </View>
-                  <View style={styles.controlItem}>
-                    <Fan size={16} color="white" />
-                    <Text style={styles.controlText}>Temp: 23°C</Text>
-                  </View>
-                  <View style={styles.controlItem}>
-                    <Music size={16} color="white" />
-                    <Text style={styles.controlText}>Music: On</Text>
-                  </View>
+                  {(() => {
+                    // Extract actions from deviceTypeRules or deviceStates
+                    const actions: Array<{ type: string; icon: LucideIcon; label: string }> = [];
+                    
+                    if (scene.deviceTypeRules || scene.device_type_rules) {
+                      const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                      rules.forEach((rule: any) => {
+                        const IconComponent = deviceTypeIconMap[rule.type] || Lightbulb;
+                        let label = '';
+                        
+                        if (rule.state) {
+                          if (rule.type === 'light' && typeof rule.state.value === 'number') {
+                            label = `Lights: ${rule.state.value}%`;
+                          } else if ((rule.type === 'ac' || rule.type === 'thermostat') && typeof rule.state.value === 'number') {
+                            label = `Temp: ${rule.state.value}°C`;
+                          } else if (rule.type === 'airguard' && typeof rule.state.buzzer === 'boolean') {
+                            label = `Buzzer: ${rule.state.buzzer ? 'On' : 'Off'}`;
+                          } else if (typeof rule.state.isActive === 'boolean') {
+                            const typeName = rule.type.charAt(0).toUpperCase() + rule.type.slice(1);
+                            label = `${typeName}: ${rule.state.isActive ? 'On' : 'Off'}`;
+                          } else if (rule.type === 'lock' && typeof rule.state.isActive === 'boolean') {
+                            label = `Lock: ${rule.state.isActive ? 'Locked' : 'Unlocked'}`;
+                          }
+                        }
+                        
+                        if (label) {
+                          actions.push({ type: rule.type, icon: IconComponent, label });
+                        }
+                      });
+                    } else if (scene.device_states || scene.deviceStates) {
+                      const deviceStates = scene.device_states || scene.deviceStates || {};
+                      Object.entries(deviceStates).forEach(([deviceId, state]: [string, any]) => {
+                        // Try to find device type from devices list
+                        const device = devices?.find((d: any) => d.id === deviceId);
+                        const deviceType = device?.type || 'light';
+                        const IconComponent = deviceTypeIconMap[deviceType] || Lightbulb;
+                        let label = '';
+                        
+                        if (deviceType === 'light' && typeof state.value === 'number') {
+                          label = `Lights: ${state.value}%`;
+                        } else if ((deviceType === 'ac' || deviceType === 'thermostat') && typeof state.value === 'number') {
+                          label = `Temp: ${state.value}°C`;
+                        } else if (deviceType === 'airguard' && typeof state.buzzer === 'boolean') {
+                          label = `Buzzer: ${state.buzzer ? 'On' : 'Off'}`;
+                        } else if (typeof state.isActive === 'boolean') {
+                          const typeName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1);
+                          label = `${typeName}: ${state.isActive ? 'On' : 'Off'}`;
+                        }
+                        
+                        if (label && !actions.find(a => a.type === deviceType)) {
+                          actions.push({ type: deviceType, icon: IconComponent, label });
+                        }
+                      });
+                    }
+                    
+                    // Limit to first 3 actions for display
+                    const displayActions = actions.slice(0, 3);
+                    
+                    if (displayActions.length === 0) {
+                      return (
+                        <View style={styles.controlItem}>
+                          <Text style={styles.controlText}>No actions configured</Text>
+                        </View>
+                      );
+                    }
+                    
+                    return displayActions.map((action, index) => (
+                      <View key={index} style={styles.controlItem}>
+                        {React.createElement(action.icon, { size: 16, color: "white" })}
+                        <Text style={styles.controlText}>{action.label}</Text>
+                      </View>
+                    ));
+                  })()}
                 </View>
               </LinearGradient>
             ))}

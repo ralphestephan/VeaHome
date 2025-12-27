@@ -4,7 +4,8 @@ import {
   createScene, 
   updateScene, 
   deleteScene, 
-  activateScene 
+  activateScene,
+  deactivateScene
 } from '../controllers/scene.controller';
 import { authenticateToken } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -17,5 +18,6 @@ router.post('/:homeId/scenes', authenticateToken, validate(sceneSchemas.createSc
 router.put('/:homeId/scenes/:sceneId', authenticateToken, validate(sceneSchemas.updateScene), updateScene);
 router.delete('/:homeId/scenes/:sceneId', authenticateToken, deleteScene);
 router.put('/:homeId/scenes/:sceneId/activate', authenticateToken, activateScene);
+router.put('/:homeId/scenes/:sceneId/deactivate', authenticateToken, deactivateScene);
 
 export default router;

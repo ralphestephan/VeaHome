@@ -125,6 +125,7 @@ export const ScenesApi = (client: AxiosInstance) => ({
   updateScene: (homeId: string, sceneId: string, payload: any) => client.put(`/homes/${homeId}/scenes/${sceneId}`, payload),
   deleteScene: (homeId: string, sceneId: string) => client.delete(`/homes/${homeId}/scenes/${sceneId}`),
   activateScene: (homeId: string, sceneId: string) => client.put(`/homes/${homeId}/scenes/${sceneId}/activate`, {}),
+  deactivateScene: (homeId: string, sceneId: string) => client.put(`/homes/${homeId}/scenes/${sceneId}/deactivate`, {}),
 });
 
 // Schedules

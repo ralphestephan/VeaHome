@@ -42,6 +42,8 @@ import {
   Tv,
   Speaker,
   ShieldCheck,
+  Clock,
+  Coffee,
 } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -68,8 +70,8 @@ type RouteProp = {
 
 const SCENE_ICONS = [
   { id: 'weather-sunset-up', name: 'Sunrise', icon: Sun },
-  { id: 'sun', name: 'Afternoon', icon: Sun },
-  { id: 'weather-sunset', name: 'Evening', icon: Sun },
+  { id: 'sun', name: 'Afternoon', icon: Clock },
+  { id: 'weather-sunset', name: 'Evening', icon: UtensilsCrossed },
   { id: 'weather-night', name: 'Night', icon: Moon },
   { id: 'movie', name: 'Movie', icon: Film },
   { id: 'party-popper', name: 'Party', icon: PartyPopper },

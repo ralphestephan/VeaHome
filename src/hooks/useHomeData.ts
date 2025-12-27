@@ -278,17 +278,44 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const rawHubs = unwrap<any[]>(hubsRes, 'hubs');
           const rawScenes = unwrap<any[]>(scenesRes, 'scenes');
 
-          // Build scene ID -> name map
+          // Build scene ID -> name map and find active scene
           const sceneNameMap = new Map<string, string>();
+          let activeSceneId: string | null = null;
           (rawScenes || []).forEach((scene: any) => {
             if (scene.id && scene.name) {
               sceneNameMap.set(String(scene.id), scene.name);
             }
+            // Find globally active scene
+            if ((scene.isActive === true || scene.is_active === true) && !activeSceneId) {
+              activeSceneId = String(scene.id);
+            }
           });
           console.log('[useHomeData] Scene name map:', Array.from(sceneNameMap.entries()));
+          console.log('[useHomeData] Active scene ID:', activeSceneId);
           console.log('[useHomeData] Raw rooms before mapping:', rawRooms.map((r: any) => ({ id: r.id, name: r.name, scene: r.scene })));
 
-          const mappedRooms = (rawRooms || []).map((r: any) => mapRoom(r, sceneNameMap));
+          const mappedRooms = (rawRooms || []).map((r: any) => {
+            const mapped = mapRoom(r, sceneNameMap);
+            // If room doesn't have a scene assigned, check if it's affected by the globally active scene
+            if (!mapped.scene && activeSceneId) {
+              const activeScene = rawScenes.find((s: any) => String(s.id) === activeSceneId);
+              if (activeScene) {
+                const scope = activeScene.scope || 'home';
+                // If home-wide, all rooms are affected
+                if (scope === 'home' || !scope) {
+                  mapped.sceneName = activeScene.name;
+                } else if (scope === 'rooms') {
+                  // Check if this room is in the active scene's room list
+                  const roomIds = activeScene.room_ids || activeScene.roomIds || [];
+                  const roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : roomIds;
+                  if (Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === String(r.id))) {
+                    mapped.sceneName = activeScene.name;
+                  }
+                }
+              }
+            }
+            return mapped;
+          });
           console.log('[useHomeData] Mapped rooms:', mappedRooms.map(r => ({ id: r.id, name: r.name, scene: r.scene, sceneName: r.sceneName })));
           const mappedDevices = (rawDevices || []).map(mapDevice);
           
