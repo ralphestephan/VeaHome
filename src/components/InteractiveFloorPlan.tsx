@@ -114,7 +114,10 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
     return [...baseRooms, ...extras];
   }, [rooms, localRooms]);
 
-  // Use real rooms if provided, otherwise fallback to roomsData
+  // Use real rooms if provided. If a `homeId` is provided we should NOT
+  // fallback to the demo `roomsData` (that causes the default layout to
+  // appear after a home is deleted). Only fallback to `roomsData` when no
+  // `homeId` is supplied (for standalone/demo usage).
   const roomsToRender = combinedRooms.length > 0
     ? combinedRooms.map((room, index) => {
         const visual = roomVisuals[room.id] || {
@@ -135,7 +138,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
           image: room.image,
         } as RoomData;
       })
-    : Object.values(roomsData);
+    : (homeId ? [] : Object.values(roomsData));
 
   useEffect(() => {
     if (combinedRooms.length === 0) return;
