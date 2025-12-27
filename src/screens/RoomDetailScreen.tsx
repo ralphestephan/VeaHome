@@ -219,6 +219,124 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
     if (homeId) loadScenes();
   }, [roomId, homeId]);
 
+  // Poll AirGuard data for live stats updates
+  useEffect(() => {
+    if (isDemoMode || !homeId || !token) return;
+    
+    const airguardDevices = devices.filter(d => d.type === 'airguard');
+    if (airguardDevices.length === 0) return;
+
+    const pollAirguardData = async () => {
+      try {
+        const updatedDevices = await Promise.all(
+          airguardDevices.map(async (d: any) => {
+            // Get smartMonitorId
+            let smartMonitorId: string | number | null = null;
+            if (d.metadata?.smartMonitorId) {
+              smartMonitorId = d.metadata.smartMonitorId;
+            } else if ((d.signalMappings as any)?.smartMonitorId) {
+              smartMonitorId = (d.signalMappings as any).smartMonitorId;
+            } else if (d.serialNumber && typeof d.serialNumber === 'string') {
+              const match = d.serialNumber.match(/SM_(\d+)/i);
+              if (match) smartMonitorId = parseInt(match[1], 10);
+            }
+            
+            if (!smartMonitorId) return d;
+
+            try {
+              const [latestRes, statusRes] = await Promise.all([
+                airguardApi.getLatest(smartMonitorId).catch(() => null),
+                airguardApi.getStatus(smartMonitorId).catch(() => null),
+              ]);
+
+              const latest = (latestRes as any)?.data?.data?.data ?? (latestRes as any)?.data?.data ?? (latestRes as any)?.data;
+              const status = (statusRes as any)?.data?.data?.data ?? (statusRes as any)?.data?.data ?? (statusRes as any)?.data;
+              const isOnline = status?.online ?? false;
+
+              if (!latest) return { ...d, isOnline, isActive: isOnline };
+
+              const toNum = (v: any): number | undefined => {
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+                if (typeof v === 'string') {
+                  const n = Number(v);
+                  return Number.isFinite(n) ? n : undefined;
+                }
+                return undefined;
+              };
+
+              const temperature = toNum(latest.temperature);
+              const humidity = toNum(latest.humidity);
+              const aqi = toNum(latest.aqi);
+              const pm25 = toNum(latest.pm25 ?? latest.dust);
+              const dust = toNum(latest.dust);
+              const mq2 = toNum(latest.mq2);
+              const alert = !!latest.alert;
+              const alertFlags = toNum(latest.alertFlags) ?? 0;
+
+              const hasAnyData = temperature !== undefined || humidity !== undefined || 
+                                 aqi !== undefined || dust !== undefined || mq2 !== undefined;
+
+              return {
+                ...d,
+                isOnline,
+                isActive: isOnline,
+                airQualityData: hasAnyData
+                  ? {
+                      temperature: temperature ?? 0,
+                      humidity: humidity ?? 0,
+                      aqi: aqi ?? dust ?? 0,
+                      pm25: pm25 ?? dust,
+                      dust,
+                      mq2,
+                      alert,
+                      alertFlags,
+                    }
+                  : d.airQualityData,
+                alarmMuted: !latest.buzzerEnabled,
+              };
+            } catch {
+              return { ...d, isOnline: false };
+            }
+          })
+        );
+
+        // Update devices with new data
+        setDevices(prevDevices => {
+          const updated = prevDevices.map(prevD => {
+            const updatedD = updatedDevices.find(ud => ud.id === prevD.id);
+            return updatedD || prevD;
+          });
+          return updated;
+        });
+
+        // Update room stats from AirGuard data
+        const airguard = updatedDevices.find((d: any) => d.type === 'airguard' && d.airQualityData);
+        if (airguard?.airQualityData) {
+          setRoom((prevRoom: any) => {
+            if (!prevRoom) return prevRoom;
+            return {
+              ...prevRoom,
+              temperature: airguard.airQualityData.temperature ?? prevRoom.temperature,
+              humidity: airguard.airQualityData.humidity ?? prevRoom.humidity,
+              airQuality: airguard.airQualityData.aqi ?? prevRoom.airQuality,
+              pm25: airguard.airQualityData.pm25 ?? prevRoom.pm25,
+              mq2: airguard.airQualityData.mq2 ?? prevRoom.mq2,
+              alertFlags: airguard.airQualityData.alertFlags ?? prevRoom.alertFlags,
+              alert: airguard.airQualityData.alert ?? prevRoom.alert,
+            };
+          });
+        }
+      } catch (error) {
+        console.error('[RoomDetailScreen] Error polling AirGuard data:', error);
+      }
+    };
+
+    // Poll immediately, then every 2 seconds
+    pollAirguardData();
+    const interval = setInterval(pollAirguardData, 2000);
+    return () => clearInterval(interval);
+  }, [devices, homeId, token, isDemoMode, airguardApi]);
+
   const loadScenes = async () => {
     if (!homeId || isDemoMode) return;
     try {

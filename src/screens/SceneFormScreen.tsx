@@ -11,6 +11,7 @@ import {
   Switch,
   Modal,
   FlatList,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
@@ -50,6 +51,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, ScenesApi } from '../services/api';
 import { useHomeData } from '../hooks/useHomeData';
+import { useToast } from '../components/Toast';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Device } from '../types';
@@ -111,6 +113,7 @@ export default function SceneFormScreen() {
   const { user, token } = useAuth();
   const { sceneId, homeId } = route.params || { homeId: user?.homeId || '' };
   const { devices, rooms } = useHomeData(homeId);
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [sceneName, setSceneName] = useState('');
@@ -137,28 +140,80 @@ export default function SceneFormScreen() {
   const loadScene = async () => {
     try {
       setLoading(true);
+      console.log('[SceneForm] Loading scene:', { sceneId, homeId });
       const response = await scenesApi.listScenes(homeId);
       const raw = (response as any)?.data;
       const payload = raw?.data?.scenes ?? raw?.scenes ?? raw?.data ?? raw;
       const scenesList = Array.isArray(payload) ? payload : [];
-      const scene = scenesList.find((s: any) => s.id === sceneId);
-      if (scene) {
-        setSceneName(scene.name);
-        setSelectedIcon(scene.icon || 'lightbulb');
-        
-        // Parse new structure
-        if (scene.scope) {
-          setScope(scene.scope);
-        }
-        if (scene.roomIds && Array.isArray(scene.roomIds)) {
-          setSelectedRoomIds(new Set(scene.roomIds));
-        }
-        if (scene.deviceTypeRules && Array.isArray(scene.deviceTypeRules)) {
-          setDeviceTypeRules(scene.deviceTypeRules);
+      console.log('[SceneForm] Found scenes:', scenesList.length);
+      const scene = scenesList.find((s: any) => String(s.id) === String(sceneId));
+      
+      if (!scene) {
+        console.error('[SceneForm] Scene not found:', sceneId);
+        showToast('Scene not found', { type: 'error' });
+        return;
+      }
+      
+      console.log('[SceneForm] Loading scene data:', {
+        name: scene.name,
+        scope: scene.scope || scene.scope,
+        roomIds: scene.roomIds || scene.room_ids,
+        deviceTypeRules: scene.deviceTypeRules || scene.device_type_rules,
+      });
+      
+      setSceneName(scene.name || '');
+      setSelectedIcon(scene.icon || 'lightbulb');
+      
+      // Parse new structure - handle both snake_case (from backend) and camelCase
+      const scopeValue = scene.scope;
+      if (scopeValue) {
+        setScope(scopeValue as 'home' | 'rooms');
+      } else {
+        setScope('home'); // Default to home if not set
+      }
+      
+      // Handle roomIds - check both camelCase and snake_case, and handle JSON strings
+      let roomIdsValue = scene.roomIds || scene.room_ids;
+      if (typeof roomIdsValue === 'string') {
+        try {
+          roomIdsValue = JSON.parse(roomIdsValue);
+        } catch (e) {
+          console.warn('[SceneForm] Failed to parse roomIds as JSON:', e);
+          roomIdsValue = null;
         }
       }
-    } catch (e) {
-      console.error('Error loading scene:', e);
+      if (roomIdsValue && Array.isArray(roomIdsValue) && roomIdsValue.length > 0) {
+        setSelectedRoomIds(new Set(roomIdsValue));
+      } else {
+        setSelectedRoomIds(new Set());
+      }
+      
+      // Handle deviceTypeRules - check both camelCase and snake_case, and handle JSON strings
+      let deviceTypeRulesValue = scene.deviceTypeRules || scene.device_type_rules;
+      if (typeof deviceTypeRulesValue === 'string') {
+        try {
+          deviceTypeRulesValue = JSON.parse(deviceTypeRulesValue);
+        } catch (e) {
+          console.warn('[SceneForm] Failed to parse deviceTypeRules as JSON:', e);
+          deviceTypeRulesValue = null;
+        }
+      }
+      if (deviceTypeRulesValue && Array.isArray(deviceTypeRulesValue) && deviceTypeRulesValue.length > 0) {
+        setDeviceTypeRules(deviceTypeRulesValue);
+      } else {
+        setDeviceTypeRules([]);
+      }
+      
+      console.log('[SceneForm] Scene loaded successfully:', {
+        name: scene.name,
+        scope: scopeValue,
+        roomIdsCount: roomIdsValue ? (Array.isArray(roomIdsValue) ? roomIdsValue.length : 0) : 0,
+        deviceTypeRulesCount: deviceTypeRulesValue ? (Array.isArray(deviceTypeRulesValue) ? deviceTypeRulesValue.length : 0) : 0,
+      });
+    } catch (e: any) {
+      console.error('[SceneForm] Error loading scene:', e);
+      console.error('[SceneForm] Error details:', e?.response?.data);
+      showToast('Failed to load scene', { type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -272,13 +327,16 @@ export default function SceneFormScreen() {
       if (sceneId) {
         const response = await scenesApi.updateScene(homeId, sceneId, payload);
         console.log('[SceneForm] Update response:', response);
-        Alert.alert('Success', 'Scene updated successfully');
+        showToast('Scene updated successfully', { type: 'success' });
       } else {
         const response = await scenesApi.createScene(homeId, payload);
         console.log('[SceneForm] Create response:', response);
-        Alert.alert('Success', 'Scene created successfully');
+        showToast('Scene created successfully', { type: 'success' });
       }
-      navigation.goBack();
+      // Small delay to ensure toast is visible before navigating
+      setTimeout(() => {
+        navigation.goBack();
+      }, 300);
     } catch (e: any) {
       console.error('Save scene error:', e);
       console.error('Error response:', e?.response?.data);
@@ -291,31 +349,69 @@ export default function SceneFormScreen() {
   };
 
   const handleDelete = async () => {
-    if (!sceneId) return;
+    console.log('[SceneForm] handleDelete called', { sceneId, homeId });
+    
+    if (!sceneId) {
+      console.warn('[SceneForm] No sceneId, cannot delete');
+      showToast('No scene selected', { type: 'error' });
+      return;
+    }
 
-    Alert.alert(
-      'Delete Scene',
-      'Are you sure you want to delete this scene?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await scenesApi.deleteScene(homeId, sceneId);
-              Alert.alert('Success', 'Scene deleted successfully');
-              navigation.goBack();
-            } catch (e: any) {
-              Alert.alert('Error', e?.response?.data?.message || 'Failed to delete scene');
-            } finally {
-              setLoading(false);
-            }
+    if (!homeId) {
+      console.warn('[SceneForm] No homeId, cannot delete');
+      showToast('No home selected', { type: 'error' });
+      return;
+    }
+
+    // On web, use window.confirm as Alert.alert may not work properly
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to delete this scene? This action cannot be undone.');
+      if (!confirmed) {
+        console.log('[SceneForm] Delete cancelled');
+        return;
+      }
+    } else {
+      Alert.alert(
+        'Delete Scene',
+        'Are you sure you want to delete this scene? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => console.log('[SceneForm] Delete cancelled') },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => performDelete(),
           },
-        },
-      ]
-    );
+        ],
+        { cancelable: true }
+      );
+      return;
+    }
+
+    // Perform deletion (for web after confirm, or called from Alert on native)
+    performDelete();
+  };
+
+  const performDelete = async () => {
+    console.log('[SceneForm] Delete confirmed, starting deletion...');
+    setLoading(true);
+    try {
+      console.log('[SceneForm] Deleting scene:', { homeId, sceneId });
+      const response = await scenesApi.deleteScene(homeId, sceneId);
+      console.log('[SceneForm] Delete response:', response);
+      showToast('Scene deleted successfully', { type: 'success' });
+      // Small delay to ensure toast is visible before navigating
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
+    } catch (e: any) {
+      console.error('[SceneForm] Delete error:', e);
+      console.error('[SceneForm] Error response:', e?.response?.data);
+      console.error('[SceneForm] Error status:', e?.response?.status);
+      const errorMsg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to delete scene';
+      showToast(errorMsg, { type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredDevicesForType = useMemo(() => {
@@ -359,8 +455,14 @@ export default function SceneFormScreen() {
         showBack
         showSettings={false}
         rightContent={sceneId ? (
-          <TouchableOpacity onPress={handleDelete}>
-            <Trash2 size={24} color={colors.destructive} />
+          <TouchableOpacity 
+            onPress={handleDelete}
+            disabled={loading}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ padding: 4 }}
+          >
+            <Trash2 size={24} color={loading ? colors.mutedForeground : colors.destructive} />
           </TouchableOpacity>
         ) : undefined}
       />

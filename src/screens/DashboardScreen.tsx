@@ -51,7 +51,7 @@ import { useAirguardAlerts } from '../hooks/useAirguardAlerts';
 import AirguardAlertBanner, { decodeAlertFlags } from '../components/AirguardAlertBanner';
 import { useDemo } from '@/context/DemoContext';
 import type { Room, Device, Home } from '../types';
-import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi } from '../services/api';
+import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi, ScenesApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -170,6 +170,8 @@ export default function DashboardScreen() {
   const { controlDevice } = useDeviceControl();
   const [quickActionLoading, setQuickActionLoading] = useState<null | 'lights' | 'locks' | 'scene'>(null);
   const { showToast } = useToast();
+  const [scenes, setScenes] = useState<any[]>([]);
+  const [activeScene, setActiveScene] = useState<any | null>(null);
   
   // Device control modal state
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
@@ -265,6 +267,44 @@ export default function DashboardScreen() {
     };
     loadSchedules();
   }, [homeId, token, isDemoMode]);
+
+  // Load scenes and find active scene
+  const demo = useDemo();
+  useEffect(() => {
+    const loadScenes = async () => {
+      if (isDemoMode) {
+        // Demo mode - use demo scenes
+        const demoScenes = demo.scenes || [];
+        setScenes(demoScenes);
+        setActiveScene(demoScenes.find((s: any) => s.isActive) || null);
+        return;
+      }
+      
+      if (!homeId || !token) return;
+      try {
+        const client = getApiClient(async () => token);
+        const scenesApi = ScenesApi(client);
+        const response = await scenesApi.listScenes(homeId);
+        const scenesList = response.data?.scenes || response.data?.data?.scenes || response.data?.data || [];
+        const scenesArray = Array.isArray(scenesList) ? scenesList : [];
+        setScenes(scenesArray);
+        
+        // Find active scene (one with isActive: true, or assigned to a room)
+        const active = scenesArray.find((s: any) => s.isActive === true) || 
+                      (rooms.find((r: Room) => r.scene) ? 
+                        scenesArray.find((s: any) => rooms.some((r: Room) => {
+                          const roomSceneId = typeof r.scene === 'string' ? r.scene : (r.scene as any)?.id;
+                          return String(roomSceneId) === String(s.id);
+                        })) : null);
+        setActiveScene(active || null);
+      } catch (e) {
+        console.error('Error loading scenes:', e);
+        setScenes([]);
+        setActiveScene(null);
+      }
+    };
+    loadScenes();
+  }, [homeId, token, isDemoMode, rooms, demo]);
 
   // Real-time updates
   const { isConnected: isCloudConnected } = useRealtime({
@@ -580,6 +620,15 @@ export default function DashboardScreen() {
   }, [hubs, hubStatuses]);
   const lightsOnCount = devices.filter((d: Device) => d.type === 'light' && d.isActive).length;
   const totalLights = devices.filter((d: Device) => d.type === 'light').length;
+  const totalLocks = devices.filter((d: Device) => d.type === 'lock').length;
+  
+  // Get active scene device count
+  const activeSceneDeviceCount = useMemo(() => {
+    if (!activeScene) return 0;
+    const deviceStates = activeScene.deviceStates || activeScene.device_states || {};
+    return Object.keys(deviceStates).length;
+  }, [activeScene]);
+  
   const avgTemperature = rooms.length
     ? rooms.reduce((sum: number, room: Room) => sum + (room.temperature || 0), 0) / rooms.length
     : 0;
@@ -870,44 +919,74 @@ export default function DashboardScreen() {
             action={{ label: 'All Scenes', onPress: () => navigation.navigate('Scenes') }}
           />
           <View style={styles.quickActionsGrid}>
+            {/* Active Scene - always show, disabled if no active scene */}
             <View style={styles.quickActionItem}>
               <QuickAction
                 icon={Moon}
-                label="Evening Mode"
-                sublabel="5 devices"
+                label={activeScene ? (activeScene.name || 'Active Scene') : 'No Active Scene'}
+                sublabel={activeScene ? `${activeSceneDeviceCount} ${activeSceneDeviceCount === 1 ? 'device' : 'devices'}` : 'Create a scene first'}
                 variant="default"
-                onPress={handleSceneActivate}
+                onPress={activeScene ? handleSceneActivate : undefined}
                 loading={quickActionLoading === 'scene'}
+                disabled={!activeScene}
               />
             </View>
+            
+            {/* Lights - always show, disabled if no lights */}
             <View style={styles.quickActionItem}>
               <QuickAction
                 icon={Lightbulb}
-                label={lightsOnCount > 0 ? 'Lights Off' : 'Lights On'}
-                sublabel={`${lightsOnCount}/${totalLights} on`}
+                label={totalLights > 0 ? (lightsOnCount > 0 ? 'Lights Off' : 'Lights On') : 'No Lights'}
+                sublabel={totalLights > 0 ? `${lightsOnCount}/${totalLights} on` : 'Add lights first'}
                 variant={lightsOnCount > 0 ? 'warning' : 'default'}
-                onPress={handleToggleAllLights}
+                onPress={totalLights > 0 ? handleToggleAllLights : undefined}
                 loading={quickActionLoading === 'lights'}
                 isActive={lightsOnCount > 0}
+                disabled={totalLights === 0}
               />
             </View>
+            
+            {/* Lock All - always show, disabled if no locks */}
             <View style={styles.quickActionItem}>
               <QuickAction
                 icon={Lock}
                 label="Lock All"
-                sublabel="2 locks"
+                sublabel={totalLocks > 0 ? `${totalLocks} ${totalLocks === 1 ? 'lock' : 'locks'}` : 'No locks available'}
                 variant="default"
-                onPress={handleLockAllDoors}
+                onPress={totalLocks > 0 ? handleLockAllDoors : undefined}
                 loading={quickActionLoading === 'locks'}
+                disabled={totalLocks === 0}
               />
             </View>
+            
+            {/* All Off - creative 4th card */}
             <View style={styles.quickActionItem}>
               <QuickAction
-                icon={Shield}
-                label="Arm Away"
-                sublabel="Security"
+                icon={Zap}
+                label="All Off"
+                sublabel={`${activeDevicesCount} active`}
                 variant="default"
-                onPress={() => showToast('Security mode coming soon', { type: 'info' })}
+                onPress={async () => {
+                  if (activeDevicesCount === 0) {
+                    showToast('All devices are already off', { type: 'info' });
+                    return;
+                  }
+                  setQuickActionLoading('scene');
+                  try {
+                    const activeDevices = devices.filter((d: Device) => d.isActive && d.type !== 'airguard');
+                    if (activeDevices.length > 0) {
+                      await Promise.all(activeDevices.map((device) => controlDevice(device.id, { isActive: false })));
+                      await refresh();
+                      showToast('All devices turned off', { type: 'success' });
+                    }
+                  } catch (error) {
+                    showToast('Failed to turn off devices', { type: 'error' });
+                  } finally {
+                    setQuickActionLoading(null);
+                  }
+                }}
+                loading={quickActionLoading === 'scene'}
+                disabled={activeDevicesCount === 0}
               />
             </View>
           </View>

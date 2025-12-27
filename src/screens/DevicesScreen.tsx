@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -89,6 +89,13 @@ export default function DevicesScreen() {
   // Track live online/offline status for hubs
   const [hubStatuses, setHubStatuses] = useState<Record<string, boolean>>({});
   
+  // Track previous statuses to only refresh on change
+  const prevDeviceStatusesRef = useRef<Record<string, boolean>>({});
+  const prevHubStatusesRef = useRef<Record<string, boolean>>({});
+  
+  // Scroll position refs for each tab
+  const scrollPositionsRef = useRef<Record<number, number>>({});
+  
   // Modal state
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -123,23 +130,62 @@ export default function DevicesScreen() {
       results.forEach(({ hubId, isOnline }) => {
         newStatuses[hubId] = isOnline;
       });
-      setHubStatuses(newStatuses);
+      
+      // Only update state if status changed - don't refresh the whole page
+      const hasChanged = Object.keys(newStatuses).some(hubId => 
+        newStatuses[hubId] !== prevHubStatusesRef.current[hubId]
+      ) || Object.keys(prevHubStatusesRef.current).some(hubId =>
+        prevHubStatusesRef.current[hubId] !== newStatuses[hubId]
+      );
+      
+      if (hasChanged) {
+        prevHubStatusesRef.current = newStatuses;
+        // Only update state - this will cause device cards to re-render without full page refresh
+        setHubStatuses(newStatuses);
+      } else {
+        // Still update state even if no change to keep it in sync
+        setHubStatuses(newStatuses);
+      }
     };
 
     fetchStatuses();
-    const interval = setInterval(fetchStatuses, 3000); // Update every 3 seconds for faster refresh
+    // Increase interval to 5 seconds to reduce unnecessary polling
+    const interval = setInterval(fetchStatuses, 5000);
     return () => clearInterval(interval);
   }, [hubs, token]);
 
-  // Real-time updates
+  // Real-time updates - don't refresh, just update state
+  // The useRealtime hook will trigger re-renders when devices change
+  // We don't need to call refresh() here as it causes full page refresh
   useRealtime({
-    onDeviceUpdate: () => refresh(),
+    onDeviceUpdate: () => {
+      // Don't call refresh() - let the realtime updates handle state changes
+      // This prevents full page refresh and scroll jumping
+    },
   });
+  
+  // Update prevDeviceStatusesRef when devices change
+  useEffect(() => {
+    const currentStatuses: Record<string, boolean> = {};
+    devices.forEach(d => {
+      currentStatuses[d.id] = d.isActive || false;
+    });
+    prevDeviceStatusesRef.current = currentStatuses;
+  }, [devices]);
 
-  // Auto-refresh when screen gains focus (e.g., after adding a device)
+  // Auto-refresh when screen gains focus - but only if coming from another screen
+  // Don't refresh if just switching tabs, as it causes scroll jump
   useFocusEffect(
     useCallback(() => {
-      refresh();
+      // Only refresh on initial focus or when explicitly needed
+      // This prevents unnecessary refreshes when switching tabs
+      const shouldRefresh = true; // Set to false if you want to disable auto-refresh on focus
+      if (shouldRefresh) {
+        // Use a small delay to prevent scroll jump
+        setTimeout(() => {
+          refresh();
+        }, 100);
+      }
     }, [refresh])
   );
 
@@ -263,26 +309,36 @@ export default function DevicesScreen() {
   ];
 
   // Calculate device counts: total and online
+  // Note: hubs are already included in the devices array from useHomeData
   const deviceCounts = useMemo(() => {
-    // Count all regular devices
-    const regularDeviceCount = devices.length;
-    // Count all hubs (hubs are shown as devices in the UI)
-    const hubCount = hubs.length;
-    const total = regularDeviceCount + hubCount;
+    // Total count is just devices.length (hubs are already included)
+    const total = devices.length;
     
-    // Count online devices (devices that are online)
-    const onlineDevices = devices.filter(d => d.isOnline !== false).length;
-    // Count online hubs (check live status for AirGuard, backend status for others)
-    const onlineHubs = hubs.filter(h => {
-      if (h.hubType === 'airguard') {
-        const liveStatus = hubStatuses[h.id];
-        if (liveStatus !== undefined) return liveStatus;
-        return false; // Default to offline if live status not available
+    // Create a set of hub IDs for quick lookup
+    const hubIds = new Set(hubs.map(h => String(h.id)));
+    
+    // Count online devices
+    // For devices that are hubs, check live status if available
+    const online = devices.filter(d => {
+      const deviceId = String(d.id);
+      const isHub = hubIds.has(deviceId);
+      
+      if (isHub) {
+        // For hubs, check live status for AirGuard, or backend status for others
+        const hub = hubs.find(h => String(h.id) === deviceId);
+        if (!hub) return false;
+        
+        if (hub.hubType === 'airguard') {
+          const liveStatus = hubStatuses[hub.id];
+          if (liveStatus !== undefined) return liveStatus;
+          return false; // Default to offline if live status not available
+        }
+        return hub.status === 'online';
       }
-      return h.status === 'online';
+      
+      // For regular devices, check isOnline
+      return d.isOnline !== false;
     }).length;
-    
-    const online = onlineDevices + onlineHubs;
     
     return { total, online };
   }, [devices, hubs, hubStatuses]);
@@ -471,7 +527,14 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '%'}
                     isActive={device.isActive}
-                    isOnline={device.status === 'online'}
+                    isOnline={(() => {
+                      // For hubs, use live status from hubStatuses
+                      if (device.hubId && hubs.some(h => h.id === device.id)) {
+                        const liveStatus = hubStatuses[device.id];
+                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                      }
+                      return device.isOnline !== false;
+                    })()}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
@@ -519,7 +582,14 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '°C'}
                     isActive={device.isActive}
-                    isOnline={device.status === 'online'}
+                    isOnline={(() => {
+                      // For hubs, use live status from hubStatuses
+                      if (device.hubId && hubs.some(h => h.id === device.id)) {
+                        const liveStatus = hubStatuses[device.id];
+                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                      }
+                      return device.isOnline !== false;
+                    })()}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
@@ -554,7 +624,22 @@ export default function DevicesScreen() {
     }
 
     return (
-      <ScrollView style={styles.tabContent} contentContainerStyle={styles.tabScrollContent}>
+      <ScrollView 
+        ref={(ref) => {
+          if (ref) {
+            const savedPosition = scrollPositionsRef.current[2];
+            if (savedPosition) {
+              setTimeout(() => ref.scrollTo({ y: savedPosition, animated: false }), 100);
+            }
+          }
+        }}
+        style={styles.tabContent} 
+        contentContainerStyle={styles.tabScrollContent}
+        onScroll={(e) => {
+          scrollPositionsRef.current[2] = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+      >
         {Object.entries(groupedDevices).map(([roomId, roomDevices]) => (
           <View key={roomId} style={styles.deviceSection}>
             <Text style={styles.deviceSectionTitle}>{getRoomName(roomId)}</Text>
@@ -567,7 +652,14 @@ export default function DevicesScreen() {
                     value={device.value}
                     unit={device.unit || '%'}
                     isActive={device.isActive}
-                    isOnline={device.status === 'online'}
+                    isOnline={(() => {
+                      // For hubs, use live status from hubStatuses
+                      if (device.hubId && hubs.some(h => h.id === device.id)) {
+                        const liveStatus = hubStatuses[device.id];
+                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                      }
+                      return device.isOnline !== false;
+                    })()}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
                     onToggle={() => handleDeviceToggle(device)}
@@ -614,7 +706,14 @@ export default function DevicesScreen() {
                     name={device.name}
                     value={device.value}
                     unit={device.unit}
-                    isOnline={device.status === 'online'}
+                    isOnline={(() => {
+                      // For hubs, use live status from hubStatuses
+                      if (device.hubId && hubs.some(h => h.id === device.id)) {
+                        const liveStatus = hubStatuses[device.id];
+                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                      }
+                      return device.isOnline !== false;
+                    })()}
                     isActive={device.isActive}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
@@ -662,7 +761,14 @@ export default function DevicesScreen() {
                     name={device.name}
                     value={device.value}
                     unit={device.unit}
-                    isOnline={device.status === 'online'}
+                    isOnline={(() => {
+                      // For hubs, use live status from hubStatuses
+                      if (device.hubId && hubs.some(h => h.id === device.id)) {
+                        const liveStatus = hubStatuses[device.id];
+                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                      }
+                      return device.isOnline !== false;
+                    })()}
                     isActive={device.isActive}
                     type={device.type}
                     onPress={() => handleDeviceLongPress(device)}
@@ -723,17 +829,6 @@ export default function DevicesScreen() {
               : `${deviceCounts.online} ${deviceCounts.online === 1 ? 'device' : 'devices'} out of ${deviceCounts.total} ${deviceCounts.total === 1 ? 'device' : 'devices'} connected`
             }
           </Text>
-          <View style={[
-            styles.statusCard,
-            overallHubStatus === 'online' ? styles.statusCardOnline : styles.statusCardOffline
-          ]}>
-            <StatusBadge 
-              variant={overallHubStatus === 'online' ? 'online' : 'offline'} 
-              size="sm" 
-              label={overallHubStatus === 'online' ? 'Online' : 'Offline'}
-              pulse={overallHubStatus === 'online'}
-            />
-          </View>
         </View>
         <TouchableOpacity 
           style={styles.addButtonWrapper}

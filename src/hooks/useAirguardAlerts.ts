@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNotifications } from '../context/NotificationsContext';
 import { Device } from '../types';
@@ -51,14 +52,28 @@ export function useAirguardAlerts(devices: Device[]) {
               deviceId,
             });
             
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: `${device.name} - Alert Resolved ✅`,
-                body: 'All sensors have returned to normal levels.',
-                data: { deviceId, type: 'resolution' },
-              },
-              trigger: null,
-            });
+            // Send push notification (skip on web)
+            if (Platform.OS !== 'web') {
+              try {            
+            // Send push notification (skip on web)
+            if (Platform.OS !== 'web') {
+              try {
+                await Notifications.scheduleNotificationAsync({
+                  content: {
+                    title: `${device.name} - Alert Resolved ✅`,
+                    body: 'All sensors have returned to normal levels.',
+                    data: { deviceId, type: 'resolution' },
+                  },
+                  trigger: null,
+                });
+              } catch (error) {
+                console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
+              }
+            }
+              } catch (error) {
+                console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
+              }
+            }
           }
           continue;
         }
@@ -85,16 +100,22 @@ export function useAirguardAlerts(devices: Device[]) {
             deviceId,
           });
 
-          // Send push notification
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: `🚨 ${device.name} - Alert!`,
-              body: message,
-              data: { deviceId, alertFlags: currentAlertFlags, type: 'first-alert' },
-              priority: Notifications.AndroidNotificationPriority.HIGH,
-            },
-            trigger: null,
-          });
+          // Send push notification (skip on web)
+          if (Platform.OS !== 'web') {
+            try {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: `🚨 ${device.name} - Alert!`,
+                  body: message,
+                  data: { deviceId, alertFlags: currentAlertFlags, type: 'first-alert' },
+                  priority: Notifications.AndroidNotificationPriority.HIGH,
+                },
+                trigger: null,
+              });
+            } catch (error) {
+              console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
+            }
+          }
 
           // Save state
           alertStatesRef.current.set(deviceId, {
@@ -123,15 +144,21 @@ export function useAirguardAlerts(devices: Device[]) {
               isReminder: true,
             });
 
-            // Send push reminder
-            await Notifications.scheduleNotificationAsync({
-              content: {
-                title: `🔔 ${device.name} - Reminder`,
-                body: message,
-                data: { deviceId, alertFlags: currentAlertFlags, type: 'reminder' },
-              },
-              trigger: null,
-            });
+            // Send push reminder (skip on web)
+            if (Platform.OS !== 'web') {
+              try {
+                await Notifications.scheduleNotificationAsync({
+                  content: {
+                    title: `🔔 ${device.name} - Reminder`,
+                    body: message,
+                    data: { deviceId, alertFlags: currentAlertFlags, type: 'reminder' },
+                  },
+                  trigger: null,
+                });
+              } catch (error) {
+                console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
+              }
+            }
 
             // Update last reminder time
             previousState.lastReminderTime = now;

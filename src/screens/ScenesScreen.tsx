@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useDemo } from '../context/DemoContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useHomeData } from '../hooks/useHomeData';
 import { getApiClient, ScenesApi, AutomationsApi } from '../services/api';
 import type { RootStackParamList } from '../types';
@@ -289,6 +289,15 @@ export default function ScenesScreen() {
       setLoading(false);
     }
   };
+
+  // Refresh scenes when screen comes into focus (e.g., after creating/editing a scene)
+  useFocusEffect(
+    useCallback(() => {
+      if (homeId || isDemoMode) {
+        loadScenes();
+      }
+    }, [homeId, isDemoMode])
+  );
 
   const toggleScene = async (id: string) => {
     if (isDemoMode) {
