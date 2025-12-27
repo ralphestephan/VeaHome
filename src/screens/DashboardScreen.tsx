@@ -284,9 +284,13 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [refresh]);
 
-  const handleRoomSelect = (roomId: string) => {
+  const handleRoomSelect = async (roomId: string) => {
     userSelectedRoomRef.current = roomId;
     setSelectedRoom(roomId);
+    // Refresh data before showing popup to ensure latest devices and stats are shown
+    await refresh();
+    // Wait a bit for state to update after refresh
+    await new Promise(resolve => setTimeout(resolve, 100));
     setShowRoomPopup(true); // Show popup overlay instead of scrolling
   };
 
@@ -485,7 +489,23 @@ export default function DashboardScreen() {
 
   // Computed values
   const firstName = user?.name?.split(' ')[0] || 'Guest';
-  const selectedRoomData = selectedRoom ? rooms.find((room: Room) => room.id === selectedRoom) : null;
+  const selectedRoomData = useMemo(() => {
+    if (!selectedRoom) return null;
+    const room = rooms.find((r: Room) => String(r.id) === String(selectedRoom));
+    if (room) {
+      console.log('[DashboardScreen] Selected room data:', {
+        id: room.id,
+        name: room.name,
+        deviceCount: room.devices?.length || 0,
+        devices: room.devices?.map((d: Device) => ({ id: d.id, name: d.name, roomId: d.roomId })) || [],
+        temperature: room.temperature,
+        humidity: room.humidity,
+      });
+    } else {
+      console.warn('[DashboardScreen] Room not found:', selectedRoom, 'Available rooms:', rooms.map(r => ({ id: r.id, name: r.name })));
+    }
+    return room || null;
+  }, [selectedRoom, rooms]);
   const activeDevicesCount = devices.filter((device: Device) => device.isActive).length;
   const onlineDevicesCount = devices.filter((device: Device) => device.isOnline !== false).length;
   // Check if any hub is actually online - use live status for AirGuard hubs, backend status for others

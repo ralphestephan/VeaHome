@@ -1164,6 +1164,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         <DeviceControlModal
           visible={modalVisible}
           device={selectedDevice}
+          rooms={[room].filter(Boolean).map(r => ({ id: r.id, name: r.name }))} // Pass rooms so modal can show room name
           onClose={() => {
             setModalVisible(false);
             setSelectedDevice(null);
@@ -1184,6 +1185,25 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
             loadRoomData();
           }}
           onToggleMute={handleMuteToggle}
+          onUpdateRoom={async (deviceId, roomId) => {
+            if (isDemoMode) return;
+            if (!homeId) return;
+            try {
+              const isHub = hubs.some(h => h.id === deviceId);
+              if (isHub) {
+                const hubApi = HubApi(getApiClient(async () => token));
+                await hubApi.updateHub(homeId, deviceId, { roomId });
+              } else {
+                const hubApi = HubApi(getApiClient(async () => token));
+                await hubApi.updateDevice(homeId, deviceId, { roomId });
+              }
+              await loadRoomData(); // Reload room data after assignment
+              await refreshHomeData(); // Also refresh global home data
+            } catch (e: any) {
+              console.error('[RoomDetailScreen] Failed to update device room:', e);
+              Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to update device room');
+            }
+          }}
         />
       )}
     </SafeAreaView>

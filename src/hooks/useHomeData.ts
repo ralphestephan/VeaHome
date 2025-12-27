@@ -90,8 +90,14 @@ const mapRoom = (raw: any, sceneNameMap?: Map<string, string>): Room => {
 
 const applyDevicesToRooms = (baseRooms: Room[], baseDevices: Device[]): Room[] => {
   return baseRooms.map((room) => {
-    const roomDevices = baseDevices.filter((d) => d.roomId === room.id);
+    // Use String() comparison to handle type mismatches (UUID strings)
+    const roomDevices = baseDevices.filter((d) => String(d.roomId) === String(room.id));
     const airguard = roomDevices.find((d) => d.type === 'airguard' && d.airQualityData);
+    
+    // Debug logging for room device assignment
+    if (roomDevices.length > 0) {
+      console.log('[applyDevicesToRooms] Room:', room.name, 'has', roomDevices.length, 'devices:', roomDevices.map(d => ({ id: d.id, name: d.name, roomId: d.roomId })));
+    }
     
     // Use room power from backend, default to '0W' if not provided
     const roomPower = room.power || '0W';
