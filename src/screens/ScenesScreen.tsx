@@ -198,7 +198,7 @@ export default function ScenesScreen() {
   const { scenes: demoScenes, activateScene: demoActivateScene } = useDemo();
   const homeId = user?.homeId;
   const isDemoMode = token === 'DEMO_TOKEN';
-  const { devices } = useHomeData(homeId || '');
+  const { devices, refresh: refreshHomeData } = useHomeData(homeId || '');
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [loading, setLoading] = useState(true);
   const [automations, setAutomations] = useState<AutomationPreview[]>([]);

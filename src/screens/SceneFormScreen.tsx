@@ -117,6 +117,64 @@ export default function SceneFormScreen() {
 
   const [loading, setLoading] = useState(false);
   const [sceneName, setSceneName] = useState('');
+  
+  // Auto-detect icon based on scene name and time of day
+  const getAutoIcon = (name: string): string => {
+    const lowerName = name.toLowerCase();
+    const hour = new Date().getHours();
+    
+    // Time-based detection
+    if (hour >= 5 && hour < 12) {
+      // Morning (5 AM - 12 PM)
+      if (lowerName.includes('morning') || lowerName.includes('breakfast') || lowerName.includes('wake')) {
+        return 'weather-sunset-up';
+      }
+    } else if (hour >= 12 && hour < 17) {
+      // Afternoon (12 PM - 5 PM)
+      if (lowerName.includes('afternoon') || lowerName.includes('lunch') || lowerName.includes('day')) {
+        return 'lightbulb'; // Use sun icon if available, otherwise lightbulb
+      }
+    } else if (hour >= 17 && hour < 21) {
+      // Evening (5 PM - 9 PM)
+      if (lowerName.includes('evening') || lowerName.includes('dinner') || lowerName.includes('sunset')) {
+        return 'weather-sunset-up';
+      }
+    } else {
+      // Night (9 PM - 5 AM)
+      if (lowerName.includes('night') || lowerName.includes('sleep') || lowerName.includes('bed')) {
+        return 'weather-night';
+      }
+    }
+    
+    // Name-based detection
+    if (lowerName.includes('night') || lowerName.includes('sleep') || lowerName.includes('bed')) {
+      return 'weather-night';
+    }
+    if (lowerName.includes('evening') || lowerName.includes('dinner')) {
+      return 'weather-sunset-up';
+    }
+    if (lowerName.includes('morning') || lowerName.includes('breakfast') || lowerName.includes('wake')) {
+      return 'weather-sunset-up';
+    }
+    if (lowerName.includes('movie') || lowerName.includes('cinema')) {
+      return 'movie';
+    }
+    if (lowerName.includes('party') || lowerName.includes('celebration')) {
+      return 'party-popper';
+    }
+    if (lowerName.includes('away') || lowerName.includes('vacation')) {
+      return 'account-off';
+    }
+    if (lowerName.includes('work') || lowerName.includes('office')) {
+      return 'briefcase';
+    }
+    
+    // Default based on time of day
+    if (hour >= 17 && hour < 21) return 'weather-sunset-up'; // Evening
+    if (hour >= 21 || hour < 5) return 'weather-night'; // Night
+    return 'lightbulb'; // Default
+  };
+  
   const [selectedIcon, setSelectedIcon] = useState<string>('lightbulb');
   const [scope, setScope] = useState<SceneScope>('home');
   const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(new Set());
@@ -162,7 +220,9 @@ export default function SceneFormScreen() {
       });
       
       setSceneName(scene.name || '');
-      setSelectedIcon(scene.icon || 'lightbulb');
+      // Use scene icon if available, otherwise auto-detect
+      const icon = scene.icon || getAutoIcon(scene.name || '');
+      setSelectedIcon(icon);
       
       // Parse new structure - handle both snake_case (from backend) and camelCase
       const scopeValue = scene.scope;
@@ -294,6 +354,9 @@ export default function SceneFormScreen() {
       return;
     }
     
+    // Auto-detect icon if not manually selected or if it's the default
+    const finalIcon = selectedIcon === 'lightbulb' && !sceneId ? getAutoIcon(sceneName) : selectedIcon;
+    
     if (scope === 'rooms' && selectedRoomIds.size === 0) {
       Alert.alert('Error', 'Please select at least one room for room-level scene');
       return;
@@ -316,7 +379,7 @@ export default function SceneFormScreen() {
     try {
       const payload = {
         name: sceneName,
-        icon: selectedIcon,
+        icon: finalIcon,
         scope,
         roomIds: scope === 'rooms' ? Array.from(selectedRoomIds) : [],
         deviceTypeRules,

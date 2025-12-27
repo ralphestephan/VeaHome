@@ -170,21 +170,40 @@ export async function activateScene(req: Request, res: Response) {
     
     if (deviceTypeRules.length > 0) {
       // New format: apply rules based on device types and scope
+      // Get both regular devices and hubs (hubs can be airguard devices)
       const allDevices = await getDevicesByHomeId(home.id);
-      const targetDevices = resolveTargetDevices(allDevices, scene);
+      const { getHubsByHomeId } = await import('../repositories/hubsRepository');
+      const allHubs = await getHubsByHomeId(home.id);
+      
+      // Map hubs to device format for processing
+      const hubDevices = allHubs.map((h: any) => ({
+        id: h.id,
+        type: h.hub_type || 'airguard',
+        room_id: h.room_id,
+        home_id: h.home_id,
+        metadata: h.metadata,
+        signal_mappings: h.metadata,
+        mqtt_topic: h.mqtt_topic,
+        hub_id: h.id,
+      }));
+      
+      // Combine devices and hubs
+      const allDevicesIncludingHubs = [...allDevices, ...hubDevices];
+      const targetDevices = resolveTargetDevices(allDevicesIncludingHubs, scene);
 
       await Promise.all(
         deviceTypeRules.map(async (rule: any) => {
           const devicesToControl = targetDevices.filter((d: any) => d.type === rule.type);
           
           // If specific mode, filter to only selected devices
+          let finalDevicesToControl = devicesToControl;
           if (rule.mode === 'specific' && rule.deviceIds && rule.deviceIds.length > 0) {
             const selectedIds = new Set(rule.deviceIds);
-            devicesToControl.filter((d: any) => selectedIds.has(d.id));
+            finalDevicesToControl = devicesToControl.filter((d: any) => selectedIds.has(d.id));
           }
 
           await Promise.all(
-            devicesToControl.map((device: any) =>
+            finalDevicesToControl.map((device: any) =>
               applyStateToDevice(device, rule.state, home.id, sceneId)
             )
           );

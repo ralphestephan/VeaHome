@@ -270,6 +270,26 @@ export default function DashboardScreen() {
 
   // Load scenes and find active scene
   const demo = useDemo();
+  
+  // Get time-based scene recommendation
+  const getTimeBasedScene = useCallback((scenesArray: any[]) => {
+    const hour = new Date().getHours();
+    const sceneName = hour >= 5 && hour < 12 ? 'morning' : 
+                     hour >= 12 && hour < 17 ? 'afternoon' :
+                     hour >= 17 && hour < 21 ? 'evening' : 'night';
+    
+    // Find scene matching current time of day
+    const timeScene = scenesArray.find((s: any) => {
+      const name = (s.name || '').toLowerCase();
+      return (hour >= 5 && hour < 12 && (name.includes('morning') || name.includes('breakfast'))) ||
+             (hour >= 12 && hour < 17 && (name.includes('afternoon') || name.includes('lunch'))) ||
+             (hour >= 17 && hour < 21 && (name.includes('evening') || name.includes('dinner'))) ||
+             ((hour >= 21 || hour < 5) && (name.includes('night') || name.includes('sleep') || name.includes('bed')));
+    });
+    
+    return timeScene || null;
+  }, []);
+  
   useEffect(() => {
     const loadScenes = async () => {
       if (isDemoMode) {
@@ -296,7 +316,10 @@ export default function DashboardScreen() {
                           const roomSceneId = typeof r.scene === 'string' ? r.scene : (r.scene as any)?.id;
                           return String(roomSceneId) === String(s.id);
                         })) : null);
-        setActiveScene(active || null);
+        
+        // If no active scene, suggest time-based scene for quick actions
+        const suggestedScene = active || getTimeBasedScene(scenesArray);
+        setActiveScene(suggestedScene);
       } catch (e) {
         console.error('Error loading scenes:', e);
         setScenes([]);
@@ -304,7 +327,7 @@ export default function DashboardScreen() {
       }
     };
     loadScenes();
-  }, [homeId, token, isDemoMode, rooms, demo]);
+  }, [homeId, token, isDemoMode, rooms, demo, getTimeBasedScene]);
 
   // Real-time updates
   const { isConnected: isCloudConnected } = useRealtime({
@@ -488,33 +511,42 @@ export default function DashboardScreen() {
           showToast('Evening scene activated', { type: 'success' });
         }, 500);
       } else {
-        // Find first available scene (prefer one with "evening" or "night" in name)
-        const client = getApiClient(async () => token);
-        const scenesApi = (await import('../services/api')).ScenesApi(client);
-        const response = await scenesApi.listScenes(homeId);
-        const scenes = response.data?.scenes || [];
-        
-        if (scenes.length === 0) {
-          showToast('No scenes available. Create one first!', { type: 'error' });
+        if (!activeScene) {
+          showToast('No active scene available', { type: 'error' });
           setQuickActionLoading(null);
           return;
         }
         
-        // Find evening/night scene or use first one
-        const eveningScene = scenes.find((s: any) => 
-          s.name.toLowerCase().includes('evening') || 
-          s.name.toLowerCase().includes('night')
-        ) || scenes[0];
+        const sceneId = activeScene.id;
+        if (!sceneId || !homeId) {
+          showToast(sceneId ? 'Home ID is missing' : 'Scene ID is missing', { type: 'error' });
+          setQuickActionLoading(null);
+          return;
+        }
         
-        await scenesApi.activateScene(homeId, eveningScene.id);
+        const client = getApiClient(async () => token);
+        const scenesApi = ScenesApi(client);
+        
+        await scenesApi.activateScene(homeId, sceneId);
+        showToast(`${activeScene.name} activated`, { type: 'success' });
+        
+        // Refresh scenes and home data to update UI
         await refresh();
+        // Reload scenes to get updated active state
+        const response = await scenesApi.listScenes(homeId);
+        const scenesList = response.data?.scenes || response.data?.data?.scenes || response.data?.data || [];
+        const scenesArray = Array.isArray(scenesList) ? scenesList : [];
+        setScenes(scenesArray);
+        const updatedActive = scenesArray.find((s: any) => s.id === sceneId);
+        setActiveScene(updatedActive || activeScene);
+        
         setQuickActionLoading(null);
-        showToast(`${eveningScene.name} activated`, { type: 'success' });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Scene activation error:', error);
+      console.error('Scene activation error response:', error?.response?.data);
       setQuickActionLoading(null);
-      showToast('Failed to activate scene', { type: 'error' });
+      showToast(error?.response?.data?.message || 'Failed to activate scene', { type: 'error' });
     }
   };
 
@@ -552,7 +584,7 @@ export default function DashboardScreen() {
     }
 
     const device = devices.find((d: Device) => d.id === deviceId) || selectedDevice;
-    if (!device || device.type !== 'airguard') return;
+    if (!device || (device.type as string) !== 'airguard') return;
 
     const smartMonitorId = (device.signalMappings as any)?.smartMonitorId ?? 1;
     const client = getApiClient(async () => token);
@@ -973,7 +1005,7 @@ export default function DashboardScreen() {
                   }
                   setQuickActionLoading('scene');
                   try {
-                    const activeDevices = devices.filter((d: Device) => d.isActive && d.type !== 'airguard');
+                    const activeDevices = devices.filter((d: Device) => d.isActive && (d.type as string) !== 'airguard');
                     if (activeDevices.length > 0) {
                       await Promise.all(activeDevices.map((device) => controlDevice(device.id, { isActive: false })));
                       await refresh();
@@ -997,7 +1029,10 @@ export default function DashboardScreen() {
           <View style={styles.section}>
             <SectionHeader 
               title="Active Devices" 
-              action={{ label: 'All Devices', onPress: () => navigation.navigate('Devices') }}
+              action={{ label: 'All Devices', onPress: () => {
+                // Navigate to Devices tab via Dashboard
+                (navigation as any).navigate('Dashboard', { screen: 'DevicesTab' });
+              }}}
             />
             <View style={styles.devicesGrid}>
               {favoriteDevices.map((device) => (

@@ -9,6 +9,8 @@ interface AlertState {
   alertFlags: number;
   firstAlertTime: number;
   lastReminderTime: number;
+  lastNotificationTime: number; // Track when we last sent a notification
+  resolutionNotified: boolean; // Track if we've notified about resolution
 }
 
 // Configure notification behavior
@@ -23,6 +25,8 @@ Notifications.setNotificationHandler({
 });
 
 const REMINDER_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+const MIN_NOTIFICATION_INTERVAL = 5 * 60 * 1000; // 5 minutes minimum between notifications
+const CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds instead of 10
 
 export function useAirguardAlerts(devices: Device[]) {
   const { addNotification } = useNotifications();
@@ -39,11 +43,11 @@ export function useAirguardAlerts(devices: Device[]) {
 
         // No alert currently
         if (currentAlertFlags === 0) {
-          // Clear state if alert resolved
-          if (previousState) {
+          // Clear state if alert resolved - only notify once
+          if (previousState && !previousState.resolutionNotified) {
             alertStatesRef.current.delete(deviceId);
             
-            // Send resolution notification
+            // Send resolution notification only once
             addNotification({
               title: `${device.name} - Alert Resolved`,
               message: 'All sensors have returned to normal levels.',
@@ -52,28 +56,30 @@ export function useAirguardAlerts(devices: Device[]) {
               deviceId,
             });
             
-            // Send push notification (skip on web)
-            if (Platform.OS !== 'web') {
-              try {            
-            // Send push notification (skip on web)
-            if (Platform.OS !== 'web') {
-              try {
-                await Notifications.scheduleNotificationAsync({
-                  content: {
-                    title: `${device.name} - Alert Resolved ✅`,
-                    body: 'All sensors have returned to normal levels.',
-                    data: { deviceId, type: 'resolution' },
-                  },
-                  trigger: null,
-                });
-              } catch (error) {
+            // Send push notification (try on all platforms, but catch errors gracefully on web)
+            try {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: `${device.name} - Alert Resolved ✅`,
+                  body: 'All sensors have returned to normal levels.',
+                  data: { deviceId, type: 'resolution' },
+                },
+                trigger: null,
+              });
+            } catch (error: any) {
+              // On web, notifications may not be available - that's okay, just log it
+              if (Platform.OS === 'web' && error?.message?.includes('not available')) {
+                // Silently ignore - web doesn't support push notifications
+              } else {
                 console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
               }
             }
-              } catch (error) {
-                console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
-              }
-            }
+            
+            // Mark as notified to prevent duplicate resolution notifications
+            previousState.resolutionNotified = true;
+          } else if (previousState) {
+            // Already notified about resolution, just clear state
+            alertStatesRef.current.delete(deviceId);
           }
           continue;
         }
@@ -100,19 +106,22 @@ export function useAirguardAlerts(devices: Device[]) {
             deviceId,
           });
 
-          // Send push notification (skip on web)
-          if (Platform.OS !== 'web') {
-            try {
-              await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: `🚨 ${device.name} - Alert!`,
-                  body: message,
-                  data: { deviceId, alertFlags: currentAlertFlags, type: 'first-alert' },
-                  priority: Notifications.AndroidNotificationPriority.HIGH,
-                },
-                trigger: null,
-              });
-            } catch (error) {
+          // Send push notification (try on all platforms, but catch errors gracefully on web)
+          try {
+            await Notifications.scheduleNotificationAsync({
+              content: {
+                title: `🚨 ${device.name} - Alert!`,
+                body: message,
+                data: { deviceId, alertFlags: currentAlertFlags, type: 'first-alert' },
+                priority: Notifications.AndroidNotificationPriority.HIGH,
+              },
+              trigger: null,
+            });
+          } catch (error: any) {
+            // On web, notifications may not be available - that's okay, just log it
+            if (Platform.OS === 'web' && error?.message?.includes('not available')) {
+              // Silently ignore - web doesn't support push notifications
+            } else {
               console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
             }
           }
@@ -123,14 +132,18 @@ export function useAirguardAlerts(devices: Device[]) {
             alertFlags: currentAlertFlags,
             firstAlertTime: now,
             lastReminderTime: now,
+            lastNotificationTime: now,
+            resolutionNotified: false,
           });
         }
         // Existing alert - check if reminder is needed
         else {
           const timeSinceLastReminder = now - previousState.lastReminderTime;
+          const timeSinceLastNotification = now - (previousState.lastNotificationTime || 0);
           
           // Send reminder if it's been an hour and alert is still active
-          if (timeSinceLastReminder >= REMINDER_INTERVAL) {
+          // AND we haven't sent a notification in the last 5 minutes (throttle)
+          if (timeSinceLastReminder >= REMINDER_INTERVAL && timeSinceLastNotification >= MIN_NOTIFICATION_INTERVAL) {
             const durationMinutes = Math.round((now - previousState.firstAlertTime) / 60000);
             const message = `Still active: ${reasons.join(', ')} (${durationMinutes} min)`;
             
@@ -144,24 +157,28 @@ export function useAirguardAlerts(devices: Device[]) {
               isReminder: true,
             });
 
-            // Send push reminder (skip on web)
-            if (Platform.OS !== 'web') {
-              try {
-                await Notifications.scheduleNotificationAsync({
-                  content: {
-                    title: `🔔 ${device.name} - Reminder`,
-                    body: message,
-                    data: { deviceId, alertFlags: currentAlertFlags, type: 'reminder' },
-                  },
-                  trigger: null,
-                });
-              } catch (error) {
+            // Send push reminder (try on all platforms, but catch errors gracefully on web)
+            try {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: `🔔 ${device.name} - Reminder`,
+                  body: message,
+                  data: { deviceId, alertFlags: currentAlertFlags, type: 'reminder' },
+                },
+                trigger: null,
+              });
+            } catch (error: any) {
+              // On web, notifications may not be available - that's okay, just log it
+              if (Platform.OS === 'web' && error?.message?.includes('not available')) {
+                // Silently ignore - web doesn't support push notifications
+              } else {
                 console.warn('[useAirguardAlerts] Failed to schedule notification:', error);
               }
             }
 
-            // Update last reminder time
+            // Update last reminder time and notification time
             previousState.lastReminderTime = now;
+            previousState.lastNotificationTime = now;
           }
 
           // Update alert flags if they changed (new sensors triggered)
@@ -173,7 +190,8 @@ export function useAirguardAlerts(devices: Device[]) {
     };
 
     // Check alerts every 10 seconds
-    const interval = setInterval(checkAlerts, 10000);
+    // Check less frequently to reduce spam (every 30 seconds instead of 10)
+    const interval = setInterval(checkAlerts, CHECK_INTERVAL);
     checkAlerts(); // Run immediately
 
     return () => clearInterval(interval);
