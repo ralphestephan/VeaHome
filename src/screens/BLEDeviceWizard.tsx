@@ -41,8 +41,14 @@ interface WiFiNetwork {
 
 type WizardStep = 'permissions' | 'scanning' | 'device-found' | 'network-scan' | 'credentials' | 'provisioning' | 'success';
 
-// Initialize BLE Manager
-const bleManager = new BleManager();
+// Initialize BLE Manager (lazy - only on native platforms)
+let bleManager: BleManager | null = null;
+const getBleManager = () => {
+  if (bleManager === null && Platform.OS !== 'web') {
+    bleManager = new BleManager();
+  }
+  return bleManager;
+};
 
 export default function BLEDeviceWizard({ route }: any) {
   const navigation = useNavigation();
@@ -87,7 +93,7 @@ export default function BLEDeviceWizard({ route }: any) {
   // Cleanup BLE on unmount
   useEffect(() => {
     return () => {
-      bleManager.stopDeviceScan();
+      getBleManager()?.stopDeviceScan();
       if (connectedBLEDevice) {
         connectedBLEDevice.cancelConnection().catch(() => {});
       }
@@ -139,9 +145,15 @@ export default function BLEDeviceWizard({ route }: any) {
 
     try {
       // Check BLE state
-      const state = await bleManager.state();
+      const bleManagerInstance = getBleManager();
+      if (!bleManagerInstance) {
+        Alert.alert('Bluetooth Unavailable', 'BLE is not available on this platform');
+        setIsScanning(false);
+        return;
+      }
+      const state = await bleManagerInstance.state();
       if (state !== 'PoweredOn') {
-        Alert.alert('Bluetooth Off', 'Please turn on Bluetooth to scan for devices');
+        Alert.alInstance!ert('Bluetooth Off', 'Please turn on Bluetooth to scan for devices');
         setIsScanning(false);
         return;
       }
@@ -182,7 +194,7 @@ export default function BLEDeviceWizard({ route }: any) {
 
       // Stop scan after 10 seconds
       setTimeout(() => {
-        bleManager.stopDeviceScan();
+        getBleManager()?.stopDeviceScan();
         setIsScanning(false);
         setDiscoveredDevices(prev => {
           if (prev.length > 0) {
@@ -212,7 +224,14 @@ export default function BLEDeviceWizard({ route }: any) {
 
     try {
       // Connect to device
-      const connected = await bleManager.connectToDevice(device.id);
+      const bleManagerInstance = getBleManager();
+      if (!bleManagerInstance) {
+        Alert.alert('Bluetooth Unavailable', 'BLE is not available on this platform');
+        setIsConnecting(false);
+        setIsScanning(false);
+        return;
+      }
+      const connected = await bleManagerInstance.connectToDevice(device.id);
       await connected.discoverAllServicesAndCharacteristics();
       
       setConnectedBLEDevice(connected);
