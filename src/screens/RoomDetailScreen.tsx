@@ -51,6 +51,7 @@ import { useToast } from '../components/Toast';
 import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { useHomeData } from '../hooks/useHomeData';
+import { useHubs } from '../hooks/useHubs';
 import { getApiClient, HomeApi, HubApi, PublicAirguardApi, ScenesApi } from '../services/api';
 import { useDeviceControl } from '../hooks/useDeviceControl';
 import { useTheme } from '../context/ThemeContext';
@@ -85,6 +86,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
   const isDemoMode = token === 'DEMO_TOKEN';
   const homeId = user?.homeId;
   const { refresh: refreshHomeData } = useHomeData(homeId || '');
+  const { hubs } = useHubs(homeId);
   const [room, setRoom] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,9 +291,33 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         };
       };
 
-      const baseDevices = devicesList
-        .map(mapDevice)
-        .filter((d: any) => String(d.roomId) === String(roomId));
+      // Map hubs to device format and include them in the device list
+      const hubDevices = (hubs || [])
+        .filter((h: any) => String(h.roomId || h.room_id) === String(roomId))
+        .map((h: any) => ({
+          id: String(h.id),
+          name: h.name,
+          type: h.hubType || 'airguard',
+          category: 'climate' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: h.roomId || h.room_id || '',
+          hubId: h.id,
+          homeId: h.homeId || h.home_id,
+          status: h.status || 'offline',
+          hubType: h.hubType,
+          serialNumber: h.serialNumber || h.serial_number,
+          metadata: h.metadata,
+          airQualityData: h.airQualityData,
+        }));
+
+      const baseDevices = [
+        ...devicesList
+          .map(mapDevice)
+          .filter((d: any) => String(d.roomId) === String(roomId)),
+        ...hubDevices,
+      ];
 
       const toNum = (v: any): number | undefined => {
         if (typeof v === 'number' && Number.isFinite(v)) return v;

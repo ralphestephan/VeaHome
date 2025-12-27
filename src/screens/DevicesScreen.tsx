@@ -856,20 +856,23 @@ export default function DevicesScreen() {
               
               if (isHub) {
                 const hubApi = HubApi(getApiClient(async () => token));
-                await hubApi.updateHub(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Hub room updated successfully');
+                const response = await hubApi.updateHub(homeId, deviceId, { roomId });
+                console.log('[DevicesScreen] Hub room updated successfully:', response?.data);
               } else {
                 // Update regular device room
                 const deviceApi = DevicesApi(getApiClient(async () => token));
-                await deviceApi.updateDevice(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Device room updated successfully');
+                const response = await deviceApi.updateDevice(homeId, deviceId, { roomId });
+                console.log('[DevicesScreen] Device room updated successfully:', response?.data);
               }
               
-              // Refresh to show updated room
+              // Refresh to show updated room - wait a bit to ensure backend has processed
+              await new Promise(resolve => setTimeout(resolve, 500));
               await Promise.all([refresh(), refreshHubs()]);
+              console.log('[DevicesScreen] Data refreshed after room assignment');
             } catch (e: any) {
               console.error('[DevicesScreen] Failed to update device room:', e);
-              Alert.alert('Error', e.response?.data?.error || 'Failed to update device room');
+              console.error('[DevicesScreen] Error response:', e.response?.data);
+              Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to update device room');
             }
           }}
           rooms={rooms}

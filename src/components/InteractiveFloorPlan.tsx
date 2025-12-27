@@ -159,8 +159,12 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
     });
   }, [combinedRooms]);
 
-  const panResponder = useMemo(() =>
-    PanResponder.create({
+  // Only create panResponder on mobile platforms to avoid web warnings
+  const panResponder = useMemo(() => {
+    if (Platform.OS === 'web') {
+      return { panHandlers: {} };
+    }
+    return PanResponder.create({
       onStartShouldSetPanResponder: () => isEditMode,
       onMoveShouldSetPanResponder: () => isEditMode,
       onPanResponderGrant: (evt: GestureResponderEvent) => {
@@ -182,8 +186,8 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       onPanResponderRelease: () => {
         draggingRoomId.current = null;
       },
-    }),
-  [isEditMode, roomsToRender, roomPositions]);
+    });
+  }, [isEditMode, roomsToRender, roomPositions]);
 
   const renderRoom = (room: RoomData | any) => {
     const isSelected = selectedRoom === room.id;
@@ -204,7 +208,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       <G
         key={room.id}
         transform={`translate(${offset.x}, ${offset.y})`}
-        {...(isEditMode && Platform.OS !== 'web' ? panResponder.panHandlers : undefined)}
+        {...(isEditMode && Platform.OS !== 'web' ? panResponder.panHandlers : {})}
       >
         <Path
           d={room.path}

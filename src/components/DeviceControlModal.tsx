@@ -11,6 +11,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -1414,11 +1415,15 @@ export default function DeviceControlModal({
                     onPress={async () => {
                       if (!device || !onUpdateRoom) return;
                       try {
+                        console.log('[DeviceControlModal] Unassigning device', device.id, 'from room');
                         await onUpdateRoom(device.id, null);
+                        console.log('[DeviceControlModal] Room unassignment successful');
                         setDisplayRoomId(null); // Update local display immediately
                         setShowRoomPicker(false);
-                      } catch (error) {
-                        console.error('Failed to remove from room:', error);
+                      } catch (error: any) {
+                        console.error('[DeviceControlModal] Failed to remove from room:', error);
+                        console.error('[DeviceControlModal] Error details:', error?.response?.data || error?.message);
+                        Alert.alert('Error', error?.response?.data?.error || error?.message || 'Failed to unassign room');
                       }
                     }}
                     activeOpacity={0.8}
@@ -1455,11 +1460,16 @@ export default function DeviceControlModal({
                         onPress={async () => {
                           if (!device || !onUpdateRoom) return;
                           try {
+                            console.log('[DeviceControlModal] Assigning device', device.id, 'to room', room.id);
                             await onUpdateRoom(device.id, room.id);
+                            console.log('[DeviceControlModal] Room assignment successful');
                             setDisplayRoomId(room.id); // Update local display immediately
                             setShowRoomPicker(false);
-                          } catch (error) {
-                            console.error('Failed to assign room:', error);
+                          } catch (error: any) {
+                            console.error('[DeviceControlModal] Failed to assign room:', error);
+                            console.error('[DeviceControlModal] Error details:', error?.response?.data || error?.message);
+                            // Show error to user
+                            Alert.alert('Error', error?.response?.data?.error || error?.message || 'Failed to assign room');
                           }
                         }}
                         activeOpacity={0.8}

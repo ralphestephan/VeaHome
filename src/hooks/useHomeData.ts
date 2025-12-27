@@ -252,14 +252,16 @@ export const useHomeData = (homeId: string | null | undefined) => {
         setError(null);
         const net = await NetInfo.fetch();
         if (net.isConnected) {
-          const [roomsRes, devicesRes, scenesRes] = await Promise.all([
+          const [roomsRes, devicesRes, hubsRes, scenesRes] = await Promise.all([
             homeApi.getRooms(effectiveHomeId).catch(() => ({ data: [] })),
             hubApi.listDevices(effectiveHomeId).catch(() => ({ data: [] })),
+            hubApi.listHubs(effectiveHomeId).catch(() => ({ data: [] })),
             scenesApi.listScenes(effectiveHomeId).catch(() => ({ data: [] })),
           ]);
 
           const rawRooms = unwrap<any[]>(roomsRes, 'rooms');
           const rawDevices = unwrap<any[]>(devicesRes, 'devices');
+          const rawHubs = unwrap<any[]>(hubsRes, 'hubs');
           const rawScenes = unwrap<any[]>(scenesRes, 'scenes');
 
           // Build scene ID -> name map
@@ -275,7 +277,29 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const mappedRooms = (rawRooms || []).map((r: any) => mapRoom(r, sceneNameMap));
           console.log('[useHomeData] Mapped rooms:', mappedRooms.map(r => ({ id: r.id, name: r.name, scene: r.scene, sceneName: r.sceneName })));
           const mappedDevices = (rawDevices || []).map(mapDevice);
-          const enrichedDevices = await enrichAirguards(mappedDevices);
+          
+          // Map hubs to device format and include them in the device list
+          const mappedHubDevices = (rawHubs || []).map((h: any) => ({
+            id: String(h.id),
+            name: h.name,
+            type: h.hubType || h.hub_type || 'airguard',
+            category: 'climate' as const,
+            isActive: h.status === 'online',
+            value: undefined,
+            unit: undefined,
+            roomId: h.roomId || h.room_id || '',
+            hubId: h.id,
+            homeId: h.homeId || h.home_id,
+            status: h.status || 'offline',
+            hubType: h.hubType || h.hub_type,
+            serialNumber: h.serialNumber || h.serial_number,
+            metadata: h.metadata,
+            airQualityData: h.airQualityData,
+          } as Device));
+          
+          // Combine regular devices and hub devices
+          const allDevices = [...mappedDevices, ...mappedHubDevices];
+          const enrichedDevices = await enrichAirguards(allDevices);
           const roomsWithDevices = applyDevicesToRooms(mappedRooms, enrichedDevices);
 
           setRooms(roomsWithDevices);
