@@ -100,6 +100,7 @@ export async function listHubs(req: Request, res: Response) {
       name: h.name || `Device_${h.serial_number}`,
       hubType: h.hub_type || 'utility',
       status: h.status,
+      roomId: h.room_id, // Include roomId in response
       wifiSsid: h.wifi_ssid,
       wifiConnected: h.wifi_connected,
       mqttTopic: h.mqtt_topic,

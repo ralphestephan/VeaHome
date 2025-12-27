@@ -1454,6 +1454,7 @@ export default function DeviceControlModal({
                   </View>
                 ) : (
                   rooms.map((room) => {
+                    if (!room || !room.id) return null;
                     const isActive = displayRoomId === room.id;
                     return (
                       <TouchableOpacity
@@ -1509,7 +1510,7 @@ export default function DeviceControlModal({
                           styles.roomCardTitle,
                           isActive && styles.roomCardTitleActive
                         ]} numberOfLines={1}>
-                          {room.name}
+                          {room.name || 'Unnamed Room'}
                         </Text>
                         {isActive && (
                           <View style={styles.roomCardActiveBadge}>
@@ -1519,7 +1520,7 @@ export default function DeviceControlModal({
                         )}
                       </TouchableOpacity>
                     );
-                  })
+                  }).filter(Boolean)
                 )}
               </ScrollView>
             </LinearGradient>
