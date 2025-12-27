@@ -156,9 +156,14 @@ export default function DeviceControlModal({
   
   // Update display values when device prop changes
   useEffect(() => {
+    console.log('[DeviceControlModal] Device prop changed:', { deviceId: device?.id, deviceName: device?.name, deviceRoomId: device?.roomId, currentDisplayRoomId: displayRoomId });
     setDisplayName(device.name);
-    setDisplayRoomId(device.roomId);
-  }, [device.name, device.roomId]);
+    const newRoomId = device.roomId || null;
+    if (String(newRoomId) !== String(displayRoomId)) {
+      console.log('[DeviceControlModal] Updating displayRoomId from', displayRoomId, 'to', newRoomId);
+      setDisplayRoomId(newRoomId);
+    }
+  }, [device?.id, device?.name, device?.roomId]);
   
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
@@ -1458,16 +1463,22 @@ export default function DeviceControlModal({
                           isActive && styles.roomCardActive
                         ]}
                         onPress={async () => {
-                          if (!device || !onUpdateRoom) return;
+                          console.log('[DeviceControlModal] Room card pressed:', { deviceId: device?.id, roomId: room.id, hasDevice: !!device, hasOnUpdateRoom: !!onUpdateRoom });
+                          if (!device || !onUpdateRoom) {
+                            console.warn('[DeviceControlModal] Cannot assign room - missing device or onUpdateRoom callback');
+                            return;
+                          }
                           try {
-                            console.log('[DeviceControlModal] Assigning device', device.id, 'to room', room.id);
+                            console.log('[DeviceControlModal] Starting room assignment - device:', device.id, 'to room:', room.id);
                             await onUpdateRoom(device.id, room.id);
-                            console.log('[DeviceControlModal] Room assignment successful');
+                            console.log('[DeviceControlModal] Room assignment callback completed successfully');
                             setDisplayRoomId(room.id); // Update local display immediately
                             setShowRoomPicker(false);
+                            console.log('[DeviceControlModal] Local state updated and picker closed');
                           } catch (error: any) {
                             console.error('[DeviceControlModal] Failed to assign room:', error);
                             console.error('[DeviceControlModal] Error details:', error?.response?.data || error?.message);
+                            console.error('[DeviceControlModal] Error stack:', error?.stack);
                             // Show error to user
                             Alert.alert('Error', error?.response?.data?.error || error?.message || 'Failed to assign room');
                           }

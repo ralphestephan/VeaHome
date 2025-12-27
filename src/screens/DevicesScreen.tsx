@@ -173,33 +173,36 @@ export default function DevicesScreen() {
   const utilityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'utility');
   const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
 
-  // Filter devices by category and include relevant hubs (e.g., AirGuard is a hub but shown as device)
-  // Map hubs to device format with ALL required Device fields
+  // Filter devices by category - hubs are already included in devices array from useHomeData
+  // Only add hubs separately if they're NOT already in the devices array (to avoid duplicates)
   const climateDevices = [
     ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
-    ...climateHubs.map(h => {
-      const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
-      return {
-        id: h.id,
-        name: h.name,
-        type: h.hubType || 'airguard',
-        category: 'climate' as const,
-        isActive: isOnline,
-        value: undefined,
-        unit: undefined,
-        roomId: h.roomId || '', // Don't auto-assign to kitchen - leave unassigned
-        homeId: h.homeId,
-        status: isOnline ? 'online' : 'offline',
-        // Pass hub-specific fields for telemetry fetching
-        hubType: h.hubType,
-        serialNumber: h.serialNumber,
-        metadata: h.metadata
-      };
-    })
+    ...climateHubs
+      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .map(h => {
+        const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType || 'airguard',
+          category: 'climate' as const,
+          isActive: isOnline,
+          value: undefined,
+          unit: undefined,
+          roomId: h.roomId || '',
+          homeId: h.homeId,
+          status: isOnline ? 'online' : 'offline',
+          hubType: h.hubType,
+          serialNumber: h.serialNumber,
+          metadata: h.metadata
+        };
+      })
   ];
   const securityDevices = [
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
-    ...securityHubs.map(h => ({
+    ...securityHubs
+      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .map(h => ({
       id: h.id,
       name: h.name,
       type: h.hubType,
@@ -214,7 +217,9 @@ export default function DevicesScreen() {
   ];
   const utilityDevices = [
     ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
-    ...utilityHubs.map(h => ({
+    ...utilityHubs
+      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .map(h => ({
       id: h.id,
       name: h.name,
       type: h.hubType,
@@ -229,7 +234,9 @@ export default function DevicesScreen() {
   ];
   const lightsDevices = [
     ...devices.filter(d => d.category === 'lighting' || d.type === 'light'),
-    ...lightingHubs.map(h => ({
+    ...lightingHubs
+      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .map(h => ({
       id: h.id,
       name: h.name,
       type: h.hubType,
@@ -846,32 +853,75 @@ export default function DevicesScreen() {
             }
           }}
           onUpdateRoom={async (deviceId, roomId) => {
-            if (isDemoMode) return;
-            if (!homeId) return;
+            console.log('[DevicesScreen] onUpdateRoom called:', { deviceId, roomId, isDemoMode, homeId });
+            if (isDemoMode) {
+              console.log('[DevicesScreen] Demo mode - skipping room update');
+              return;
+            }
+            if (!homeId) {
+              console.log('[DevicesScreen] No homeId - cannot update room');
+              return;
+            }
             try {
               console.log('[DevicesScreen] Updating device room:', deviceId, 'to:', roomId);
+              console.log('[DevicesScreen] Available hubs:', hubs.map(h => ({ id: h.id, name: h.name })));
               
               // Check if this is a hub
               const isHub = hubs.some(h => h.id === deviceId);
+              console.log('[DevicesScreen] Is hub?', isHub);
               
               if (isHub) {
+                console.log('[DevicesScreen] Updating hub room via updateHub API');
                 const hubApi = HubApi(getApiClient(async () => token));
                 const response = await hubApi.updateHub(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Hub room updated successfully:', response?.data);
+                console.log('[DevicesScreen] Hub API response:', response);
+                const updatedHub = response?.data?.data || response?.data;
+                console.log('[DevicesScreen] Hub room updated successfully:', updatedHub);
+                console.log('[DevicesScreen] Updated hub roomId:', updatedHub?.room_id || updatedHub?.roomId);
+                
+                // Verify the update was saved
+                if (updatedHub) {
+                  const savedRoomId = updatedHub.room_id || updatedHub.roomId;
+                  console.log('[DevicesScreen] Saved roomId in backend:', savedRoomId, 'Expected:', roomId);
+                  if (String(savedRoomId) !== String(roomId)) {
+                    console.warn('[DevicesScreen] WARNING: RoomId mismatch! Backend returned:', savedRoomId, 'but we sent:', roomId);
+                  }
+                }
               } else {
+                console.log('[DevicesScreen] Updating regular device room via updateDevice API');
                 // Update regular device room
-                const deviceApi = DevicesApi(getApiClient(async () => token));
-                const response = await deviceApi.updateDevice(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Device room updated successfully:', response?.data);
+                const hubApi = HubApi(getApiClient(async () => token));
+                const response = await hubApi.updateDevice(homeId, deviceId, { roomId });
+                console.log('[DevicesScreen] Device API response:', response);
+                const updatedDevice = response?.data?.data?.device || response?.data?.device || response?.data;
+                console.log('[DevicesScreen] Device room updated successfully:', updatedDevice);
+                console.log('[DevicesScreen] Updated device roomId:', updatedDevice?.room_id || updatedDevice?.roomId);
+                
+                // Verify the update was saved
+                if (updatedDevice) {
+                  const savedRoomId = updatedDevice.room_id || updatedDevice.roomId;
+                  console.log('[DevicesScreen] Saved roomId in backend:', savedRoomId, 'Expected:', roomId);
+                  if (String(savedRoomId) !== String(roomId)) {
+                    console.warn('[DevicesScreen] WARNING: RoomId mismatch! Backend returned:', savedRoomId, 'but we sent:', roomId);
+                  }
+                }
               }
               
-              // Refresh to show updated room - wait a bit to ensure backend has processed
-              await new Promise(resolve => setTimeout(resolve, 500));
+              // Force refresh both data sources immediately
+              console.log('[DevicesScreen] Refreshing data sources...');
               await Promise.all([refresh(), refreshHubs()]);
-              console.log('[DevicesScreen] Data refreshed after room assignment');
+              console.log('[DevicesScreen] First refresh complete');
+              
+              // Wait and refresh again to ensure backend changes are reflected
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              await Promise.all([refresh(), refreshHubs()]);
+              console.log('[DevicesScreen] Second refresh complete - room assignment should be visible now');
             } catch (e: any) {
               console.error('[DevicesScreen] Failed to update device room:', e);
+              console.error('[DevicesScreen] Error message:', e.message);
               console.error('[DevicesScreen] Error response:', e.response?.data);
+              console.error('[DevicesScreen] Error status:', e.response?.status);
+              console.error('[DevicesScreen] Full error:', JSON.stringify(e, null, 2));
               Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to update device room');
             }
           }}

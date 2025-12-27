@@ -279,23 +279,34 @@ export const useHomeData = (homeId: string | null | undefined) => {
           const mappedDevices = (rawDevices || []).map(mapDevice);
           
           // Map hubs to device format and include them in the device list
-          const mappedHubDevices = (rawHubs || []).map((h: any) => ({
-            id: String(h.id),
-            name: h.name,
-            type: h.hubType || h.hub_type || 'airguard',
-            category: 'climate' as const,
-            isActive: h.status === 'online',
-            value: undefined,
-            unit: undefined,
-            roomId: h.roomId || h.room_id || '',
-            hubId: h.id,
-            homeId: h.homeId || h.home_id,
-            status: h.status || 'offline',
-            hubType: h.hubType || h.hub_type,
-            serialNumber: h.serialNumber || h.serial_number,
-            metadata: h.metadata,
-            airQualityData: h.airQualityData,
-          } as Device));
+          const mappedHubDevices = (rawHubs || []).map((h: any) => {
+            const roomId = h.roomId || h.room_id || null;
+            console.log('[useHomeData] Mapping hub to device:', { 
+              hubId: h.id, 
+              hubName: h.name, 
+              roomId, 
+              roomIdRaw: h.roomId, 
+              room_idRaw: h.room_id,
+              fullHub: h 
+            });
+            return {
+              id: String(h.id),
+              name: h.name,
+              type: h.hubType || h.hub_type || 'airguard',
+              category: 'climate' as const,
+              isActive: h.status === 'online',
+              value: undefined,
+              unit: undefined,
+              roomId: roomId ? String(roomId) : '',
+              hubId: h.id,
+              homeId: h.homeId || h.home_id,
+              status: h.status || 'offline',
+              hubType: h.hubType || h.hub_type,
+              serialNumber: h.serialNumber || h.serial_number,
+              metadata: h.metadata,
+              airQualityData: h.airQualityData,
+            } as Device;
+          });
           
           // Combine regular devices and hub devices
           const allDevices = [...mappedDevices, ...mappedHubDevices];
