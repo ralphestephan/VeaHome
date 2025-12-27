@@ -371,20 +371,40 @@ export const useHomeData = (homeId: string | null | undefined) => {
       throw new Error('No home selected');
     }
 
-    const payload = {
+    const payload: any = {
       name: room.name,
-      scene: room.scene && room.scene.trim() ? room.scene : null,
-      image: room.image,
-      layoutPath: room.layoutPath,
-      accentColor: room.accentColor,
       metadata: {
         temperature: room.temperature,
         humidity: room.humidity,
         lights: room.lights,
       },
     };
+    
+    // Only include optional fields if they have valid values
+    if (room.scene && room.scene.trim()) {
+      payload.scene = room.scene.trim();
+    } else {
+      payload.scene = null;
+    }
+    
+    if (room.image && room.image.trim()) {
+      payload.image = room.image.trim();
+    }
+    
+    if (room.layoutPath && room.layoutPath.trim()) {
+      payload.layoutPath = room.layoutPath.trim();
+    }
+    
+    // Validate accentColor is a valid hex color before including it
+    if (room.accentColor) {
+      const hexPattern = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
+      if (hexPattern.test(room.accentColor)) {
+        payload.accentColor = room.accentColor;
+      }
+    }
 
     try {
+      console.log('[useHomeData] Creating room with payload:', JSON.stringify(payload, null, 2));
       const res = await homeApi.createRoom(effectiveHomeId, payload);
       const createdRaw = unwrap<any>(res, 'room');
       const created = createdRaw ? mapRoom(createdRaw) : null;
@@ -396,8 +416,14 @@ export const useHomeData = (homeId: string | null | undefined) => {
       // Refresh to ensure we have canonical data from the backend
       await refresh();
       return created;
-    } catch (e) {
+    } catch (e: any) {
       console.error('[useHomeData] createRoom failed:', e);
+      if (e?.response?.data?.errors) {
+        console.error('[useHomeData] Validation errors:', e.response.data.errors);
+      }
+      if (e?.response?.data?.error) {
+        console.error('[useHomeData] Error message:', e.response.data.error);
+      }
       throw e;
     }
   }, [currentHomeId, homeApi, homeId, isDemoMode]);
