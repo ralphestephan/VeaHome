@@ -153,13 +153,13 @@ export default function BLEDeviceWizard({ route }: any) {
       }
       const state = await bleManagerInstance.state();
       if (state !== 'PoweredOn') {
-        Alert.alInstance!ert('Bluetooth Off', 'Please turn on Bluetooth to scan for devices');
+        Alert.alert('Bluetooth Off', 'Please turn on Bluetooth to scan for devices');
         setIsScanning(false);
         return;
       }
 
       // Start scanning
-      bleManager.startDeviceScan(
+      bleManagerInstance!.startDeviceScan(
         null, // Scan for all devices
         { allowDuplicates: false },
         (error, device) => {
