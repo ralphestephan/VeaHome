@@ -20,6 +20,7 @@ import {
   Modal,
   TextInput,
   Image,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, G, Text as SvgText, Circle } from 'react-native-svg';
@@ -203,7 +204,7 @@ const InteractiveFloorPlan = forwardRef<InteractiveFloorPlanHandle, InteractiveF
       <G
         key={room.id}
         transform={`translate(${offset.x}, ${offset.y})`}
-        {...(isEditMode ? panResponder.panHandlers : {})}
+        {...(isEditMode && Platform.OS !== 'web' ? panResponder.panHandlers : {})}
       >
         <Path
           d={room.path}
