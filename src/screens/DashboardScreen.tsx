@@ -272,9 +272,34 @@ export default function DashboardScreen() {
     onEnergyUpdate: () => {},
   });
 
+  // Listen for navigation events to refresh when returning from RoomDetailScreen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('[DashboardScreen] Screen focused via navigation, refreshing data...');
+      if (homeId) {
+        refresh().then(() => {
+          console.log('[DashboardScreen] Refresh complete after navigation focus');
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, homeId, refresh]);
+
   useFocusEffect(
     useCallback(() => {
-      if (homeId) refresh();
+      const refreshData = async () => {
+        if (homeId) {
+          console.log('[DashboardScreen] useFocusEffect: Refreshing data...');
+          // Don't await - let it run in background so it doesn't block UI
+          refresh().then(() => {
+            console.log('[DashboardScreen] useFocusEffect: Refresh complete');
+          }).catch(err => {
+            console.error('[DashboardScreen] useFocusEffect: Refresh failed:', err);
+          });
+        }
+      };
+      refreshData();
     }, [homeId, refresh])
   );
 
@@ -285,13 +310,30 @@ export default function DashboardScreen() {
   }, [refresh]);
 
   const handleRoomSelect = async (roomId: string) => {
+    console.log('[DashboardScreen] handleRoomSelect called for roomId:', roomId);
     userSelectedRoomRef.current = roomId;
     setSelectedRoom(roomId);
-    // Refresh data before showing popup to ensure latest devices and stats are shown
-    await refresh();
-    // Wait a bit for state to update after refresh
-    await new Promise(resolve => setTimeout(resolve, 100));
-    setShowRoomPopup(true); // Show popup overlay instead of scrolling
+    
+    // Check if room data exists before showing popup
+    const currentRoom = rooms.find((r: Room) => String(r.id) === String(roomId));
+    console.log('[DashboardScreen] Current room data:', currentRoom ? { id: currentRoom.id, name: currentRoom.name, deviceCount: currentRoom.devices?.length } : 'NOT FOUND');
+    
+    // Show popup immediately if we have room data, otherwise refresh first
+    if (currentRoom) {
+      setShowRoomPopup(true);
+      // Refresh in background to update with latest data
+      refresh().then(() => {
+        console.log('[DashboardScreen] Background refresh complete. Rooms count:', rooms.length);
+      }).catch(err => {
+        console.error('[DashboardScreen] Background refresh failed:', err);
+      });
+    } else {
+      // No room data yet, refresh first then show popup
+      console.log('[DashboardScreen] No room data found, refreshing first...');
+      await refresh();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setShowRoomPopup(true);
+    }
   };
 
   const handleRoomPopupClose = () => {

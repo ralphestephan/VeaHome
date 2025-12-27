@@ -388,24 +388,64 @@ export const useHomeData = (homeId: string | null | undefined) => {
     }
     if (!effectiveHomeId || !token) return;
     try {
-      const [roomsRes, devicesRes] = await Promise.all([
-        homeApi.getRooms(effectiveHomeId),
-        hubApi.listDevices(effectiveHomeId),
+      console.log('[useHomeData.refresh] Starting refresh...');
+      const [roomsRes, devicesRes, hubsRes] = await Promise.all([
+        homeApi.getRooms(effectiveHomeId).catch(() => ({ data: [] })),
+        hubApi.listDevices(effectiveHomeId).catch(() => ({ data: [] })),
+        hubApi.listHubs(effectiveHomeId).catch(() => ({ data: [] })), // CRITICAL: Include hubs in refresh!
       ]);
+      
       const rawRooms = unwrap<any[]>(roomsRes, 'rooms');
       const rawDevices = unwrap<any[]>(devicesRes, 'devices');
+      const rawHubs = unwrap<any[]>(hubsRes, 'hubs');
+
+      console.log('[useHomeData.refresh] Fetched:', {
+        rooms: rawRooms?.length || 0,
+        devices: rawDevices?.length || 0,
+        hubs: rawHubs?.length || 0,
+      });
 
       const mappedRooms = (rawRooms || []).map(mapRoom);
       const mappedDevices = (rawDevices || []).map(mapDevice);
-      const enrichedDevices = await enrichAirguards(mappedDevices);
+      
+      // Map hubs to device format and include them in the device list (same as loadData)
+      const mappedHubDevices = (rawHubs || []).map((h: any) => {
+        const roomId = h.roomId || h.room_id || null;
+        return {
+          id: String(h.id),
+          name: h.name,
+          type: h.hubType || h.hub_type || 'airguard',
+          category: 'climate' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId ? String(roomId) : '',
+          hubId: h.id,
+          homeId: h.homeId || h.home_id,
+          status: h.status || 'offline',
+          hubType: h.hubType || h.hub_type,
+          serialNumber: h.serialNumber || h.serial_number,
+          metadata: h.metadata,
+          airQualityData: h.airQualityData,
+        } as Device;
+      });
+
+      // Combine regular devices and hub devices
+      const allDevices = [...mappedDevices, ...mappedHubDevices];
+      const enrichedDevices = await enrichAirguards(allDevices);
       const roomsWithDevices = applyDevicesToRooms(mappedRooms, enrichedDevices);
+
+      console.log('[useHomeData.refresh] After enrichment:', {
+        totalDevices: enrichedDevices.length,
+        roomsWithDevices: roomsWithDevices.map(r => ({ name: r.name, deviceCount: r.devices?.length || 0 })),
+      });
 
       setRooms(roomsWithDevices);
       setDevices(enrichedDevices);
       await AsyncStorage.setItem(`rooms_cache_${effectiveHomeId}`, JSON.stringify(roomsWithDevices));
       await AsyncStorage.setItem(`devices_cache_${effectiveHomeId}`, JSON.stringify(enrichedDevices));
     } catch (e) {
-      console.error('Error refreshing data:', e);
+      console.error('[useHomeData.refresh] Error refreshing data:', e);
     }
   }, [currentHomeId, enrichAirguards, homeApi, hubApi, homeId, isDemoMode, token]);
 

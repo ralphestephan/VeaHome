@@ -72,7 +72,13 @@ export default function RoomPopupCard({
     }
   }, [visible, room]);
   
-  if (!visible || !room) return null;
+  if (!visible) return null;
+  
+  // If room is null, don't show popup (wait for data)
+  if (!room) {
+    console.log('[RoomPopupCard] Room is null, not showing popup');
+    return null;
+  }
   
   const deviceCount = Array.isArray(room.devices) ? room.devices.length : 0;
   const alertFlags = (room as any).alertFlags ?? 0;
