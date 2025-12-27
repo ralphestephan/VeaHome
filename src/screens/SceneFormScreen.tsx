@@ -68,6 +68,8 @@ type RouteProp = {
 
 const SCENE_ICONS = [
   { id: 'weather-sunset-up', name: 'Sunrise', icon: Sun },
+  { id: 'sun', name: 'Afternoon', icon: Sun },
+  { id: 'weather-sunset', name: 'Evening', icon: Sun },
   { id: 'weather-night', name: 'Night', icon: Moon },
   { id: 'movie', name: 'Movie', icon: Film },
   { id: 'party-popper', name: 'Party', icon: PartyPopper },
@@ -131,13 +133,13 @@ export default function SceneFormScreen() {
       }
     } else if (hour >= 12 && hour < 17) {
       // Afternoon (12 PM - 5 PM)
-      if (lowerName.includes('afternoon') || lowerName.includes('lunch') || lowerName.includes('day')) {
-        return 'lightbulb'; // Use sun icon if available, otherwise lightbulb
+      if (lowerName.includes('afternoon') || lowerName.includes('lunch') || lowerName.includes('day') || lowerName.includes('noon')) {
+        return 'sun';
       }
     } else if (hour >= 17 && hour < 21) {
       // Evening (5 PM - 9 PM)
       if (lowerName.includes('evening') || lowerName.includes('dinner') || lowerName.includes('sunset')) {
-        return 'weather-sunset-up';
+        return 'weather-sunset';
       }
     } else {
       // Night (9 PM - 5 AM)
@@ -150,8 +152,11 @@ export default function SceneFormScreen() {
     if (lowerName.includes('night') || lowerName.includes('sleep') || lowerName.includes('bed')) {
       return 'weather-night';
     }
-    if (lowerName.includes('evening') || lowerName.includes('dinner')) {
-      return 'weather-sunset-up';
+    if (lowerName.includes('evening') || lowerName.includes('dinner') || lowerName.includes('sunset')) {
+      return 'weather-sunset';
+    }
+    if (lowerName.includes('afternoon') || lowerName.includes('noon')) {
+      return 'sun';
     }
     if (lowerName.includes('morning') || lowerName.includes('breakfast') || lowerName.includes('wake')) {
       return 'weather-sunset-up';
@@ -170,9 +175,10 @@ export default function SceneFormScreen() {
     }
     
     // Default based on time of day
-    if (hour >= 17 && hour < 21) return 'weather-sunset-up'; // Evening
+    if (hour >= 12 && hour < 17) return 'sun'; // Afternoon
+    if (hour >= 17 && hour < 21) return 'weather-sunset'; // Evening
     if (hour >= 21 || hour < 5) return 'weather-night'; // Night
-    return 'lightbulb'; // Default
+    return 'weather-sunset-up'; // Default (Morning)
   };
   
   const [selectedIcon, setSelectedIcon] = useState<string>('lightbulb');

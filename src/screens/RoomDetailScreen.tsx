@@ -606,12 +606,31 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           console.log('[Room Scene] Scene ID to match:', sceneIdToMatch);
           console.log('[Room Scene] Available scenes:', scenesData);
           
-          // First, try to find scene by ID (scene assigned to room)
-          let activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => String(s.id) === String(sceneIdToMatch)) : null;
+          // Filter scenes to only include those that affect this room
+          const roomIdStr = String(roomId);
+          const relevantScenes = Array.isArray(scenesData) ? scenesData.filter((s: any) => {
+            // Home-wide scenes are always relevant
+            if (s.scope === 'home' || !s.scope) return true;
+            
+            // Room-specific scenes - check if this room is included
+            if (s.scope === 'rooms') {
+              const roomIds = s.room_ids || s.roomIds || [];
+              // Parse if string
+              const roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : roomIds;
+              return Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === roomIdStr);
+            }
+            
+            return false;
+          }) : [];
           
-          // If no scene assigned to room, check for globally active scene
+          setScenes(relevantScenes);
+          
+          // First, try to find scene by ID (scene assigned to room)
+          let activeScene = relevantScenes.find((s: any) => String(s.id) === String(sceneIdToMatch));
+          
+          // If no scene assigned to room, check for globally active scene that affects this room
           if (!activeScene) {
-            activeScene = Array.isArray(scenesData) ? scenesData.find((s: any) => s.isActive === true || s.is_active === true) : null;
+            activeScene = relevantScenes.find((s: any) => s.isActive === true || s.is_active === true);
           }
           
           console.log('[Room Scene] Found scene:', activeScene);
@@ -1288,7 +1307,35 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
                   <View style={styles.sceneOptionInfo}>
                     <Text style={styles.sceneOptionText}>{scene.name}</Text>
                     <Text style={styles.sceneOptionSubtext}>
-                      {Object.keys(scene.device_states || scene.deviceStates || {}).length} devices
+                      {(() => {
+                        // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                        // For room-specific scenes, only count devices in this room
+                        if (scene.deviceTypeRules || scene.device_type_rules) {
+                          const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                          let totalDevices = 0;
+                          
+                          rules.forEach((rule: any) => {
+                            if (rule.mode === 'specific' && rule.deviceIds) {
+                              // Count only devices in this room
+                              const roomDevices = devices.filter((d: any) => rule.deviceIds.includes(d.id));
+                              totalDevices += roomDevices.length;
+                            } else if (rule.mode === 'all') {
+                              // Count all devices of this type in the room
+                              const typeDevices = devices.filter((d: any) => d.type === rule.type);
+                              totalDevices += typeDevices.length;
+                            }
+                          });
+                          
+                          return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
+                        }
+                        
+                        // Fallback to old format - count devices in this room
+                        const deviceStates = scene.device_states || scene.deviceStates || {};
+                        const deviceIds = Object.keys(deviceStates);
+                        const roomDeviceIds = deviceIds.filter(id => devices.some(d => d.id === id));
+                        const count = roomDeviceIds.length;
+                        return `${count} ${count === 1 ? 'device' : 'devices'}`;
+                      })()}
                     </Text>
                   </View>
                   {activeSceneName === scene.name && (

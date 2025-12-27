@@ -59,6 +59,8 @@ import { useToast } from '../components/Toast';
 // Icon mapping for scenes
 const sceneIconMap: Record<string, LucideIcon> = {
   'weather-sunset-up': Sun,
+  'sun': Sun,
+  'weather-sunset': Sun,
   'weather-night': Moon,
   'movie': Film,
   'party-popper': PartyPopper,
@@ -334,21 +336,34 @@ export default function ScenesScreen() {
 
     try {
       const scene = scenes.find(s => s.id === id);
-      if (scene && !scene.isActive) {
+      const isCurrentlyActive = scene?.isActive === true || scene?.is_active === true;
+      
+      if (scene && !isCurrentlyActive) {
         // Activate scene
         await scenesApi.activateScene(homeId, id);
-        // Deactivate others locally for snappy UI
-        setScenes(prev => prev.map(s => ({
-          ...s,
-          isActive: s.id === id,
-        })));
         showToast(`"${scene.name}" activated`, { type: 'success' });
+        
+        // Refresh scenes to get updated state from backend
+        await loadScenes();
+        // Also refresh home data to update rooms with active scene
+        await refreshHomeData();
+        // Refresh scenes one more time to ensure sync
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await loadScenes();
       } else if (scene) {
         showToast(`"${scene.name}" is already active`, { type: 'info' });
+        // Still refresh to ensure UI is in sync
+        await loadScenes();
+      } else {
+        // Scene not found, refresh to get latest data
+        await loadScenes();
       }
-      await loadScenes();
     } catch (e: any) {
+      console.error('[ScenesScreen] Scene activation error:', e);
+      console.error('[ScenesScreen] Error response:', e?.response?.data);
       showToast(e?.response?.data?.message || 'Failed to toggle scene', { type: 'error' });
+      // Still refresh to ensure UI is in sync
+      await loadScenes();
     }
   };
 
@@ -416,8 +431,8 @@ export default function ScenesScreen() {
     }
   };
 
-  const activeScenes = scenes.filter(s => s.isActive);
-  const inactiveScenes = scenes.filter(s => !s.isActive);
+  const activeScenes = scenes.filter(s => s.isActive === true || s.is_active === true);
+  const inactiveScenes = scenes.filter(s => !(s.isActive === true || s.is_active === true));
 
   if (loading) {
     return (
@@ -464,7 +479,26 @@ export default function ScenesScreen() {
                     <View style={styles.activeSceneContent}>
                       <Text style={styles.activeSceneName}>{scene.name}</Text>
                       <Text style={styles.activeSceneDetails}>
-                        {scene.deviceCount || Object.keys(scene.device_states || scene.deviceStates || {}).length || 0} devices active • {scene.description || 'Custom scene'}
+                        {(() => {
+                          // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                          if (scene.deviceTypeRules || scene.device_type_rules) {
+                            const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                            let totalDevices = 0;
+                            
+                            rules.forEach((rule: any) => {
+                              if (rule.mode === 'specific' && rule.deviceIds) {
+                                totalDevices += rule.deviceIds.length;
+                              } else if (rule.mode === 'all') {
+                                const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
+                                totalDevices += typeDevices.length;
+                              }
+                            });
+                            
+                            return totalDevices;
+                          }
+                          
+                          return Object.keys(scene.device_states || scene.deviceStates || {}).length;
+                        })()} devices active • {scene.description || 'Custom scene'}
                       </Text>
                     </View>
                   </View>
@@ -538,6 +572,26 @@ export default function ScenesScreen() {
                 <Text style={styles.sceneCardName}>{scene.name}</Text>
                 <View style={styles.sceneCardDetails}>
                   <Text style={styles.sceneCardDevices}>{(() => {
+                    // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                    if (scene.deviceTypeRules || scene.device_type_rules) {
+                      const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                      let totalDevices = 0;
+                      
+                      rules.forEach((rule: any) => {
+                        if (rule.mode === 'specific' && rule.deviceIds) {
+                          totalDevices += rule.deviceIds.length;
+                        } else if (rule.mode === 'all') {
+                          // Count all devices of this type
+                          const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
+                          totalDevices += typeDevices.length;
+                        }
+                      });
+                      
+                      if (totalDevices === 0) return 'No devices';
+                      return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
+                    }
+                    
+                    // Fallback to old format
                     const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
                     const count = deviceIds.length;
                     if (count === 0) return 'No devices';
@@ -578,6 +632,25 @@ export default function ScenesScreen() {
                   <Text style={styles.sceneListName}>{scene.name}</Text>
                   <Text style={styles.sceneListDescription}>
                     {(() => {
+                      // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                      if (scene.deviceTypeRules || scene.device_type_rules) {
+                        const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                        let totalDevices = 0;
+                        
+                        rules.forEach((rule: any) => {
+                          if (rule.mode === 'specific' && rule.deviceIds) {
+                            totalDevices += rule.deviceIds.length;
+                          } else if (rule.mode === 'all') {
+                            const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
+                            totalDevices += typeDevices.length;
+                          }
+                        });
+                        
+                        if (totalDevices === 0) return 'No devices configured';
+                        return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
+                      }
+                      
+                      // Fallback to old format
                       const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
                       const count = deviceIds.length;
                       if (count === 0) return 'No devices configured';
