@@ -23,7 +23,7 @@ import {
   Plus,
   Edit3,
   Save,
-  Sparkles,
+  Cpu,
 } from 'lucide-react-native';
 import { 
   spacing, 
@@ -43,6 +43,7 @@ import RoomCard from '../components/RoomCard';
 import Model3DViewer from '../components/Model3DViewer';
 import { useAuth } from '../context/AuthContext';
 import { useHomeData } from '../hooks/useHomeData';
+import { useHubs } from '../hooks/useHubs';
 import { useEnergyData } from '../hooks/useEnergyData';
 import { useRealtime } from '../hooks/useRealtime';
 import { useDeviceControl } from '../hooks/useDeviceControl';
@@ -85,6 +86,8 @@ export default function DashboardScreen() {
   const { currentHomeId } = useAuth();
   const homeId = currentHomeId || user?.homeId;
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
+  const { hubs: fetchedHubs } = useHubs(homeId);
+  const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
   const { devices: demoDevices, rooms: demoRooms, toggleDevice: demoToggleDevice, activateScene, addRoom: demoAddRoom, setDeviceMuted } = useDemo();
   
   // Use demo data if in demo mode
@@ -154,6 +157,7 @@ export default function DashboardScreen() {
           const client = getApiClient(async () => token);
           const homeApi = HomeApi(client);
           const response = await homeApi.getHome(homeId);
+          console.log('[DashboardScreen] Loaded home:', response.data);
           setHome(response.data);
         } catch (e) {
           console.error('Error loading home:', e);
@@ -162,6 +166,25 @@ export default function DashboardScreen() {
     };
     loadHome();
   }, [homeId, token]);
+
+  // Refetch home data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadHome = async () => {
+        if (homeId && token) {
+          try {
+            const client = getApiClient(async () => token);
+            const homeApi = HomeApi(client);
+            const response = await homeApi.getHome(homeId);
+            setHome(response.data);
+          } catch (e) {
+            console.error('Error loading home on focus:', e);
+          }
+        }
+      };
+      loadHome();
+    }, [homeId, token])
+  );
 
   // Load schedules
   useEffect(() => {
@@ -405,7 +428,7 @@ export default function DashboardScreen() {
   const selectedRoomData = selectedRoom ? rooms.find((room: Room) => room.id === selectedRoom) : null;
   const activeDevicesCount = devices.filter((device: Device) => device.isActive).length;
   const onlineDevicesCount = devices.filter((device: Device) => device.isOnline !== false).length;
-  const isHomeOnline = onlineDevicesCount > 0;
+  const isHomeOnline = hubs.length > 0;
   const lightsOnCount = devices.filter((d: Device) => d.type === 'light' && d.isActive).length;
   const totalLights = devices.filter((d: Device) => d.type === 'light').length;
   const avgTemperature = rooms.length
@@ -538,8 +561,7 @@ export default function DashboardScreen() {
             <View style={styles.heroContent}>
               <View style={styles.heroTopRow}>
                 <View style={styles.heroBadge}>
-                  <Sparkles size={12} color={colors.neonCyan} />
-                  <Text style={styles.heroBadgeText}>VeaHome</Text>
+                  <Text style={styles.heroBadgeText}>{home?.name || 'My Home'}</Text>
                 </View>
                 <StatusBadge 
                   variant={isHomeOnline ? 'online' : 'offline'} 
@@ -552,7 +574,7 @@ export default function DashboardScreen() {
               <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
               <Text style={styles.heroSubtitle}>
                 {isHomeOnline 
-                  ? (activeDevicesCount > 0 ? 'Your home is running smoothly' : 'All devices are idle')
+                  ? (hubs.length > 0 ? `${hubs.length} hub${hubs.length !== 1 ? 's' : ''} active` : 'No hubs connected')
                   : 'All devices are offline'}
               </Text>
               
@@ -567,10 +589,10 @@ export default function DashboardScreen() {
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
                   <View style={styles.heroStatIcon}>
-                    <Lightbulb size={14} color={colors.warning} />
+                    <Cpu size={14} color={colors.warning} />
                   </View>
-                  <Text style={styles.heroStatValue}>{activeDevicesCount}</Text>
-                  <Text style={styles.heroStatLabel}>Active</Text>
+                  <Text style={styles.heroStatValue}>{hubs.length}</Text>
+                  <Text style={styles.heroStatLabel}>Hubs</Text>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
@@ -584,18 +606,6 @@ export default function DashboardScreen() {
             </View>
           </LinearGradient>
         </Animated.View>
-
-        {/* Home Status Bar */}
-        <View style={styles.section}>
-          <HomeStatusBar
-            homeName={home?.name || 'My Home'}
-            isOnline={isHomeOnline}
-            hubCount={1}
-            deviceCount={devices.length}
-            activeDeviceCount={onlineDevicesCount}
-            onHomeSelect={() => navigation.navigate('HomeSelector')}
-          />
-        </View>
 
         {/* Spatial View - Moved above Quick Actions */}
         <View style={styles.section}>
@@ -934,9 +944,11 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.sm,
+      justifyContent: 'space-between',
     },
     quickActionItem: {
-      width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+      width: '48%',
+      minWidth: 140,
     },
 
     // View Mode

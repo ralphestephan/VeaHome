@@ -62,34 +62,9 @@ export default function SettingsScreen() {
   const [cloudSync, setCloudSync] = useState(true);
   const [autoBackup, setAutoBackup] = useState(true);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [showEditHomeModal, setShowEditHomeModal] = useState(false);
-  const [editingHomeName, setEditingHomeName] = useState(user?.homeId ? `Home ${user.id?.slice(0, 8)}` : '');
-  const [editHomeLoading, setEditHomeLoading] = useState(false);
 
   const handleLogout = async () => {
     await logout();
-  };
-
-  const handleEditHomeName = async () => {
-    if (!editingHomeName.trim()) {
-      Alert.alert('Error', 'Home name cannot be empty');
-      return;
-    }
-
-    try {
-      setEditHomeLoading(true);
-      const homeId = user?.homeId || '';
-      const client = getApiClient(async () => token);
-      const homeApi = HomeApi(client);
-      await homeApi.updateHome(homeId, { name: editingHomeName.trim() });
-      Alert.alert('Success', 'Home name updated successfully');
-      setShowEditHomeModal(false);
-    } catch (error: any) {
-      console.error('[SettingsScreen] Update home error:', error);
-      Alert.alert('Error', error.response?.data?.error || 'Failed to update home name');
-    } finally {
-      setEditHomeLoading(false);
-    }
   };
 
   const handleDeleteHome = () => {
@@ -221,27 +196,13 @@ export default function SettingsScreen() {
         {/* Home Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Home Settings</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={() => setShowEditHomeModal(true)}>
-            <View style={styles.settingIcon}>
-              <Home size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Home Name</Text>
-              <Text style={styles.settingValue}>Edit your home name</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.settingItem} onPress={handleHomeInfoPress}>
             <View style={styles.settingIcon}>
               <Home size={20} color={colors.primary} />
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Home Information</Text>
-              <Text style={styles.settingValue}>VeaHome Smart</Text>
+              <Text style={styles.settingValue}>Manage your home</Text>
             </View>
             <ChevronRight
               size={20}
@@ -654,43 +615,6 @@ export default function SettingsScreen() {
           <Text style={styles.aboutCopyright}>© 2025 VeaLive. All rights reserved.</Text>
         </View>
       </ScrollView>
-
-      {/* Edit Home Name Modal */}
-      <Modal visible={showEditHomeModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Home Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter home name"
-              placeholderTextColor={colors.mutedForeground}
-              value={editingHomeName}
-              onChangeText={setEditingHomeName}
-              editable={!editHomeLoading}
-            />
-            <View style={styles.modalButtonGroup}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowEditHomeModal(false)}
-                disabled={editHomeLoading}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSave]}
-                onPress={handleEditHomeName}
-                disabled={editHomeLoading}
-              >
-                {editHomeLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={[styles.modalButtonText, { color: 'white' }]}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -713,58 +637,6 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     subtitle: {
       fontSize: fontSize.sm,
       color: colors.mutedForeground,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalContent: {
-      backgroundColor: colors.secondary,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      width: '80%',
-      ...shadows.md,
-    },
-    modalTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: '600',
-      color: colors.foreground,
-      marginBottom: spacing.md,
-    },
-    modalInput: {
-      backgroundColor: colors.muted,
-      color: colors.foreground,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      marginBottom: spacing.md,
-      fontSize: fontSize.md,
-      borderColor: colors.primary,
-      borderWidth: 1,
-    },
-    modalButtonGroup: {
-      flexDirection: 'row',
-      gap: spacing.md,
-    },
-    modalButton: {
-      flex: 1,
-      paddingVertical: spacing.md,
-      borderRadius: borderRadius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalButtonCancel: {
-      backgroundColor: colors.muted,
-    },
-    modalButtonSave: {
-      backgroundColor: colors.primary,
-    },
-    modalButtonText: {
-      fontSize: fontSize.md,
-      fontWeight: '600',
-      color: colors.foreground,
     },
     scrollContent: {
       padding: spacing.lg,

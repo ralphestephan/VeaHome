@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Home, Plus, Trash2, UserPlus, X } from 'lucide-react-native';
+import { Home, Plus, Trash2, UserPlus, X, Edit2 } from 'lucide-react-native';
 import Header from '../components/Header';
 import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { getApiClient, HomesApi, HomeMembersApi } from '../services/api';
+import { getApiClient, HomesApi, HomeMembersApi, HomeApi } from '../services/api';
 
 export default function HomeSelectorScreen() {
   const { user, token, homes, currentHomeId, setCurrentHomeId } = useAuth();
@@ -19,9 +19,14 @@ export default function HomeSelectorScreen() {
   const [familyEmail, setFamilyEmail] = useState('');
   const [familyPassword, setFamilyPassword] = useState('');
   const [creatingMember, setCreatingMember] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingHomeId, setEditingHomeId] = useState<string | null>(null);
+  const [editingHomeName, setEditingHomeName] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
   
   const client = getApiClient(async () => token);
   const homesApi = HomesApi(client);
+  const homeApi = HomeApi(client);
   const membersApi = HomeMembersApi(client);
 
   const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
@@ -90,6 +95,32 @@ export default function HomeSelectorScreen() {
         },
       ]
     );
+  };
+
+  const handleEditHome = (homeId: string, homeName: string) => {
+    setEditingHomeId(homeId);
+    setEditingHomeName(homeName);
+    setShowEditModal(true);
+  };
+
+  const handleSaveHomeName = async () => {
+    if (!editingHomeName.trim()) {
+      Alert.alert('Error', 'Home name cannot be empty');
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+      await homeApi.updateHome(editingHomeId!, { name: editingHomeName.trim() });
+      await loadHomes();
+      Alert.alert('Success', 'Home name updated successfully');
+      setShowEditModal(false);
+    } catch (error: any) {
+      console.error('Error updating home:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to update home');
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handleCreateFamilyMember = async () => {
@@ -181,6 +212,12 @@ export default function HomeSelectorScreen() {
               >
                 <Trash2 size={16} color={colors.destructive} />
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => handleEditHome(h.id, h.name)}
+              >
+                <Edit2 size={16} color={colors.primary} />
+              </TouchableOpacity>
             </View>
           ))}
           {(Array.isArray(homeList) ? homeList : []).length === 0 && (
@@ -188,6 +225,43 @@ export default function HomeSelectorScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Edit Home Name Modal */}
+      <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={() => setShowEditModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalContent}>
+            <Text style={styles.editModalTitle}>Edit Home Name</Text>
+            <TextInput
+              style={styles.editModalInput}
+              placeholder="Enter home name"
+              placeholderTextColor={colors.mutedForeground}
+              value={editingHomeName}
+              onChangeText={setEditingHomeName}
+              editable={!editLoading}
+            />
+            <View style={styles.editModalButtonGroup}>
+              <TouchableOpacity
+                style={[styles.editModalButton, styles.editModalButtonCancel]}
+                onPress={() => setShowEditModal(false)}
+                disabled={editLoading}
+              >
+                <Text style={styles.editModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editModalButton, styles.editModalButtonSave]}
+                onPress={handleSaveHomeName}
+                disabled={editLoading}
+              >
+                {editLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={[styles.editModalButtonText, { color: 'white' }]}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Family Member Creation Modal */}
       <Modal
@@ -277,6 +351,58 @@ export default function HomeSelectorScreen() {
 
 const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalContent: {
+    backgroundColor: colors.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    width: '80%',
+    ...defaultShadows.md,
+  },
+  editModalTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.foreground,
+    marginBottom: spacing.md,
+  },
+  editModalInput: {
+    backgroundColor: colors.muted,
+    color: colors.foreground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    fontSize: fontSize.md,
+    borderColor: colors.primary,
+    borderWidth: 1,
+  },
+  editModalButtonGroup: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  editModalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editModalButtonCancel: {
+    backgroundColor: colors.muted,
+  },
+  editModalButtonSave: {
+    backgroundColor: colors.primary,
+  },
+  editModalButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.foreground,
+  },
   subHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -296,6 +422,7 @@ const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, s
   homeIcon: { width: 32, height: 32, borderRadius: borderRadius.md, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
   homeName: { flex: 1, color: colors.foreground, fontWeight: '600' },
   deleteButton: { padding: spacing.md, borderLeftWidth: 1, borderLeftColor: colors.border },
+  editButton: { padding: spacing.md, borderLeftWidth: 1, borderLeftColor: colors.border },
   empty: { textAlign: 'center', color: colors.mutedForeground, padding: spacing.xl },
   loadingContainer: { padding: spacing.xl, alignItems: 'center', gap: spacing.md },
   loadingText: { fontSize: 12, color: colors.mutedForeground },
