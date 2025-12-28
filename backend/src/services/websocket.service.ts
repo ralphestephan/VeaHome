@@ -34,6 +34,11 @@ export function initializeWebSocket(server: HttpServer) {
     
     console.log(`WebSocket: User ${userId} connected to home ${homeId}`);
 
+    // Join room for user-specific events
+    if (userId) {
+      socket.join(`user:${userId}`);
+    }
+
     // Join room for home-specific events
     if (homeId) {
       socket.join(`home:${homeId}`);

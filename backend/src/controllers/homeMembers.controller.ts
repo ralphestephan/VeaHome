@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { homeMembersRepository } from '../repositories/homeMembersRepository';
 import { usersRepository } from '../repositories/usersRepository';
 import bcrypt from 'bcryptjs';
+import { getHomeById } from '../repositories/homesRepository';
+import { getIO } from '../services/websocket.service';
 
 // Get all members of a home
 export const getHomeMembers = async (req: Request, res: Response) => {
@@ -38,6 +40,7 @@ export const createInvitation = async (req: Request, res: Response) => {
 
     // Check if user already exists and is a member
     const existingUser = await usersRepository.findByEmail(email);
+    const isExistingUser = !!existingUser;
     if (existingUser) {
       const isMember = await homeMembersRepository.isMember(homeId, existingUser.id);
       if (isMember) {
@@ -56,13 +59,38 @@ export const createInvitation = async (req: Request, res: Response) => {
     const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://veahome.app';
     const inviteLink = `${appUrl}/invite/${invitation.token}`;
 
-    // TODO: Send email with invitation link
-    // For now, return the link in the response
+    // If user exists, send notification via WebSocket
+    if (isExistingUser && existingUser) {
+      const home = await getHomeById(homeId);
+      const homeName = home?.name || 'a home';
+      
+      // Send WebSocket notification to the invited user
+      const io = getIO();
+      if (io) {
+        io.to(`user:${existingUser.id}`).emit('home_invitation', {
+          type: 'home_invitation',
+          homeId,
+          homeName,
+          role,
+          message: `You've been invited to join ${homeName}. You now have access to this home. Switch to it from your home selector.`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      
+      console.log(`[Invitation] Notification sent to existing user ${email} (${existingUser.id}) for home ${homeId}`);
+    } else {
+      // New user - send email with invitation link
+      // TODO: Send email with invitation link
+      console.log(`[Invitation] New user ${email} invited. Should send email with link: ${inviteLink}`);
+    }
 
     return res.status(201).json({
       ...invitation,
       inviteLink,
-      message: 'Invitation created successfully'
+      existingUser: isExistingUser,
+      message: isExistingUser 
+        ? 'Invitation sent. User will be notified to switch homes.' 
+        : 'Invitation created successfully'
     });
   } catch (error) {
     console.error('Error creating invitation:', error);
@@ -162,7 +190,25 @@ export const removeMember = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Cannot remove the owner' });
     }
 
+    // Get home and member info before removal for notification
+    const home = await getHomeById(homeId);
+    const homeName = home?.name || 'this home';
+
     await homeMembersRepository.removeMember(homeId, memberId);
+    
+    // Send notification to removed user via WebSocket
+    const io = getIO();
+    if (io) {
+      io.to(`user:${memberId}`).emit('home_removed', {
+        type: 'home_removed',
+        homeId,
+        homeName,
+        message: `You've been removed from ${homeName}. You no longer have access to this home.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    console.log(`[Member Removal] Notification sent to user ${memberId} about removal from home ${homeId}`);
+
     return res.json({ message: 'Member removed successfully' });
   } catch (error) {
     console.error('Error removing member:', error);
