@@ -157,6 +157,43 @@ export const removeMember = async (req: Request, res: Response) => {
   }
 };
 
+// Update member (role, etc.)
+export const updateMember = async (req: Request, res: Response) => {
+  try {
+    const { homeId, memberId } = req.params;
+    const { role } = req.body;
+    const userId = (req as any).userId;
+
+    // Check if user is owner or admin
+    const userRole = await homeMembersRepository.getMemberRole(homeId, userId);
+    if (userRole !== 'owner' && userRole !== 'admin') {
+      return res.status(403).json({ error: 'Only owners and admins can update members' });
+    }
+
+    // Can't change owner role
+    const targetRole = await homeMembersRepository.getMemberRole(homeId, memberId);
+    if (targetRole === 'owner' && role !== 'owner') {
+      return res.status(400).json({ error: 'Cannot change owner role' });
+    }
+
+    // Only owners can assign owner role
+    if (role === 'owner' && userRole !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can assign owner role' });
+    }
+
+    // Validate role
+    if (!['owner', 'admin', 'member'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be owner, admin, or member' });
+    }
+
+    await homeMembersRepository.updateMemberRole(homeId, memberId, role);
+    return res.json({ message: 'Member updated successfully' });
+  } catch (error: any) {
+    console.error('Error updating member:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update member' });
+  }
+};
+
 // Create family member (direct user creation)
 export const createFamilyMember = async (req: Request, res: Response) => {
   try {

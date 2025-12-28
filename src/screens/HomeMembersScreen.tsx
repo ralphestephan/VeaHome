@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { UserPlus, X, Mail, Send, Trash2, Users, Check } from 'lucide-react-native';
+import { UserPlus, X, Mail, Send, Trash2, Users, Check, Edit } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -46,7 +46,9 @@ export default function HomeMembersScreen() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
+  const [rolePickerVisible, setRolePickerVisible] = useState(false);
 
   const homeId = currentHomeId || user?.homeId || '';
 
@@ -93,7 +95,7 @@ export default function HomeMembersScreen() {
       const client = getApiClient(async () => token);
       const api = HomeMembersApi(client);
 
-      await api.createInvitation(homeId, inviteEmail);
+      await api.createInvitation(homeId, inviteEmail, inviteRole);
       Alert.alert('Success', `Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
       loadData();
@@ -201,6 +203,15 @@ export default function HomeMembersScreen() {
               />
             </View>
             <TouchableOpacity
+              style={styles.roleSelectorButton}
+              onPress={() => setRolePickerVisible(true)}
+            >
+              <Text style={styles.roleSelectorText}>
+                Role: {inviteRole === 'owner' ? 'Owner' : inviteRole === 'admin' ? 'Admin' : 'Member'}
+              </Text>
+              <X size={16} color={colors.mutedForeground} style={{ transform: [{ rotate: '45deg' }] }} />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.inviteButton, inviting && styles.inviteButtonDisabled]}
               onPress={handleSendInvite}
               disabled={inviting}
@@ -273,19 +284,82 @@ export default function HomeMembersScreen() {
                   <Text style={styles.memberEmail}>{member.user.email}</Text>
                   <Text style={styles.memberRole}>{member.role}</Text>
                 </View>
-                {!isOwner && !isCurrentUser && (
+                <View style={styles.memberActions}>
                   <TouchableOpacity
-                    style={styles.removeButton}
-                    onPress={() => handleRemoveMember(member.userId, member.user.name || member.user.email)}
+                    style={styles.editButton}
+                    onPress={() => navigation.navigate('MemberEdit', { memberId: member.userId, homeId })}
                   >
-                    <Trash2 size={18} color={colors.destructive} />
+                    <Edit size={18} color={colors.primary} />
                   </TouchableOpacity>
-                )}
+                  {!isOwner && !isCurrentUser && (
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveMember(member.userId, member.user.name || member.user.email)}
+                    >
+                      <Trash2 size={18} color={colors.destructive} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             );
           })}
         </View>
       </ScrollView>
+
+      {/* Role Picker Modal */}
+      <Modal
+        visible={rolePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRolePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Role</Text>
+              <TouchableOpacity onPress={() => setRolePickerVisible(false)} style={styles.modalCloseButton}>
+                <X size={24} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.roleOption, inviteRole === 'owner' && styles.roleOptionSelected]}
+              onPress={() => {
+                setInviteRole('owner');
+                setRolePickerVisible(false);
+              }}
+            >
+              <Text style={[styles.roleOptionText, inviteRole === 'owner' && styles.roleOptionTextSelected]}>
+                Owner - Full access to everything
+              </Text>
+              {inviteRole === 'owner' && <Check size={20} color={colors.primary} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roleOption, inviteRole === 'admin' && styles.roleOptionSelected]}
+              onPress={() => {
+                setInviteRole('admin');
+                setRolePickerVisible(false);
+              }}
+            >
+              <Text style={[styles.roleOptionText, inviteRole === 'admin' && styles.roleOptionTextSelected]}>
+                Admin - Can manage members and devices
+              </Text>
+              {inviteRole === 'admin' && <Check size={20} color={colors.primary} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roleOption, inviteRole === 'member' && styles.roleOptionSelected]}
+              onPress={() => {
+                setInviteRole('member');
+                setRolePickerVisible(false);
+              }}
+            >
+              <Text style={[styles.roleOptionText, inviteRole === 'member' && styles.roleOptionTextSelected]}>
+                Member - Can control devices and scenes
+              </Text>
+              {inviteRole === 'member' && <Check size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -439,7 +513,80 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       color: 'white',
       fontWeight: '600',
     },
+    memberActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    editButton: {
+      padding: spacing.sm,
+    },
     removeButton: {
       padding: spacing.sm,
+    },
+    roleSelectorButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    roleSelectorText: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+      fontWeight: '500',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: borderRadius.xxl,
+      borderTopRightRadius: borderRadius.xxl,
+      paddingBottom: spacing.xl,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+    },
+    modalCloseButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roleOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    roleOptionSelected: {
+      backgroundColor: colors.primary + '10',
+    },
+    roleOptionText: {
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    roleOptionTextSelected: {
+      color: colors.primary,
+      fontWeight: '600',
     },
   });

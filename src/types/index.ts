@@ -8,9 +8,13 @@ export type RootStackParamList = {
   RoomDetail: { roomId: string };
   Thermostat: { roomId: string; deviceId?: string };
   Profile: undefined;
+  ProfileEdit: undefined;
+  MemberEdit: { memberId: string; homeId: string };
+  MemberCreate: { homeId: string };
   SceneForm: { sceneId?: string; homeId: string };
   AutomationForm: { automationId?: string; homeId: string };
-  Schedules: undefined;
+  ScheduleForm: { scheduleId?: string; homeId: string };
+  Schedules: { homeId?: string } | undefined;
   HomeSelector: undefined;
   DeviceGroups: undefined;
   Automations: undefined;
@@ -70,11 +74,6 @@ export interface Device {
   hubId: string; // Required - all devices need a hub
   signalMappings?: Record<string, unknown>;
   metadata?: Record<string, any>;
-    pm25?: number;
-    dust?: number;
-    mq2?: number;
-    alert?: boolean;
-  };
   alarmMuted?: boolean;
 }
 

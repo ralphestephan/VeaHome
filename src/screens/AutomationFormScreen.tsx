@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getApiClient, AutomationsApi } from '../services/api';
 import { useHomeData } from '../hooks/useHomeData';
+import { useToast } from '../components/Toast';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Device } from '../types';
@@ -205,6 +206,7 @@ export default function AutomationFormScreen() {
   const { user, token } = useAuth();
   const { automationId, homeId } = route.params || { homeId: user?.homeId || '' };
   const { devices } = useHomeData(homeId);
+  const { showToast } = useToast();
 
   const [loading, setLoading] = useState(false);
   const [automationName, setAutomationName] = useState('');
@@ -216,45 +218,113 @@ export default function AutomationFormScreen() {
   const [devicePickerVisible, setDevicePickerVisible] = useState(false);
   const [devicePickerFor, setDevicePickerFor] = useState<{ type: 'trigger' | 'action', id: string } | null>(null);
 
-  const client = getApiClient(async () => token);
-  const automationsApi = AutomationsApi(client);
+  const client = useMemo(() => getApiClient(async () => token), [token]);
+  const automationsApi = useMemo(() => AutomationsApi(client), [client]);
+
+  const loadAutomation = useCallback(async () => {
+    try {
+      setLoading(true);
+      console.log('[AutomationForm] Loading automation:', { automationId, homeId });
+      const response = await automationsApi.listAutomations(homeId);
+      
+      // Handle different response structures
+      const raw = response.data;
+      let payload = raw;
+      if (raw?.data?.automations) payload = raw.data.automations;
+      else if (raw?.automations) payload = raw.automations;
+      else if (raw?.data && Array.isArray(raw.data)) payload = raw.data;
+      else if (Array.isArray(raw)) payload = raw;
+      
+      const automationsList = Array.isArray(payload) ? payload : [];
+      console.log('[AutomationForm] Found automations:', automationsList.length);
+      const automation = automationsList.find((a: any) => String(a.id) === String(automationId));
+      
+      if (!automation) {
+        console.error('[AutomationForm] Automation not found:', automationId);
+        return;
+      }
+      
+      console.log('[AutomationForm] Loading automation data:', {
+        name: automation.name,
+        enabled: automation.enabled,
+        trigger: automation.trigger,
+        triggers: automation.triggers,
+        actions: automation.actions,
+      });
+      
+      setAutomationName(automation.name || '');
+      setEnabled(automation.enabled !== false);
+      
+      // Handle triggers - check both triggers array and trigger.conditions format
+      let loadedTriggers: Trigger[] = [];
+      if (automation.triggers && Array.isArray(automation.triggers)) {
+        // New format with triggers array
+        loadedTriggers = automation.triggers.map((t: any, idx: number) => ({
+          id: `trigger_${idx}`,
+          operator: idx < automation.triggers.length - 1 ? (t.operator || 'AND') : undefined,
+          type: t.type || 'time',
+          ...t,
+        }));
+      } else if (automation.trigger && typeof automation.trigger === 'object') {
+        // Old format with trigger.conditions
+        if (automation.trigger.conditions && Array.isArray(automation.trigger.conditions)) {
+          loadedTriggers = automation.trigger.conditions.map((cond: any, idx: number) => ({
+            id: `trigger_${idx}`,
+            type: cond.type || 'time',
+            at: cond.at,
+            days: cond.days,
+            operator: idx < automation.trigger.conditions.length - 1 ? (cond.operator || 'AND') : undefined,
+            deviceId: cond.deviceId,
+            property: cond.property,
+            condition: cond.condition,
+            value: cond.value,
+          }));
+        } else {
+          // Single trigger object (fallback)
+          loadedTriggers = [{
+            id: 'trigger_0',
+            type: automation.trigger.type || 'time',
+            at: automation.trigger.at,
+            days: automation.trigger.days,
+            deviceId: automation.trigger.deviceId,
+            property: automation.trigger.property,
+            condition: automation.trigger.condition,
+            value: automation.trigger.value,
+          }];
+        }
+      }
+      
+      if (loadedTriggers.length > 0) {
+        setTriggers(loadedTriggers);
+      }
+      
+      // Handle actions
+      if (Array.isArray(automation.actions)) {
+        const loadedActions = automation.actions.map((a: any, idx: number) => ({
+          id: `action_${idx}`,
+          deviceId: a.deviceId,
+          action: a.action, // Keep action field (e.g., "mute_buzzer")
+          type: a.type || a.action, // Support both type and action fields
+          property: a.property,
+          value: a.value,
+        }));
+        setActions(loadedActions);
+      }
+      
+      console.log('[AutomationForm] Loaded triggers:', loadedTriggers);
+      console.log('[AutomationForm] Loaded actions:', automation.actions);
+    } catch (e) {
+      console.error('[AutomationForm] Error loading automation:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [automationId, homeId, automationsApi]);
 
   useEffect(() => {
     if (automationId && homeId) {
       loadAutomation();
     }
-  }, [automationId, homeId]);
-
-  const loadAutomation = async () => {
-    try {
-      setLoading(true);
-      const response = await automationsApi.listAutomations(homeId);
-      const automation = (response.data?.automations || []).find((a: any) => a.id === automationId);
-      if (automation) {
-        setAutomationName(automation.name);
-        setEnabled(automation.enabled !== false);
-        
-        if (automation.triggers && Array.isArray(automation.triggers)) {
-          setTriggers(automation.triggers.map((t: any, idx: number) => ({
-            id: `trigger_${idx}`,
-            operator: idx < automation.triggers.length - 1 ? (t.operator || 'AND') : undefined,
-            ...t,
-          })));
-        }
-        
-        if (Array.isArray(automation.actions)) {
-          setActions(automation.actions.map((a: any, idx: number) => ({
-            id: `action_${idx}`,
-            ...a,
-          })));
-        }
-      }
-    } catch (e) {
-      console.error('Error loading automation:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [automationId, homeId, loadAutomation]);
 
   const addTrigger = () => {
     setTriggers([...triggers, {
@@ -321,43 +391,58 @@ export default function AutomationFormScreen() {
   };
 
   const handleSave = async () => {
+    // Prevent multiple saves
+    if (loading) {
+      return;
+    }
+
+    // Validation
     if (!automationName.trim()) {
-      Alert.alert('Error', 'Please enter automation name');
+      showToast('Please enter an automation name', { type: 'error' });
       return;
     }
 
     if (triggers.length === 0) {
-      Alert.alert('Error', 'Please add at least one trigger condition');
+      showToast('Please add at least one trigger condition', { type: 'error' });
       return;
     }
 
     if (actions.length === 0) {
-      Alert.alert('Error', 'Please add at least one action');
+      showToast('Please add at least one action', { type: 'error' });
       return;
     }
 
-    for (const trigger of triggers) {
-      if (trigger.type === 'sensor' && !trigger.deviceId) {
-        Alert.alert('Error', 'Please select a device for all triggers');
-        return;
-      }
-      if (trigger.type === 'sensor' && !trigger.property) {
-        Alert.alert('Error', 'Please select what to monitor for all triggers');
-        return;
-      }
-      if (trigger.type === 'sensor' && !trigger.condition) {
-        Alert.alert('Error', 'Please select a condition for all triggers');
+    // Validate triggers
+    for (let i = 0; i < triggers.length; i++) {
+      const trigger = triggers[i];
+      if (trigger.type === 'sensor') {
+        if (!trigger.deviceId) {
+          showToast(`Trigger ${i + 1}: Please select a device`, { type: 'error' });
+          return;
+        }
+        if (!trigger.property) {
+          showToast(`Trigger ${i + 1}: Please select what to monitor`, { type: 'error' });
+          return;
+        }
+        if (!trigger.condition) {
+          showToast(`Trigger ${i + 1}: Please select a condition`, { type: 'error' });
+          return;
+        }
+      } else if (trigger.type === 'time' && !trigger.at) {
+        showToast(`Trigger ${i + 1}: Please set a time`, { type: 'error' });
         return;
       }
     }
 
-    for (const action of actions) {
+    // Validate actions
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
       if (!action.deviceId) {
-        Alert.alert('Error', 'Please select a device for all actions');
+        showToast(`Action ${i + 1}: Please select a device`, { type: 'error' });
         return;
       }
-      if (!action.action) {
-        Alert.alert('Error', 'Please select an action');
+      if (!action.action && !action.type) {
+        showToast(`Action ${i + 1}: Please select an action`, { type: 'error' });
         return;
       }
     }
@@ -375,19 +460,45 @@ export default function AutomationFormScreen() {
 
       if (automationId) {
         await automationsApi.updateAutomation(homeId, automationId, payload);
+        showToast('Automation updated successfully', { type: 'success' });
       } else {
         await automationsApi.createAutomation(homeId, payload);
+        showToast('Automation created successfully', { type: 'success' });
       }
 
-      Alert.alert('Success', `Automation ${automationId ? 'updated' : 'created'} successfully`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      // Navigate back after short delay to show success message
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
     } catch (error: any) {
-      console.error('Save automation error:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to save automation';
-      Alert.alert('Error', errorMessage);
+      console.error('[AutomationForm] Save automation error:', error);
+      console.error('[AutomationForm] Error response:', error.response?.data);
+      console.error('[AutomationForm] Error status:', error.response?.status);
+      
+      // Extract detailed error message
+      let errorMessage = 'Failed to save automation';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // If it's a validation error, try to extract field-specific messages
+      if (error.response?.status === 400 && error.response?.data?.details) {
+        const details = error.response.data.details;
+        if (typeof details === 'string') {
+          errorMessage = details;
+        } else if (Array.isArray(details)) {
+          errorMessage = details.join(', ');
+        } else if (typeof details === 'object') {
+          const fieldErrors = Object.entries(details).map(([field, msg]) => `${field}: ${msg}`);
+          errorMessage = fieldErrors.join('. ') || errorMessage;
+        }
+      }
+      
+      showToast(errorMessage, { type: 'error' });
     } finally {
       setLoading(false);
     }

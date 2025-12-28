@@ -174,10 +174,14 @@ export default function EnergyScreen() {
               <Zap size={32} color="white" />
             </View>
           </View>
-          <View style={styles.trendBadge}>
-            <TrendingDown size={14} color={colors.success} />
-            <Text style={styles.trendText}>Track your consumption</Text>
-          </View>
+          {safeEnergyData.length > 0 && (
+            <View style={styles.trendBadge}>
+              <Zap size={14} color={colors.primary} />
+              <Text style={styles.trendText}>
+                {totalEnergy > 0 ? `${totalEnergy.toFixed(1)} kWh total` : 'No data yet'}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Chart */}
@@ -238,10 +242,6 @@ export default function EnergyScreen() {
               <View style={styles.categoryIcon}>
                 <Lightbulb size={20} color={colors.primary} />
               </View>
-              <View style={styles.trendIndicator}>
-                <TrendingDown size={12} color={colors.success} />
-                <Text style={styles.trendPercent}>5%</Text>
-              </View>
             </View>
             <Text style={styles.categoryValue}>{totalLighting.toFixed(1)}</Text>
             <Text style={styles.categoryLabel}>Lighting • {lightingPercent}%</Text>
@@ -251,10 +251,6 @@ export default function EnergyScreen() {
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
                 <Fan size={20} color={colors.primary} />
-              </View>
-              <View style={styles.trendIndicator}>
-                <TrendingDown size={12} color={colors.success} />
-                <Text style={styles.trendPercent}>8%</Text>
               </View>
             </View>
             <Text style={styles.categoryValue}>{totalClimate.toFixed(1)}</Text>
@@ -266,10 +262,6 @@ export default function EnergyScreen() {
               <View style={styles.categoryIcon}>
                 <Tv size={20} color={colors.primary} />
               </View>
-              <View style={styles.trendIndicator}>
-                <TrendingUp size={12} color={colors.destructive} />
-                <Text style={[styles.trendPercent, { color: colors.destructive }]}>3%</Text>
-              </View>
             </View>
             <Text style={styles.categoryValue}>{totalMedia.toFixed(1)}</Text>
             <Text style={styles.categoryLabel}>Utility • {mediaPercent}%</Text>
@@ -279,10 +271,6 @@ export default function EnergyScreen() {
             <View style={styles.categoryHeader}>
               <View style={styles.categoryIcon}>
                 <Shield size={20} color={colors.primary} />
-              </View>
-              <View style={styles.trendIndicator}>
-                <TrendingDown size={12} color={colors.success} />
-                <Text style={styles.trendPercent}>2%</Text>
               </View>
             </View>
             <Text style={styles.categoryValue}>{totalSecurity.toFixed(1)}</Text>

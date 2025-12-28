@@ -57,7 +57,7 @@ import {
   Speaker,
   Power,
 } from 'lucide-react-native';
-import { spacing, borderRadius, fontSize } from '../constants/theme';
+import { spacing, borderRadius, fontSize, fontWeight } from '../constants/theme';
 import Header from '../components/Header';
 import { useToast } from '../components/Toast';
 
@@ -172,15 +172,62 @@ const ensureArray = (value: any) => (Array.isArray(value) ? value : []);
 const normalizeAutomations = (list: any[]): AutomationPreview[] => {
   if (!Array.isArray(list)) return [];
   return list.map((automation, idx) => {
-    const trigger = typeof automation?.trigger === 'object' ? automation.trigger : undefined;
+    // Handle both old format (trigger) and new format (triggers/conditions)
+    let trigger = undefined;
+    let conditions: any[] = [];
+    
+    if (automation?.trigger && typeof automation.trigger === 'object') {
+      // Check if it's the new format with conditions array
+      if (automation.trigger.conditions && Array.isArray(automation.trigger.conditions) && automation.trigger.conditions.length > 0) {
+        // Extract conditions array
+        conditions = automation.trigger.conditions;
+        // Extract first condition as the main trigger
+        const firstCondition = automation.trigger.conditions[0];
+        trigger = {
+          type: firstCondition.type || 'custom',
+          at: firstCondition.at,
+          days: firstCondition.days,
+          sensor: firstCondition.sensor,
+          deviceId: firstCondition.deviceId,
+        };
+      } else {
+        // Old format - use as is
+        trigger = automation.trigger;
+        if (automation.trigger && typeof automation.trigger === 'object') {
+          conditions = [automation.trigger]; // Single trigger as a condition
+        }
+      }
+    } else if (automation?.triggers && Array.isArray(automation.triggers) && automation.triggers.length > 0) {
+      // New format with triggers array
+      conditions = automation.triggers;
+      const firstTrigger = automation.triggers[0];
+      trigger = {
+        type: firstTrigger.type || 'custom',
+        at: firstTrigger.at,
+        days: firstTrigger.days,
+        sensor: firstTrigger.sensor,
+        deviceId: firstTrigger.deviceId,
+      };
+    }
+    
+    // Extract devices from actions (unique deviceIds)
+    const actions = ensureArray(automation?.actions);
+    const deviceIds = new Set<string>();
+    actions.forEach((action: any) => {
+      if (action.deviceId) {
+        deviceIds.add(action.deviceId);
+      }
+    });
+    const devices = Array.from(deviceIds).map((deviceId: string) => ({ id: deviceId }));
+    
     return {
       id: automation?.id || `automation-${idx}`,
       name: automation?.name || 'Untitled automation',
-      isActive: Boolean(automation?.isActive),
+      isActive: Boolean(automation?.isActive || automation?.enabled),
       trigger,
-      actions: ensureArray(automation?.actions),
-      devices: ensureArray(automation?.devices),
-      conditions: ensureArray(automation?.conditions),
+      actions,
+      devices: devices.length > 0 ? devices : ensureArray(automation?.devices), // Fallback to automation.devices if no devices found in actions
+      conditions: conditions.length > 0 ? conditions : ensureArray(automation?.conditions), // Use extracted conditions or fallback
       lastRunAt: automation?.lastRunAt,
       summary: typeof automation?.summary === 'string' ? automation.summary : undefined,
     };
@@ -262,6 +309,7 @@ export default function ScenesScreen() {
         setAutomationError(null);
       }
 
+      // Show all automations (including invalid ones) so user can delete them
       setAutomations(normalizeAutomations(list));
     } catch (e) {
       console.error('Error loading automations:', e);
@@ -430,8 +478,9 @@ export default function ScenesScreen() {
     try {
       setAutomationLoading(true);
       const nextState = !automation.isActive;
+      // Use 'enabled' field to match backend API expectation
       await automationsApi.updateAutomation(homeId, automation.id, {
-        isActive: nextState,
+        enabled: nextState,
       });
       setAutomations(prev => prev.map(item =>
         item.id === automation.id ? { ...item, isActive: nextState } : item
@@ -441,7 +490,32 @@ export default function ScenesScreen() {
         { type: 'success' }
       );
     } catch (e: any) {
-      showToast(e?.response?.data?.message || 'Failed to update automation', { type: 'error' });
+      console.error('Toggle automation error:', e?.response?.data);
+      const errorMsg = e?.response?.data?.message || e?.response?.data?.error || 'Failed to update automation';
+      showToast(errorMsg, { type: 'error' });
+      // If toggle fails with 400, the automation might be invalid
+      if (e?.response?.status === 400) {
+        Alert.alert(
+          'Invalid Automation',
+          'This automation appears to be invalid (missing triggers or actions). Would you like to delete it?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await automationsApi.deleteAutomation(homeId, automation.id);
+                  await loadAutomations();
+                  showToast('Invalid automation deleted', { type: 'success' });
+                } catch (deleteErr) {
+                  showToast('Failed to delete automation', { type: 'error' });
+                }
+              },
+            },
+          ]
+        );
+      }
     } finally {
       setAutomationLoading(false);
     }
@@ -773,7 +847,12 @@ export default function ScenesScreen() {
         {/* Smart Automations */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Smart Automations</Text>
+            <View style={styles.sectionTitleContainer}>
+              <Text style={styles.sectionTitle}>Smart Automations</Text>
+              <Text style={styles.sectionDescription}>
+                Automate lighting, security, and comfort flows to match your routine.
+              </Text>
+            </View>
             <TouchableOpacity onPress={() => navigation.navigate('Automations')}>
               <Text style={styles.manageAllText}>Manage All</Text>
             </TouchableOpacity>
@@ -830,9 +909,6 @@ export default function ScenesScreen() {
                         <Text style={styles.featuredAutomationStatText}>{describeList(featuredAutomation.conditions, 'condition', 'conditions')}</Text>
                       </View>
                     </View>
-                    <Text style={styles.featuredAutomationSummary}>
-                      {featuredAutomation.summary || 'Automates lighting, security, and comfort flows to match your routine.'}
-                    </Text>
                   </LinearGradient>
                 ) : (
                   <View style={styles.automationEmptyState}>
@@ -939,13 +1015,23 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     sectionHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       marginBottom: spacing.md,
     },
+    sectionTitleContainer: {
+      flex: 1,
+      marginRight: spacing.md,
+    },
     sectionTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+      marginBottom: spacing.xs,
+    },
+    sectionDescription: {
       fontSize: fontSize.sm,
       color: colors.mutedForeground,
-      marginBottom: spacing.md,
+      lineHeight: fontSize.sm * 1.5,
     },
     manageAllText: {
       fontSize: fontSize.sm,
@@ -1226,9 +1312,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       fontSize: fontSize.md - 1,
       color: 'rgba(255,255,255,0.9)',
     },
-    featuredAutomationSummary: {
-      fontSize: fontSize.md - 1,
-      color: 'rgba(255,255,255,0.8)',
+    automationHeaderSection: {
+      marginBottom: spacing.lg,
+    },
+    automationHeaderTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+      marginBottom: spacing.xs,
+    },
+    automationHeaderDescription: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      lineHeight: fontSize.sm * 1.5,
     },
     automationEmptyState: {
       backgroundColor: colors.secondary,

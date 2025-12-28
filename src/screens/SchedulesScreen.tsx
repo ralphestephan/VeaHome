@@ -1,13 +1,19 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Clock, Edit, Trash2, Sun, Moon, Coffee, Bed } from 'lucide-react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types';
 import Header from '../components/Header';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useDemo } from '../context/DemoContext';
 import { getApiClient, SchedulesApi } from '../services/api';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Demo schedules data
 const demoSchedules = [
@@ -17,15 +23,27 @@ const demoSchedules = [
   { id: 'sch4', name: 'Movie Night', time: '20:00', days: ['Fri', 'Sat'], enabled: false, icon: 'moon' },
 ];
 
+type RouteProp = {
+  key: string;
+  name: string;
+  params?: {
+    homeId?: string;
+  };
+};
+
 export default function SchedulesScreen() {
+  const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp>();
   const { user, token, currentHomeId } = useAuth();
   const { colors, gradients, shadows } = useTheme();
   const demo = useDemo();
   const isDemoMode = token === 'DEMO_TOKEN';
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
-  const homeId = currentHomeId || user?.homeId;
-  const client = getApiClient(async () => token);
-  const schedulesApi = SchedulesApi(client);
+  const homeId = route.params?.homeId || currentHomeId || user?.homeId;
+  console.log('[SchedulesScreen] homeId:', homeId, 'route.params:', route.params);
+  
+  const client = useMemo(() => getApiClient(async () => token), [token]);
+  const schedulesApi = useMemo(() => SchedulesApi(client), [client]);
 
   const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
 
@@ -40,51 +58,50 @@ export default function SchedulesScreen() {
     'clock': Clock,
   };
 
-  const loadSchedules = async () => {
+  const loadSchedules = useCallback(async () => {
     if (isDemoMode) {
       // Show empty state in demo mode
       setSchedules([]);
       setLoading(false);
       return;
     }
-    if (!homeId) return;
+    if (!homeId) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const res = await schedulesApi.listSchedules(homeId).catch(() => ({ data: [] }));
       const payload = unwrap(res.data);
-      setSchedules(Array.isArray(payload) ? payload : []);
+      const schedulesData = payload?.schedules || (Array.isArray(payload) ? payload : []);
+      setSchedules(Array.isArray(schedulesData) ? schedulesData : []);
     } catch (e) {
       Alert.alert('Error', 'Failed to load schedules');
     } finally {
       setLoading(false);
     }
-  };
+  }, [homeId, isDemoMode, schedulesApi]);
 
-  useEffect(() => {
-    loadSchedules();
-  }, [homeId]);
+  // Refresh when screen comes into focus (e.g., after creating/editing a schedule)
+  useFocusEffect(
+    useCallback(() => {
+      loadSchedules();
+    }, [loadSchedules])
+  );
 
   const handleAdd = async () => {
-    if (isDemoMode) {
-      const newSchedule = {
-        id: `sch${Date.now()}`,
-        name: 'New Schedule',
-        time: '12:00',
-        days: ['Mon', 'Wed', 'Fri'],
-        enabled: true,
-        icon: 'clock',
-      };
-      setSchedules(prev => [...prev, newSchedule]);
+    console.log('[SchedulesScreen] handleAdd called, homeId:', homeId);
+    if (!homeId) {
+      Alert.alert('Error', 'Home ID is required. Please ensure you are logged in.');
       return;
     }
+    console.log('[SchedulesScreen] Navigating to ScheduleForm with homeId:', homeId);
+    navigation.navigate('ScheduleForm', { homeId });
+  };
+
+  const handleEdit = (schedule: any) => {
     if (!homeId) return;
-    try {
-      const payload = { name: 'New Schedule', time: '22:00', days: ['Mon','Tue','Wed','Thu','Fri'], actions: [] };
-      await schedulesApi.createSchedule(homeId, payload);
-      loadSchedules();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to create schedule');
-    }
+    navigation.navigate('ScheduleForm', { homeId, scheduleId: schedule.id });
   };
 
   const handleToggle = (id: string) => {
@@ -135,7 +152,11 @@ export default function SchedulesScreen() {
           {schedules.map((s) => {
             const IconComponent = getScheduleIcon(s);
             return (
-              <View key={s.id} style={[styles.card, s.enabled && styles.cardActive]}>
+              <TouchableOpacity
+                key={s.id}
+                onPress={() => handleEdit(s)}
+                style={[styles.card, s.enabled && styles.cardActive]}
+              >
                 <View style={styles.cardHeader}>
                   <View style={[styles.icon, s.enabled && styles.iconActive]}>
                     <IconComponent size={18} color={s.enabled ? colors.primary : colors.mutedForeground} />
@@ -152,12 +173,17 @@ export default function SchedulesScreen() {
                       thumbColor={s.enabled ? colors.primary : colors.mutedForeground}
                     />
                   ) : (
-                    <TouchableOpacity onPress={() => handleDelete(s.id)}>
+                    <TouchableOpacity 
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDelete(s.id);
+                      }}
+                    >
                       <Trash2 size={18} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
           {schedules.length === 0 && (

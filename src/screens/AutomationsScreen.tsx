@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Wand2, Plus, Trash2, Clock, Sun, Moon, Home, Zap, Edit } from 'lucide-react-native';
@@ -8,7 +8,7 @@ import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { getApiClient, AutomationsApi } from '../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
 
@@ -22,9 +22,9 @@ export default function AutomationsScreen() {
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
   const [automations, setAutomations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const client = getApiClient(async () => token);
-  const automationsApi = AutomationsApi(client);
   const homeId = currentHomeId || user?.homeId;
+  const client = useMemo(() => getApiClient(async () => token), [token]);
+  const automationsApi = useMemo(() => AutomationsApi(client), [client]);
 
   const unwrap = (data: any) => (data && typeof data === 'object' && 'data' in data ? (data as any).data : data);
 
@@ -37,7 +37,7 @@ export default function AutomationsScreen() {
     'wand': Wand2,
   };
 
-  const loadAutomations = async () => {
+  const loadAutomations = useCallback(async () => {
     if (isDemoMode) {
       setAutomations([]);
       setLoading(false);
@@ -47,16 +47,50 @@ export default function AutomationsScreen() {
     try {
       setLoading(true);
       const res = await automationsApi.listAutomations(homeId).catch(() => ({ data: [] }));
-      const payload = unwrap(res.data);
-      setAutomations(Array.isArray(payload) ? payload : []);
+      const raw = res.data;
+      // Handle different response structures - check multiple possible paths
+      let payload = raw;
+      if (raw?.data?.automations) payload = raw.data.automations;
+      else if (raw?.automations) payload = raw.automations;
+      else if (raw?.data && Array.isArray(raw.data)) payload = raw.data;
+      else if (Array.isArray(raw)) payload = raw;
+      
+      const allAutomations = Array.isArray(payload) ? payload : [];
+      
+      // Debug logging
+      console.log('[AutomationsScreen] Raw response:', raw);
+      console.log('[AutomationsScreen] Loaded automations:', allAutomations.length);
+      console.log('[AutomationsScreen] Automation IDs:', allAutomations.map((a: any) => a.id));
+      console.log('[AutomationsScreen] Automation names:', allAutomations.map((a: any) => a.name));
+      allAutomations.forEach((a: any) => {
+        console.log(`[AutomationsScreen] Automation ${a.name} (${a.id}):`, {
+          enabled: a.enabled,
+          isActive: a.isActive,
+          hasTrigger: !!a.trigger,
+          triggerStructure: a.trigger ? Object.keys(a.trigger) : 'none',
+          hasTriggers: Array.isArray(a.triggers) && a.triggers.length > 0,
+          actionsCount: Array.isArray(a.actions) ? a.actions.length : 0,
+          actions: a.actions,
+        });
+      });
+      
+      // Show all automations (including invalid ones) so user can delete them
+      setAutomations(allAutomations);
     } catch (e) {
       Alert.alert('Error', 'Failed to load automations');
     } finally {
       setLoading(false);
     }
-  };
+  }, [homeId, isDemoMode, automationsApi]);
 
-  useEffect(() => { loadAutomations(); }, [homeId, isDemoMode]);
+  useEffect(() => { loadAutomations(); }, [loadAutomations]);
+
+  // Refresh when screen comes into focus (e.g., after editing/deleting)
+  useFocusEffect(
+    useCallback(() => {
+      loadAutomations();
+    }, [loadAutomations])
+  );
 
   const handleCreate = async () => {
     if (!homeId) return;
@@ -135,7 +169,7 @@ export default function AutomationsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {automations.filter(a => a.name && a.name !== 'New Automation').map((a) => {
+          {automations.filter(a => a.name && a.name.trim() !== '').map((a) => {
             const IconComponent = getAutomationIcon(a);
             return (
               <TouchableOpacity
@@ -150,7 +184,21 @@ export default function AutomationsScreen() {
                   <View style={styles.titleWrap}>
                     <Text style={styles.cardTitle}>{a.name}</Text>
                     <Text style={styles.cardSubtitle}>
-                      {a.trigger?.type || 'custom'} • {a.trigger?.at || a.trigger?.event || a.trigger?.sensorType || ''}
+                      {(() => {
+                        // Handle different trigger formats
+                        if (a.trigger?.type) {
+                          return `${a.trigger.type}${a.trigger.at ? ` • ${a.trigger.at}` : ''}`;
+                        }
+                        if (a.trigger?.conditions && Array.isArray(a.trigger.conditions) && a.trigger.conditions.length > 0) {
+                          const firstCond = a.trigger.conditions[0];
+                          return `${firstCond.type || 'custom'}${firstCond.at ? ` • ${firstCond.at}` : ''}`;
+                        }
+                        if (a.triggers && Array.isArray(a.triggers) && a.triggers.length > 0) {
+                          const firstTrig = a.triggers[0];
+                          return `${firstTrig.type || 'custom'}${firstTrig.at ? ` • ${firstTrig.at}` : ''}`;
+                        }
+                        return 'custom';
+                      })()}
                     </Text>
                   </View>
                   <View style={styles.cardActions}>

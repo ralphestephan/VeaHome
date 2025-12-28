@@ -75,6 +75,8 @@ export const AuthApi = (client: AxiosInstance) => ({
   login: (email: string, password: string) => client.post('/auth/login', { email, password }),
   register: (name: string, email: string, password: string) => client.post('/auth/register', { name, email, password }),
   me: () => client.get('/auth/me'),
+  updateProfile: (payload: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) =>
+    client.patch('/auth/me', payload),
 });
 
 // Hub & devices
@@ -194,6 +196,8 @@ export const HomeMembersApi = (client: AxiosInstance) => ({
     client.delete(`/homes/${homeId}/members/${memberId}`),
   createFamilyMember: (homeId: string, payload: { name: string; email: string; password: string; role?: string }) =>
     client.post(`/homes/${homeId}/family-members`, payload),
+  updateMember: (homeId: string, memberId: string, payload: { role?: string; name?: string; email?: string }) =>
+    client.patch(`/homes/${homeId}/members/${memberId}`, payload),
 });
 
 

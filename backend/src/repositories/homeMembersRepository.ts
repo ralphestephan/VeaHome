@@ -95,6 +95,31 @@ export const homeMembersRepository = {
     };
   },
 
+  // Update member role
+  async updateMemberRole(homeId: string, userId: string, role: string): Promise<HomeMember> {
+    const result = await pool.query(
+      `UPDATE home_members 
+       SET role = $3, updated_at = CURRENT_TIMESTAMP 
+       WHERE home_id = $1 AND user_id = $2 
+       RETURNING *`,
+      [homeId, userId, role]
+    );
+    
+    if (result.rows.length === 0) {
+      throw new Error('Member not found');
+    }
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      homeId: row.home_id,
+      userId: row.user_id,
+      role: row.role,
+      invitedBy: row.invited_by,
+      joinedAt: row.joined_at
+    };
+  },
+
   // Remove member from home
   async removeMember(homeId: string, userId: string): Promise<void> {
     await pool.query(

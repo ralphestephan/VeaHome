@@ -430,23 +430,79 @@ export const useHomeData = (homeId: string | null | undefined) => {
     if (!effectiveHomeId || !token) return;
     try {
       console.log('[useHomeData.refresh] Starting refresh...');
-      const [roomsRes, devicesRes, hubsRes] = await Promise.all([
+      const [roomsRes, devicesRes, hubsRes, scenesRes] = await Promise.all([
         homeApi.getRooms(effectiveHomeId).catch(() => ({ data: [] })),
         hubApi.listDevices(effectiveHomeId).catch(() => ({ data: [] })),
         hubApi.listHubs(effectiveHomeId).catch(() => ({ data: [] })), // CRITICAL: Include hubs in refresh!
+        scenesApi.listScenes(effectiveHomeId).catch(() => ({ data: [] })), // CRITICAL: Include scenes in refresh!
       ]);
       
       const rawRooms = unwrap<any[]>(roomsRes, 'rooms');
       const rawDevices = unwrap<any[]>(devicesRes, 'devices');
       const rawHubs = unwrap<any[]>(hubsRes, 'hubs');
+      const rawScenes = unwrap<any[]>(scenesRes, 'scenes') || unwrap<any[]>(scenesRes);
 
       console.log('[useHomeData.refresh] Fetched:', {
         rooms: rawRooms?.length || 0,
         devices: rawDevices?.length || 0,
         hubs: rawHubs?.length || 0,
+        scenes: rawScenes?.length || 0,
       });
 
-      const mappedRooms = (rawRooms || []).map(mapRoom);
+      // Build scene ID -> name map and find active scene (same logic as loadData)
+      const sceneNameMap = new Map<string, string>();
+      let activeSceneId: string | null = null;
+      (rawScenes || []).forEach((scene: any) => {
+        if (scene.id && scene.name) {
+          sceneNameMap.set(String(scene.id), scene.name);
+        }
+        // Find globally active scene
+        if ((scene.isActive === true || scene.is_active === true) && !activeSceneId) {
+          activeSceneId = String(scene.id);
+        }
+      });
+      console.log('[useHomeData.refresh] Scene name map:', Array.from(sceneNameMap.entries()));
+      console.log('[useHomeData.refresh] Active scene ID:', activeSceneId);
+
+      // Map rooms with sceneNameMap and apply active scene logic (same as loadData)
+      const mappedRooms = (rawRooms || []).map((r: any) => {
+        const mapped = mapRoom(r, sceneNameMap);
+        // Always check for active scene first - it takes priority over assigned scene
+        if (activeSceneId) {
+          const activeScene = rawScenes.find((s: any) => String(s.id) === activeSceneId);
+          if (activeScene) {
+            const scope = activeScene.scope || 'home';
+            let roomIsAffected = false;
+            
+            // If home-wide, all rooms are affected
+            if (scope === 'home' || !scope) {
+              roomIsAffected = true;
+            } else if (scope === 'rooms') {
+              // Check if this room is in the active scene's room list
+              const roomIds = activeScene.room_ids || activeScene.roomIds || [];
+              let roomIdsArray: any[] = [];
+              try {
+                roomIdsArray = typeof roomIds === 'string' ? JSON.parse(roomIds) : (Array.isArray(roomIds) ? roomIds : []);
+              } catch (e) {
+                console.warn('[useHomeData.refresh] Error parsing room_ids:', e);
+                roomIdsArray = Array.isArray(roomIds) ? roomIds : [];
+              }
+              roomIsAffected = Array.isArray(roomIdsArray) && roomIdsArray.some((rid: any) => String(rid) === String(r.id));
+            }
+            
+            // If this room is affected by the active scene, use the active scene name
+            if (roomIsAffected) {
+              mapped.sceneName = activeScene.name;
+              // Also update scene ID to match active scene for consistency
+              mapped.scene = String(activeScene.id);
+            }
+          }
+        }
+        // If no active scene affects this room, keep the scene assigned to the room (already set in mapRoom)
+        return mapped;
+      });
+      console.log('[useHomeData.refresh] Mapped rooms:', mappedRooms.map(r => ({ id: r.id, name: r.name, scene: r.scene, sceneName: r.sceneName })));
+
       const mappedDevices = (rawDevices || []).map(mapDevice);
       
       // Map hubs to device format and include them in the device list (same as loadData)
@@ -488,7 +544,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
     } catch (e) {
       console.error('[useHomeData.refresh] Error refreshing data:', e);
     }
-  }, [currentHomeId, enrichAirguards, homeApi, hubApi, homeId, isDemoMode, token]);
+  }, [currentHomeId, enrichAirguards, homeApi, hubApi, scenesApi, homeId, isDemoMode, token]);
 
   const createRoom = useCallback(async (room: Room): Promise<Room> => {
     if (isDemoMode) {

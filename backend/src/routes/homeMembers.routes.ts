@@ -6,6 +6,7 @@ import {
   acceptInvitation,
   cancelInvitation,
   removeMember,
+  updateMember,
   createFamilyMember
 } from '../controllers/homeMembers.controller';
 import { authenticateToken } from '../middleware/auth';
@@ -29,6 +30,9 @@ router.post('/invitations/:token/accept', acceptInvitation);
 
 // Cancel invitation
 router.delete('/invitations/:invitationId', cancelInvitation);
+
+// Update member
+router.patch('/:homeId/members/:memberId', updateMember);
 
 // Remove member
 router.delete('/:homeId/members/:memberId', removeMember);

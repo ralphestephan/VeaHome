@@ -15,6 +15,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SchedulesScreen from '../screens/SchedulesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
 import RoomDetailScreen from '../screens/RoomDetailScreen';
 import ThermostatScreen from '../screens/ThermostatScreen';
 import LoginScreen from '../screens/Auth/LoginScreen';
@@ -26,8 +27,10 @@ import DeviceProvisioningWizard from '../screens/DeviceProvisioningWizard';
 import BLEDeviceWizard from '../screens/BLEDeviceWizard';
 import SceneFormScreen from '../screens/SceneFormScreen';
 import AutomationFormScreen from '../screens/AutomationFormScreen';
+import ScheduleFormScreen from '../screens/ScheduleFormScreen';
 import HomeSelectorScreen from '../screens/HomeSelectorScreen';
 import HomeMembersScreen from '../screens/HomeMembersScreen';
+import MemberEditScreen from '../screens/MemberEditScreen';
 import DeviceGroupsScreen from '../screens/DeviceGroupsScreen';
 import AutomationsScreen from '../screens/AutomationsScreen';
 import DeviceHistoryScreen from '../screens/DeviceHistoryScreen';
@@ -151,12 +154,14 @@ export default function AppNavigator() {
           <Stack.Screen name="BLEDeviceWizard" component={BLEDeviceWizard} />
           <Stack.Screen name="SceneForm" component={SceneFormScreen} />
           <Stack.Screen name="AutomationForm" component={AutomationFormScreen} />
+          <Stack.Screen name="ScheduleForm" component={ScheduleFormScreen} />
           <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />
           <Stack.Screen name="Thermostat" component={ThermostatScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="Schedules" component={SchedulesScreen} />
           <Stack.Screen name="HomeSelector" component={HomeSelectorScreen} />
           <Stack.Screen name="HomeMembers" component={HomeMembersScreen} />
+          <Stack.Screen name="MemberEdit" component={MemberEditScreen} />
           <Stack.Screen name="DeviceGroups" component={DeviceGroupsScreen} />
           <Stack.Screen name="Automations" component={AutomationsScreen} />
           <Stack.Screen name="DeviceHistory" component={DeviceHistoryScreen} />

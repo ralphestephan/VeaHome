@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { generateToken } from '../config/jwt';
 import { successResponse, errorResponse } from '../utils/response';
 import { AuthRequest, Home, User } from '../types';
-import { createUser, findUserByEmail, findUserById } from '../repositories/usersRepository';
+import { createUser, findUserByEmail, findUserById, updateUser } from '../repositories/usersRepository';
 import { createHome as createHomeRecord, getHomesByUserId } from '../repositories/homesRepository';
 import { createRoom as createRoomRecord } from '../repositories/roomsRepository';
 
@@ -158,5 +158,74 @@ export async function me(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Me error:', error);
     return errorResponse(res, error.message || 'Failed to get user', 500);
+  }
+}
+
+export async function updateProfile(req: Request, res: Response) {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.userId;
+
+    if (!userId) {
+      return errorResponse(res, 'Unauthorized', 401);
+    }
+
+    const { name, email, currentPassword, newPassword } = req.body;
+
+    const user = await findUserById(userId);
+    if (!user) {
+      return errorResponse(res, 'User not found', 404);
+    }
+
+    const updates: { name?: string; email?: string; passwordHash?: string } = {};
+
+    if (name !== undefined) {
+      updates.name = sanitizeName(name);
+    }
+
+    if (email !== undefined) {
+      const normalizedEmail = normalizeEmail(email);
+      
+      // Check if email is already taken by another user
+      const existingUser = await findUserByEmail(normalizedEmail);
+      if (existingUser && existingUser.id !== userId) {
+        return errorResponse(res, 'Email already in use', 409);
+      }
+      
+      updates.email = normalizedEmail;
+    }
+
+    // Handle password change
+    if (newPassword) {
+      if (!currentPassword) {
+        return errorResponse(res, 'Current password is required to change password', 400);
+      }
+
+      if (!user.password_hash) {
+        return errorResponse(res, 'User has no password set', 400);
+      }
+
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!isValidPassword) {
+        return errorResponse(res, 'Current password is incorrect', 401);
+      }
+
+      if (newPassword.length < 6) {
+        return errorResponse(res, 'New password must be at least 6 characters', 400);
+      }
+
+      updates.passwordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    const updatedUser = await updateUser(userId, updates);
+    const homes = await getHomesByUserId(updatedUser.id);
+
+    return successResponse(res, {
+      user: buildUserPayload(updatedUser, homes),
+      homes: mapHomesForResponse(homes),
+    });
+  } catch (error: any) {
+    console.error('Update profile error:', error);
+    return errorResponse(res, error.message || 'Failed to update profile', 500);
   }
 }

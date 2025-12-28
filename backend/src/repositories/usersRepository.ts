@@ -23,6 +23,36 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   return rows[0] || null;
 }
 
+export async function updateUser(id: string, updates: { name?: string; email?: string; passwordHash?: string }): Promise<User> {
+  const setClauses: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 2;
+
+  if (updates.name !== undefined) {
+    setClauses.push(`name = $${paramIndex++}`);
+    values.push(updates.name);
+  }
+  if (updates.email !== undefined) {
+    setClauses.push(`email = $${paramIndex++}`);
+    values.push(updates.email.toLowerCase());
+  }
+  if (updates.passwordHash !== undefined) {
+    setClauses.push(`password_hash = $${paramIndex++}`);
+    values.push(updates.passwordHash);
+  }
+
+  if (setClauses.length === 0) {
+    const user = await findUserById(id);
+    if (!user) throw new Error('User not found');
+    return user;
+  }
+
+  setClauses.push('updated_at = CURRENT_TIMESTAMP');
+  const queryStr = `UPDATE users SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`;
+  const { rows } = await query(queryStr, [id, ...values]);
+  return rows[0] as User;
+}
+
 export async function findUserById(id: string): Promise<User | null> {
   const { rows } = await query('SELECT * FROM users WHERE id = $1', [id]);
   return rows[0] || null;

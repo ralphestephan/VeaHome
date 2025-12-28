@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -45,13 +45,17 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { getApiClient, HomeApi } from '../services/api';
+import { useHomeData } from '../hooks/useHomeData';
 
 
 export default function SettingsScreen() {
-  const { logout, user, token } = useAuth();
+  const { logout, user, token, currentHomeId } = useAuth();
   const navigation = useNavigation<any>();
   const { colors, gradients, shadows, mode, setMode } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
+  const homeId = currentHomeId || user?.homeId;
+  const { devices, rooms } = useHomeData(homeId || '');
+  const [home, setHome] = useState<any>(null);
   const [notifications, setNotifications] = useState(true);
   const [autoMode, setAutoMode] = useState(false);
   const [energySaving, setEnergySaving] = useState(true);
@@ -184,8 +188,8 @@ export default function SettingsScreen() {
             <User size={32} color="white" />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>VeaLive Client</Text>
-            <Text style={styles.profilePlan}>Premium Account</Text>
+            <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+            <Text style={styles.profilePlan}>{user?.email || 'No email'}</Text>
           </View>
           <ChevronRight
             size={20}
@@ -202,7 +206,7 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Home Information</Text>
-              <Text style={styles.settingValue}>Manage your home</Text>
+              <Text style={styles.settingValue}>{home?.name || 'Manage your home'}</Text>
             </View>
             <ChevronRight
               size={20}
@@ -219,7 +223,7 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Network & Connection</Text>
-              <Text style={styles.settingValue}>Connected • 120 Mbps</Text>
+              <Text style={styles.settingValue}>{home?.address || 'Connected'}</Text>
             </View>
             <ChevronRight
               size={20}
@@ -233,7 +237,7 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>Devices & Integrations</Text>
-              <Text style={styles.settingValue}>38 devices connected</Text>
+              <Text style={styles.settingValue}>{devices.length} {devices.length === 1 ? 'device' : 'devices'} connected</Text>
             </View>
             <ChevronRight
               size={20}

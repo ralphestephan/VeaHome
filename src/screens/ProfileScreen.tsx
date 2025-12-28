@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,51 @@ import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
+import { useHomeData } from '../hooks/useHomeData';
+import { getApiClient, HomeApi, AutomationsApi, ScenesApi } from '../services/api';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows), [colors, gradients, shadows]);
+  const { user, token, currentHomeId } = useAuth();
+  const homeId = currentHomeId || user?.homeId;
+  const { devices, rooms } = useHomeData(homeId || '');
+  const [automations, setAutomations] = useState<any[]>([]);
+  const [scenes, setScenes] = useState<any[]>([]);
+  const [home, setHome] = useState<any>(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (homeId && token) {
+        try {
+          const client = getApiClient(async () => token);
+          const homeApi = HomeApi(client);
+          const automationsApi = AutomationsApi(client);
+          const scenesApi = ScenesApi(client);
+
+          // Load home data
+          const homeRes = await homeApi.getHome(homeId).catch(() => ({ data: null }));
+          const loadedHome = homeRes.data?.data?.home ?? homeRes.data?.home ?? homeRes.data?.data ?? null;
+          setHome(loadedHome);
+
+          // Load automations
+          const automationsRes = await automationsApi.listAutomations(homeId).catch(() => ({ data: [] }));
+          const automationsData = automationsRes.data?.data?.automations ?? automationsRes.data?.automations ?? automationsRes.data?.data ?? [];
+          setAutomations(Array.isArray(automationsData) ? automationsData : []);
+
+          // Load scenes
+          const scenesRes = await scenesApi.listScenes(homeId).catch(() => ({ data: [] }));
+          const scenesData = scenesRes.data?.data?.scenes ?? scenesRes.data?.scenes ?? scenesRes.data?.data ?? [];
+          setScenes(Array.isArray(scenesData) ? scenesData : []);
+        } catch (e) {
+          console.error('Error loading profile data:', e);
+        }
+      }
+    };
+    loadData();
+  }, [homeId, token]);
 
   const handleUpdateContact = () => {
     Alert.alert('Contact info', 'We will let you edit these details in the next update.');
@@ -36,7 +76,7 @@ export default function ProfileScreen() {
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Edit profile', 'Profile editing is coming soon.');
+    navigation.navigate('ProfileEdit');
   };
 
   const handlePrivacySettings = () => {
@@ -64,21 +104,21 @@ export default function ProfileScreen() {
           <View style={styles.avatarContainer}>
             <MaterialCommunityIcons name="account" size={48} color="white" />
           </View>
-          <Text style={styles.profileName}>VeaLive Client</Text>
-          <Text style={styles.profileRole}>Smart Home Owner • Premium</Text>
+          <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+          <Text style={styles.profileRole}>{user?.email || 'Smart Home Owner'}</Text>
           
           <View style={styles.statsRow}>
             <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Member Since</Text>
-              <Text style={styles.statValue}>Jan 2024</Text>
+              <Text style={styles.statLabel}>Devices</Text>
+              <Text style={styles.statValue}>{devices.length}</Text>
             </View>
             <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Plan</Text>
-              <Text style={styles.statValue}>Premium</Text>
+              <Text style={styles.statLabel}>Rooms</Text>
+              <Text style={styles.statValue}>{rooms.length}</Text>
             </View>
             <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Level</Text>
-              <Text style={styles.statValue}>Pro</Text>
+              <Text style={styles.statLabel}>Scenes</Text>
+              <Text style={styles.statValue}>{scenes.length}</Text>
             </View>
           </View>
         </View>
@@ -89,33 +129,29 @@ export default function ProfileScreen() {
             <View style={styles.statIcon}>
               <MaterialCommunityIcons name="home" size={16} color={colors.primary} />
             </View>
-            <Text style={styles.statNumber}>38</Text>
+            <Text style={styles.statNumber}>{devices.length}</Text>
             <Text style={styles.statText}>Devices</Text>
-            <Text style={styles.statChange}>+2 this week</Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <MaterialCommunityIcons name="lightning-bolt" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statNumber}>156kWh</Text>
-            <Text style={styles.statText}>Energy Saved</Text>
-            <Text style={[styles.statChange, { color: colors.success }]}>+12% more</Text>
           </View>
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
               <MaterialCommunityIcons name="calendar" size={16} color={colors.primary} />
             </View>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{automations.length}</Text>
             <Text style={styles.statText}>Automations</Text>
-            <Text style={styles.statChange}>Running daily</Text>
           </View>
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
               <MaterialCommunityIcons name="target" size={16} color={colors.primary} />
             </View>
-            <Text style={styles.statNumber}>8</Text>
+            <Text style={styles.statNumber}>{scenes.length}</Text>
             <Text style={styles.statText}>Scenes</Text>
-            <Text style={styles.statChange}>3 active</Text>
+          </View>
+          <View style={styles.statCard}>
+            <View style={styles.statIcon}>
+              <MaterialCommunityIcons name="home-variant" size={16} color={colors.primary} />
+            </View>
+            <Text style={styles.statNumber}>{rooms.length}</Text>
+            <Text style={styles.statText}>Rooms</Text>
           </View>
         </View>
 
@@ -134,20 +170,9 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>client@vealive.com</Text>
+              <Text style={styles.infoValue}>{user?.email || 'No email'}</Text>
             </View>
-            <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />
-          </View>
-
-          <View style={styles.infoCard}>
-            <View style={styles.infoIcon}>
-              <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Phone</Text>
-              <Text style={styles.infoValue}>+1 234 567 8900</Text>
-            </View>
-            <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />
+            {user?.email && <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />}
           </View>
 
           <TouchableOpacity style={styles.infoCard} onPress={handleAddress}>
@@ -155,8 +180,8 @@ export default function ProfileScreen() {
               <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} />
             </View>
             <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Address</Text>
-              <Text style={styles.infoValue}>Smart Home, City</Text>
+              <Text style={styles.infoLabel}>Home</Text>
+              <Text style={styles.infoValue}>{home?.name || home?.address || 'No home set'}</Text>
             </View>
             <MaterialCommunityIcons
               name="chevron-right"
@@ -166,48 +191,50 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Most Used Devices */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Most Used Devices</Text>
-            <TouchableOpacity onPress={handleSeeDevices}>
-              <Text style={styles.updateText}>See All</Text>
-            </TouchableOpacity>
+        {/* Devices */}
+        {devices.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Your Devices</Text>
+              <TouchableOpacity onPress={handleSeeDevices}>
+                <Text style={styles.updateText}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {devices.slice(0, 3).map((device) => {
+              const deviceIcons: Record<string, string> = {
+                light: 'lightbulb',
+                thermostat: 'thermostat',
+                ac: 'air-conditioner',
+                tv: 'television',
+                lock: 'lock',
+                camera: 'camera',
+                speaker: 'speaker',
+                fan: 'fan',
+                blind: 'blinds',
+                shutter: 'blinds',
+                sensor: 'motion-sensor',
+              };
+              const iconName = deviceIcons[device.type] || 'devices';
+              return (
+                <View key={device.id} style={styles.deviceCard}>
+                  <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
+                    <MaterialCommunityIcons name={iconName as any} size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.deviceInfo}>
+                    <Text style={styles.deviceName}>{device.name}</Text>
+                    <Text style={styles.deviceUsage}>{device.type} • {device.isActive ? 'Active' : 'Inactive'}</Text>
+                  </View>
+                  <MaterialCommunityIcons 
+                    name={device.isActive ? "check-circle" : "circle-outline"} 
+                    size={20} 
+                    color={device.isActive ? colors.success : colors.mutedForeground} 
+                  />
+                </View>
+              );
+            })}
           </View>
-          
-          <View style={styles.deviceCard}>
-            <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
-              <MaterialCommunityIcons name="lightbulb" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>Living Room Lights</Text>
-              <Text style={styles.deviceUsage}>Used 142 times</Text>
-            </View>
-            <Text style={styles.devicePercent}>45%</Text>
-          </View>
-
-          <View style={styles.deviceCard}>
-            <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
-              <MaterialCommunityIcons name="air-conditioner" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>Thermostat</Text>
-              <Text style={styles.deviceUsage}>Used 98 times</Text>
-            </View>
-            <Text style={styles.devicePercent}>32%</Text>
-          </View>
-
-          <View style={styles.deviceCard}>
-            <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
-              <MaterialCommunityIcons name="television" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>Smart TV</Text>
-              <Text style={styles.deviceUsage}>Used 76 times</Text>
-            </View>
-            <Text style={styles.devicePercent}>23%</Text>
-          </View>
-        </View>
+        )}
 
         {/* Achievements */}
         <View style={styles.section}>

@@ -24,6 +24,8 @@ import {
   Edit3,
   Save,
   Cpu,
+  List,
+  Calendar as CalendarIcon,
 } from 'lucide-react-native';
 import { 
   spacing, 
@@ -157,6 +159,7 @@ export default function DashboardScreen() {
   
   const { energyData } = useEnergyData(homeId, 'day');
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleViewMode, setScheduleViewMode] = useState<'list' | 'calendar'>('list');
   const [selectedRoom, setSelectedRoom] = useState<string | undefined>();
   const [showRoomPopup, setShowRoomPopup] = useState(false);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
@@ -249,24 +252,39 @@ export default function DashboardScreen() {
   );
 
   // Load schedules
-  useEffect(() => {
-    const loadSchedules = async () => {
-      if (homeId && token && !isDemoMode) {
-        try {
-          const client = getApiClient(async () => token);
-          const schedulesApi = SchedulesApi(client);
-          const response = await schedulesApi.listSchedules(homeId);
-          const schedulesList = response.data?.schedules || [];
-          // Get next 2 upcoming schedules
-          setSchedules(schedulesList.filter((s: any) => s.enabled).slice(0, 2));
-        } catch (e) {
-          console.error('Error loading schedules:', e);
-          setSchedules([]);
-        }
+  const loadSchedules = useCallback(async () => {
+    if (homeId && token && !isDemoMode) {
+      try {
+        const client = getApiClient(async () => token);
+        const schedulesApi = SchedulesApi(client);
+        const response = await schedulesApi.listSchedules(homeId);
+        const schedulesList = response.data?.schedules || response.data?.data?.schedules || [];
+        // Show all enabled schedules, sorted by time
+        const enabledSchedules = schedulesList.filter((s: any) => s.enabled);
+        // Sort by time (earliest first)
+        const sortedSchedules = enabledSchedules.sort((a: any, b: any) => {
+          const timeA = a.time || '00:00';
+          const timeB = b.time || '00:00';
+          return timeA.localeCompare(timeB);
+        });
+        setSchedules(sortedSchedules);
+      } catch (e) {
+        console.error('Error loading schedules:', e);
+        setSchedules([]);
       }
-    };
-    loadSchedules();
+    }
   }, [homeId, token, isDemoMode]);
+
+  useEffect(() => {
+    loadSchedules();
+  }, [loadSchedules]);
+
+  // Refresh schedules when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadSchedules();
+    }, [loadSchedules])
+  );
 
   // Load scenes and find active scene
   const demo = useDemo();
@@ -375,26 +393,24 @@ export default function DashboardScreen() {
     userSelectedRoomRef.current = roomId;
     setSelectedRoom(roomId);
     
-    // Check if room data exists before showing popup
-    const currentRoom = rooms.find((r: Room) => String(r.id) === String(roomId));
-    console.log('[DashboardScreen] Current room data:', currentRoom ? { id: currentRoom.id, name: currentRoom.name, deviceCount: currentRoom.devices?.length } : 'NOT FOUND');
+    // Always refresh first to ensure we have latest data including scene information
+    console.log('[DashboardScreen] Refreshing room data before showing popup...');
+    await refresh();
+    // Wait a bit for state to propagate
+    await new Promise(resolve => setTimeout(resolve, 150));
     
-    // Show popup immediately if we have room data, otherwise refresh first
-    if (currentRoom) {
-      setShowRoomPopup(true);
-      // Refresh in background to update with latest data
-      refresh().then(() => {
-        console.log('[DashboardScreen] Background refresh complete. Rooms count:', rooms.length);
-      }).catch(err => {
-        console.error('[DashboardScreen] Background refresh failed:', err);
-      });
-    } else {
-      // No room data yet, refresh first then show popup
-      console.log('[DashboardScreen] No room data found, refreshing first...');
-      await refresh();
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setShowRoomPopup(true);
-    }
+    // Check if room data exists after refresh
+    const currentRoom = rooms.find((r: Room) => String(r.id) === String(roomId));
+    console.log('[DashboardScreen] Room data after refresh:', currentRoom ? { 
+      id: currentRoom.id, 
+      name: currentRoom.name, 
+      deviceCount: currentRoom.devices?.length,
+      sceneName: currentRoom.sceneName,
+      scene: currentRoom.scene
+    } : 'NOT FOUND');
+    
+    // Show popup after refresh completes
+    setShowRoomPopup(true);
   };
 
   const handleRoomPopupClose = () => {
@@ -623,6 +639,8 @@ export default function DashboardScreen() {
         devices: room.devices?.map((d: Device) => ({ id: d.id, name: d.name, roomId: d.roomId })) || [],
         temperature: room.temperature,
         humidity: room.humidity,
+        sceneName: room.sceneName,
+        scene: room.scene,
       });
     } else {
       console.warn('[DashboardScreen] Room not found:', selectedRoom, 'Available rooms:', rooms.map(r => ({ id: r.id, name: r.name })));
@@ -694,6 +712,33 @@ export default function DashboardScreen() {
     ? rooms.reduce((sum: number, room: Room) => sum + (room.temperature || 0), 0) / rooms.length
     : 0;
   const todayEnergy = (Array.isArray(energyData) ? energyData : []).reduce((sum, point) => sum + (point.total || 0), 0);
+  
+  // Calculate trend - compare recent hours with earlier hours in the day
+  const calculateEnergyTrend = useMemo(() => {
+    if (!energyData || !Array.isArray(energyData) || energyData.length === 0) {
+      return { trend: 'neutral' as const, changePercent: undefined };
+    }
+    
+    // Get the most recent data points (last 3-4 hours)
+    const recentData = energyData.slice(-4);
+    const earlierData = energyData.slice(0, Math.max(1, energyData.length - 4));
+    
+    if (earlierData.length === 0 || recentData.length === 0) {
+      return { trend: 'neutral' as const, changePercent: undefined };
+    }
+    
+    const recentAvg = recentData.reduce((sum, p) => sum + (p.total || 0), 0) / recentData.length;
+    const earlierAvg = earlierData.reduce((sum, p) => sum + (p.total || 0), 0) / earlierData.length;
+    
+    if (earlierAvg === 0) {
+      return { trend: 'neutral' as const, changePercent: undefined };
+    }
+    
+    const changePercent = Math.round(((recentAvg - earlierAvg) / earlierAvg) * 100);
+    const trend: 'up' | 'down' | 'neutral' = changePercent > 5 ? 'up' : changePercent < -5 ? 'down' : 'neutral';
+    
+    return { trend, changePercent: Math.abs(changePercent) };
+  }, [energyData]);
 
   // Get favorite/active devices for quick access
   const favoriteDevices = devices
@@ -1098,10 +1143,10 @@ export default function DashboardScreen() {
             action={{ label: 'Details', onPress: () => navigation.navigate('Energy') }}
           />
           <EnergyCard
-            currentUsage={`${(todayEnergy / 24).toFixed(1)}`}
+            currentUsage={`${todayEnergy > 0 ? (todayEnergy / 24).toFixed(1) : '0.0'}`}
             unit="kW"
-            trend="down"
-            changePercent={12}
+            trend={calculateEnergyTrend.trend}
+            changePercent={calculateEnergyTrend.changePercent}
             period="Today"
             onPress={() => navigation.navigate('Energy')}
           />
@@ -1109,33 +1154,97 @@ export default function DashboardScreen() {
 
         {/* Scheduled */}
         <View style={styles.section}>
-          <SectionHeader 
-            title="Upcoming" 
-            action={{ label: 'All Schedules', onPress: () => navigation.navigate('Schedules') }}
-          />
+          <View style={styles.scheduleHeader}>
+            <Text style={styles.sectionTitle}>Upcoming Schedules</Text>
+            <TouchableOpacity 
+              style={styles.allSchedulesButton}
+              onPress={() => navigation.navigate('Schedules', { homeId })}
+            >
+              <Text style={styles.allSchedulesButtonText}>All Schedules</Text>
+              <ChevronRight size={14} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
           {schedules.length > 0 ? (
             <NeonCard style={styles.scheduleCard}>
-              {schedules.map((schedule, index) => (
-                <React.Fragment key={schedule.id}>
-                  <View style={styles.scheduleItem}>
-                    <View style={styles.scheduleIcon}>
-                      <Clock size={18} color={colors.primary} />
-                    </View>
-                    <View style={styles.scheduleContent}>
-                      <Text style={styles.scheduleTitle}>{schedule.name}</Text>
-                      <Text style={styles.scheduleTime}>
-                        {schedule.days?.join(', ')} at {schedule.time}
-                      </Text>
-                    </View>
-                    {schedule.enabled && (
-                      <View style={styles.scheduleBadge}>
-                        <Text style={styles.scheduleBadgeText}>Active</Text>
+              {/* View Toggle */}
+              <View style={styles.viewToggleContainer}>
+                <View style={styles.viewToggle}>
+                  <TouchableOpacity
+                    style={[styles.viewToggleButton, scheduleViewMode === 'list' && styles.viewToggleButtonActive]}
+                    onPress={() => setScheduleViewMode('list')}
+                  >
+                    <List size={16} color={scheduleViewMode === 'list' ? '#fff' : colors.mutedForeground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.viewToggleButton, scheduleViewMode === 'calendar' && styles.viewToggleButtonActive]}
+                    onPress={() => setScheduleViewMode('calendar')}
+                  >
+                    <CalendarIcon size={16} color={scheduleViewMode === 'calendar' ? '#fff' : colors.mutedForeground} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {scheduleViewMode === 'list' ? (
+                schedules.map((schedule, index) => (
+                  <React.Fragment key={schedule.id}>
+                    <View style={styles.scheduleItem}>
+                      <View style={styles.scheduleIcon}>
+                        <Clock size={18} color={colors.primary} />
                       </View>
-                    )}
-                  </View>
-                  {index < schedules.length - 1 && <View style={styles.scheduleDivider} />}
-                </React.Fragment>
-              ))}
+                      <View style={styles.scheduleContent}>
+                        <Text style={styles.scheduleTitle}>{schedule.name}</Text>
+                        <Text style={styles.scheduleTime}>
+                          {schedule.days?.join(', ')} at {schedule.time}
+                        </Text>
+                      </View>
+                      {schedule.enabled && (
+                        <View style={styles.scheduleBadge}>
+                          <Text style={styles.scheduleBadgeText}>Active</Text>
+                        </View>
+                      )}
+                    </View>
+                    {index < schedules.length - 1 && <View style={styles.scheduleDivider} />}
+                  </React.Fragment>
+                ))
+              ) : (
+                <View style={styles.calendarView}>
+                  {schedules.map((schedule) => {
+                    const sceneAction = Array.isArray(schedule.actions) 
+                      ? schedule.actions.find((a: any) => a.type === 'scene')
+                      : null;
+                    // Get scene name from scenes list
+                    const scene = scenes.find((s: any) => s.id === sceneAction?.sceneId);
+                    const sceneName = scene?.name || sceneAction?.sceneId?.substring(0, 20) || 'No scene';
+                    
+                    // Format days - show all days, not just first 2
+                    const daysList = Array.isArray(schedule.days) ? schedule.days : [];
+                    const daysText = daysList.length <= 3 
+                      ? daysList.join(', ')
+                      : `${daysList.slice(0, 2).join(', ')}, +${daysList.length - 2} more`;
+                    
+                    return (
+                      <View key={schedule.id} style={styles.calendarScheduleItem}>
+                        <View style={styles.calendarTimeBlock}>
+                          <Text style={styles.calendarTime}>{schedule.time}</Text>
+                          <Text style={styles.calendarDays}>{daysText}</Text>
+                        </View>
+                        <View style={styles.calendarScheduleContent}>
+                          <Text style={styles.calendarScheduleTitle}>{schedule.name}</Text>
+                          <View style={styles.calendarSceneInfo}>
+                            <Clock size={12} color={colors.mutedForeground} />
+                            <Text style={styles.calendarSceneName}>{sceneName}</Text>
+                          </View>
+                        </View>
+                        {schedule.enabled && (
+                          <View style={styles.scheduleBadge}>
+                            <Text style={styles.scheduleBadgeText}>Active</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </NeonCard>
           ) : (
             <NeonCard style={styles.scheduleCard}>
@@ -1144,7 +1253,7 @@ export default function DashboardScreen() {
                 <Text style={styles.emptyScheduleText}>No schedules yet</Text>
                 <TouchableOpacity
                   style={styles.addScheduleButton}
-                  onPress={() => navigation.navigate('Schedules')}
+                  onPress={() => navigation.navigate('Schedules', { homeId })}
                 >
                   <Plus size={16} color={colors.primary} />
                   <Text style={styles.addScheduleText}>Add Schedule</Text>
@@ -1582,6 +1691,97 @@ const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => {
       fontSize: fontSize.sm,
       color: colors.primary,
       fontWeight: '600',
+    },
+    scheduleHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.md,
+    },
+    sectionTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+    },
+    allSchedulesButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    allSchedulesButtonText: {
+      fontSize: fontSize.sm,
+      color: colors.primary,
+      fontWeight: fontWeight.medium,
+    },
+    viewToggleContainer: {
+      marginBottom: spacing.md,
+      alignItems: 'flex-end',
+    },
+    viewToggle: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      padding: 2,
+    },
+    viewToggleButton: {
+      width: 32,
+      height: 32,
+      borderRadius: borderRadius.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    viewToggleButtonActive: {
+      backgroundColor: colors.primary,
+    },
+    calendarView: {
+      gap: spacing.md,
+    },
+    calendarScheduleItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      padding: spacing.md,
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    calendarTimeBlock: {
+      alignItems: 'flex-start',
+      minWidth: 70,
+      paddingTop: 2,
+    },
+    calendarTime: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.bold,
+      color: colors.primary,
+      marginBottom: spacing.xs,
+    },
+    calendarDays: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      lineHeight: fontSize.xs * 1.4,
+    },
+    calendarScheduleContent: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    calendarScheduleTitle: {
+      fontSize: fontSize.md,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      marginBottom: spacing.xs,
+    },
+    calendarSceneInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    calendarSceneName: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      flex: 1,
     },
   });
 };
