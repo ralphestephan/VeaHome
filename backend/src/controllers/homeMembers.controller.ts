@@ -52,11 +52,16 @@ export const createInvitation = async (req: Request, res: Response) => {
       role
     );
 
+    // Generate invitation link
+    const appUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'https://veahome.app';
+    const inviteLink = `${appUrl}/invite/${invitation.token}`;
+
     // TODO: Send email with invitation link
-    // const inviteLink = `${process.env.APP_URL}/invite/${invitation.token}`;
+    // For now, return the link in the response
 
     return res.status(201).json({
       ...invitation,
+      inviteLink,
       message: 'Invitation created successfully'
     });
   } catch (error) {

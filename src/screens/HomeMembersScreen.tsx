@@ -9,9 +9,12 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Share,
+  Platform,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { UserPlus, X, Mail, Send, Trash2, Users, Check, Edit } from 'lucide-react-native';
+import { UserPlus, X, Mail, Send, Trash2, Users, Check, Edit, Share2, Link as LinkIcon } from 'lucide-react-native';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -50,6 +53,9 @@ export default function HomeMembersScreen() {
   const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
+  const [shareLinkVisible, setShareLinkVisible] = useState(false);
+  const [shareLink, setShareLink] = useState('');
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   const homeId = currentHomeId || user?.homeId || '';
 
@@ -132,6 +138,87 @@ export default function HomeMembersScreen() {
     );
   };
 
+  const handleGenerateShareLink = async () => {
+    if (!homeId) {
+      Alert.alert('Error', 'Home ID is required');
+      return;
+    }
+
+    try {
+      setGeneratingLink(true);
+      const client = getApiClient(async () => token);
+      const api = HomeMembersApi(client);
+      
+      // Create a public invitation link (use a placeholder email for share links)
+      // The backend will return the inviteLink in the response
+      const placeholderEmail = `share-${Date.now()}@veahome.app`;
+      const response = await api.createInvitation(homeId, placeholderEmail, inviteRole);
+      
+      // Extract token and inviteLink from response
+      const invitation = response.data?.data || response.data;
+      const token = invitation?.token;
+      const inviteLink = invitation?.inviteLink;
+      
+      if (!token) {
+        Alert.alert('Error', 'Failed to generate share link');
+        return;
+      }
+
+      // Generate shareable URL - use inviteLink from backend if available, otherwise construct it
+      let shareUrl = inviteLink;
+      if (!shareUrl) {
+        // Fallback: construct URL (in production, this should come from backend)
+        shareUrl = `https://veahome.app/invite/${token}`;
+      }
+      
+      setShareLink(shareUrl);
+      setShareLinkVisible(true);
+    } catch (error: any) {
+      console.error('Error generating share link:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to generate share link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!shareLink) return;
+    
+    try {
+      if (Platform.OS === 'web') {
+        await navigator.clipboard.writeText(shareLink);
+      } else {
+        Clipboard.setString(shareLink);
+      }
+      Alert.alert('Success', 'Link copied to clipboard!');
+      setShareLinkVisible(false);
+    } catch (error) {
+      console.error('Clipboard error:', error);
+      // Fallback: show the link so user can manually copy
+      Alert.alert('Copy Link', shareLink, [
+        { text: 'OK' }
+      ]);
+    }
+  };
+
+  const handleShareLink = async () => {
+    if (!shareLink) return;
+    
+    try {
+      const result = await Share.share({
+        message: `Join my smart home! Use this link: ${shareLink}`,
+        url: shareLink,
+        title: 'Invite to VeaHome',
+      });
+      
+      if (result.action === Share.sharedAction) {
+        setShareLinkVisible(false);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to share link');
+    }
+  };
+
   const handleRemoveMember = async (memberId: string, memberName: string) => {
     Alert.alert(
       'Remove Member',
@@ -189,6 +276,24 @@ export default function HomeMembersScreen() {
             <UserPlus size={20} color={colors.primary} />
             <Text style={styles.sectionTitle}>Invite New Member</Text>
           </View>
+          
+          {/* Share Link Button */}
+          <TouchableOpacity
+            style={styles.shareLinkButton}
+            onPress={handleGenerateShareLink}
+            disabled={generatingLink}
+          >
+            {generatingLink ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Share2 size={18} color={colors.primary} />
+                <Text style={styles.shareLinkButtonText}>Share Invitation Link</Text>
+                <LinkIcon size={16} color={colors.mutedForeground} />
+              </>
+            )}
+          </TouchableOpacity>
+
           <View style={styles.inviteCard}>
             <View style={styles.inputContainer}>
               <Mail size={20} color={colors.mutedForeground} />
@@ -358,6 +463,51 @@ export default function HomeMembersScreen() {
               </Text>
               {inviteRole === 'member' && <Check size={20} color={colors.primary} />}
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Share Link Modal */}
+      <Modal
+        visible={shareLinkVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShareLinkVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Share Invitation Link</Text>
+              <TouchableOpacity onPress={() => setShareLinkVisible(false)} style={styles.modalCloseButton}>
+                <X size={24} color={colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.shareLinkContent}>
+              <Text style={styles.shareLinkDescription}>
+                Share this link with anyone to invite them to your home. They can use it to join even if they don't have an account yet.
+              </Text>
+              <View style={styles.shareLinkBox}>
+                <Text style={styles.shareLinkText} selectable>
+                  {shareLink}
+                </Text>
+              </View>
+              <View style={styles.shareLinkActions}>
+                <TouchableOpacity
+                  style={[styles.shareLinkActionButton, styles.copyButton]}
+                  onPress={handleCopyShareLink}
+                >
+                  <LinkIcon size={18} color="#fff" />
+                  <Text style={styles.shareLinkActionText}>Copy Link</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shareLinkActionButton, styles.shareButton]}
+                  onPress={handleShareLink}
+                >
+                  <Share2 size={18} color="#fff" />
+                  <Text style={styles.shareLinkActionText}>Share</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -588,6 +738,71 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     },
     roleOptionTextSelected: {
       color: colors.primary,
+      fontWeight: '600',
+    },
+    shareLinkButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+    },
+    shareLinkButtonText: {
+      fontSize: fontSize.md,
+      color: colors.primary,
+      fontWeight: '600',
+      flex: 1,
+    },
+    shareLinkContent: {
+      padding: spacing.lg,
+    },
+    shareLinkDescription: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginBottom: spacing.lg,
+      lineHeight: fontSize.sm * 1.5,
+    },
+    shareLinkBox: {
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: spacing.lg,
+    },
+    shareLinkText: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    shareLinkActions: {
+      flexDirection: 'row',
+      gap: spacing.md,
+    },
+    shareLinkActionButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: borderRadius.md,
+    },
+    copyButton: {
+      backgroundColor: colors.primary,
+    },
+    shareButton: {
+      backgroundColor: colors.secondary,
+    },
+    shareLinkActionText: {
+      fontSize: fontSize.md,
+      color: '#fff',
       fontWeight: '600',
     },
   });
