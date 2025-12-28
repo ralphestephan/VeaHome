@@ -158,6 +158,7 @@ export default function AppNavigator() {
           <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />
           <Stack.Screen name="Thermostat" component={ThermostatScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
           <Stack.Screen name="Schedules" component={SchedulesScreen} />
           <Stack.Screen name="HomeSelector" component={HomeSelectorScreen} />
           <Stack.Screen name="HomeMembers" component={HomeMembersScreen} />

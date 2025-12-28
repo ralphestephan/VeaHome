@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UserPlus, X, Mail, Send, Trash2, Users, Check, Edit } from 'lucide-react-native';

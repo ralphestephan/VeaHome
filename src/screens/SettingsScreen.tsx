@@ -150,7 +150,7 @@ export default function SettingsScreen() {
   };
 
   const handleChangePassword = () => {
-    showInfo('Change password', 'Use the Profile screen to update your password.');
+    navigation.navigate('ProfileEdit');
   };
 
   const handlePrivacyPolicy = () => {

@@ -71,10 +71,18 @@ export const getPendingInvitations = async (req: Request, res: Response) => {
     const { homeId } = req.params;
     const userId = (req as any).userId;
 
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     // Check if user is a member
     const isMember = await homeMembersRepository.isMember(homeId, userId);
     if (!isMember) {
-      return res.status(403).json({ error: 'Not authorized' });
+      // If user is not a member, check if they own the home (via homes table)
+      const home = await getHomeById(homeId);
+      if (!home || home.user_id !== userId) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
     }
 
     const invitations = await homeMembersRepository.getPendingInvitations(homeId);
