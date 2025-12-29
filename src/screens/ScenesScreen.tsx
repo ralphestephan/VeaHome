@@ -599,12 +599,12 @@ export default function ScenesScreen() {
                     >
                       <Power size={16} color="white" />
                     </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.editButton}
-                      onPress={() => handleEditScene(scene.id)}
-                    >
-                      <Edit size={16} color="white" />
-                    </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.editButton}
+                    onPress={() => handleEditScene(scene.id)}
+                  >
+                    <Edit size={16} color="white" />
+                  </TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.activeSceneControls}>
@@ -668,9 +668,9 @@ export default function ScenesScreen() {
                     
                     if (displayActions.length === 0) {
                       return (
-                        <View style={styles.controlItem}>
+                  <View style={styles.controlItem}>
                           <Text style={styles.controlText}>No actions configured</Text>
-                        </View>
+                  </View>
                       );
                     }
                     
@@ -678,7 +678,7 @@ export default function ScenesScreen() {
                       <View key={index} style={styles.controlItem}>
                         {React.createElement(action.icon, { size: 16, color: "white" })}
                         <Text style={styles.controlText}>{action.label}</Text>
-                      </View>
+                  </View>
                     ));
                   })()}
                 </View>
@@ -848,7 +848,7 @@ export default function ScenesScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleContainer}>
-              <Text style={styles.sectionTitle}>Smart Automations</Text>
+            <Text style={styles.sectionTitle}>Smart Automations</Text>
               <Text style={styles.sectionDescription}>
                 Automate lighting, security, and comfort flows to match your routine.
               </Text>

@@ -69,10 +69,12 @@ export const createInvitation = async (req: Request, res: Response) => {
       if (io) {
         io.to(`user:${existingUser.id}`).emit('home_invitation', {
           type: 'home_invitation',
+          invitationId: invitation.id,
+          invitationToken: invitation.token,
           homeId,
           homeName,
           role,
-          message: `You've been invited to join ${homeName}. You now have access to this home. Switch to it from your home selector.`,
+          message: `You've been invited to join ${homeName}. You now have access to this home.`,
           timestamp: new Date().toISOString(),
         });
       }

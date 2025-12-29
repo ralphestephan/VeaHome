@@ -453,7 +453,7 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
 
       const baseDevices = [
         ...devicesList
-          .map(mapDevice)
+        .map(mapDevice)
           .filter((d: any) => String(d.roomId) === String(roomId)),
         ...hubDevices,
       ];
@@ -627,19 +627,19 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
           if (typeof baseRoom.scene === 'object' && (baseRoom.scene as any).id) {
             console.log('[Room Scene] Corrupted scene object detected:', baseRoom.scene);
             sceneIdToMatch = (baseRoom.scene as any).id;
-          }
+            }
           
           activeScene = relevantScenes.find((s: any) => String(s.id) === String(sceneIdToMatch));
-        }
-        
-        console.log('[Room Scene] Found scene:', activeScene);
-        if (activeScene) {
-          setActiveSceneName(activeScene.name);
-        } else {
-          setActiveSceneName('');
-        }
-      } catch (err) {
-        console.log('Error loading scene name:', err);
+          }
+          
+          console.log('[Room Scene] Found scene:', activeScene);
+          if (activeScene) {
+            setActiveSceneName(activeScene.name);
+          } else {
+            setActiveSceneName('');
+          }
+        } catch (err) {
+          console.log('Error loading scene name:', err);
         setActiveSceneName('');
       }
       

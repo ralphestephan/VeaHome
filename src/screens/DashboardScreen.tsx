@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
@@ -53,7 +54,7 @@ import { useAirguardAlerts } from '../hooks/useAirguardAlerts';
 import AirguardAlertBanner, { decodeAlertFlags } from '../components/AirguardAlertBanner';
 import { useDemo } from '@/context/DemoContext';
 import type { Room, Device, Home } from '../types';
-import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi, ScenesApi } from '../services/api';
+import { getApiClient, HomeApi, PublicAirguardApi, SchedulesApi, ScenesApi, HomeMembersApi } from '../services/api';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -85,7 +86,7 @@ export default function DashboardScreen() {
   const viewContentFade = useRef(new Animated.Value(1)).current;
   const heroScale = useRef(new Animated.Value(0.95)).current;
   const heroOpacity = useRef(new Animated.Value(0)).current;
-  const { user, token } = useAuth();
+  const { user, token, refreshMe } = useAuth();
   const { currentHomeId } = useAuth();
   const homeId = currentHomeId || user?.homeId;
   const { rooms: homeRooms, devices: homeDevices, loading, refresh, createRoom, isDemoMode } = useHomeData(homeId);
@@ -253,11 +254,11 @@ export default function DashboardScreen() {
 
   // Load schedules
   const loadSchedules = useCallback(async () => {
-    if (homeId && token && !isDemoMode) {
-      try {
-        const client = getApiClient(async () => token);
-        const schedulesApi = SchedulesApi(client);
-        const response = await schedulesApi.listSchedules(homeId);
+      if (homeId && token && !isDemoMode) {
+        try {
+          const client = getApiClient(async () => token);
+          const schedulesApi = SchedulesApi(client);
+          const response = await schedulesApi.listSchedules(homeId);
         const schedulesList = response.data?.schedules || response.data?.data?.schedules || [];
         // Show all enabled schedules, sorted by time
         const enabledSchedules = schedulesList.filter((s: any) => s.enabled);
@@ -268,11 +269,11 @@ export default function DashboardScreen() {
           return timeA.localeCompare(timeB);
         });
         setSchedules(sortedSchedules);
-      } catch (e) {
-        console.error('Error loading schedules:', e);
-        setSchedules([]);
+        } catch (e) {
+          console.error('Error loading schedules:', e);
+          setSchedules([]);
+        }
       }
-    }
   }, [homeId, token, isDemoMode]);
 
   useEffect(() => {
@@ -345,10 +346,82 @@ export default function DashboardScreen() {
     loadScenes();
   }, [homeId, token, isDemoMode, rooms, demo, getTimeBasedScene]);
 
+  // Home members API for invitation handling
+  const homeMembersApi = useMemo(() => {
+    const client = getApiClient(async () => token);
+    return HomeMembersApi(client);
+  }, [token]);
+
+  // Handle accepting invitation
+  const handleAcceptInvitation = useCallback(async (token: string, invitedHomeId: string) => {
+    try {
+      await homeMembersApi.acceptInvitation(token);
+      showToast('Invitation accepted! Updating your homes...', { type: 'success' });
+      await refreshMe(); // Refresh user data to get updated homes list
+      // Navigate to home selector to allow user to switch to the new home
+      setTimeout(() => {
+        navigation.navigate('HomeSelector');
+      }, 500);
+    } catch (error: any) {
+      console.error('Error accepting invitation:', error);
+      showToast(error.response?.data?.error || 'Failed to accept invitation', { type: 'error' });
+    }
+  }, [homeMembersApi, showToast, refreshMe, navigation]);
+
+  // Handle declining invitation
+  const handleDeclineInvitation = useCallback(async (token: string) => {
+    try {
+      await homeMembersApi.declineInvitation(token);
+      showToast('Invitation declined.', { type: 'info' });
+    } catch (error: any) {
+      console.error('Error declining invitation:', error);
+      showToast(error.response?.data?.error || 'Failed to decline invitation', { type: 'error' });
+    }
+  }, [homeMembersApi, showToast]);
+
   // Real-time updates
   const { isConnected: isCloudConnected } = useRealtime({
     onDeviceUpdate: () => refresh(),
     onEnergyUpdate: () => {},
+    onHomeInvitation: (data: any) => {
+      console.log('[DashboardScreen] Received home invitation:', data);
+      Alert.alert(
+        `Invitation to ${data.homeName || 'a home'}`,
+        data.message || `You've been invited to join ${data.homeName || 'a home'}. You now have access to this home.`,
+        [
+          {
+            text: 'Decline',
+            onPress: () => handleDeclineInvitation(data.invitationToken),
+            style: 'cancel',
+          },
+          {
+            text: 'Accept',
+            onPress: () => handleAcceptInvitation(data.invitationToken, data.homeId),
+          },
+        ],
+        { cancelable: false }
+      );
+    },
+    onHomeRemoved: (data: any) => {
+      console.log('[DashboardScreen] Received home removal notification:', data);
+      Alert.alert(
+        'Access Removed',
+        data.message || `You've been removed from ${data.homeName || 'a home'}. You no longer have access to this home.`,
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await refreshMe(); // Refresh to update homes list
+              // If current home was removed, switch to another home
+              if (currentHomeId === data.homeId) {
+                navigation.navigate('HomeSelector');
+              }
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    },
   });
 
   // Listen for navigation events to refresh when returning from RoomDetailScreen
@@ -857,10 +930,10 @@ export default function DashboardScreen() {
         }}>
           <View style={styles.heroCardContainer}>
             {/* Animated gradient background with multiple layers */}
-            <LinearGradient
+          <LinearGradient
               colors={['#0F1428', '#141A35', '#0A0E1F']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
               style={styles.heroCardBase}
             />
             
@@ -895,14 +968,14 @@ export default function DashboardScreen() {
               
               {/* Greeting and status */}
               <View style={styles.heroGreetingContainer}>
-                <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
+              <Text style={styles.heroGreeting}>{getGreeting()}, {firstName}</Text>
                 <View style={styles.heroStatusContainer}>
                   {!isHomeOnline ? (
                     <View style={styles.heroStatusBadge}>
                       <View style={[styles.heroStatusDot, { backgroundColor: colors.offline }]} />
                       <Text style={[styles.heroStatusText, { color: colors.foreground }]}>
                         System offline • No active connections
-                      </Text>
+              </Text>
                     </View>
                   ) : hasAlerts ? (
                     <View style={[styles.heroStatusBadge, styles.heroStatusBadgeAlert]}>
@@ -1186,25 +1259,25 @@ export default function DashboardScreen() {
 
               {scheduleViewMode === 'list' ? (
                 schedules.map((schedule, index) => (
-                  <React.Fragment key={schedule.id}>
-                    <View style={styles.scheduleItem}>
-                      <View style={styles.scheduleIcon}>
-                        <Clock size={18} color={colors.primary} />
-                      </View>
-                      <View style={styles.scheduleContent}>
-                        <Text style={styles.scheduleTitle}>{schedule.name}</Text>
-                        <Text style={styles.scheduleTime}>
-                          {schedule.days?.join(', ')} at {schedule.time}
-                        </Text>
-                      </View>
-                      {schedule.enabled && (
-                        <View style={styles.scheduleBadge}>
-                          <Text style={styles.scheduleBadgeText}>Active</Text>
-                        </View>
-                      )}
+                <React.Fragment key={schedule.id}>
+                  <View style={styles.scheduleItem}>
+                    <View style={styles.scheduleIcon}>
+                      <Clock size={18} color={colors.primary} />
                     </View>
-                    {index < schedules.length - 1 && <View style={styles.scheduleDivider} />}
-                  </React.Fragment>
+                    <View style={styles.scheduleContent}>
+                      <Text style={styles.scheduleTitle}>{schedule.name}</Text>
+                      <Text style={styles.scheduleTime}>
+                        {schedule.days?.join(', ')} at {schedule.time}
+                      </Text>
+                    </View>
+                    {schedule.enabled && (
+                      <View style={styles.scheduleBadge}>
+                        <Text style={styles.scheduleBadgeText}>Active</Text>
+                      </View>
+                    )}
+                  </View>
+                  {index < schedules.length - 1 && <View style={styles.scheduleDivider} />}
+                </React.Fragment>
                 ))
               ) : (
                 <View style={styles.calendarView}>

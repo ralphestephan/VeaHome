@@ -141,7 +141,7 @@ export default function DevicesScreen() {
       if (hasChanged) {
         prevHubStatusesRef.current = newStatuses;
         // Only update state - this will cause device cards to re-render without full page refresh
-        setHubStatuses(newStatuses);
+      setHubStatuses(newStatuses);
       } else {
         // Still update state even if no change to keep it in sync
         setHubStatuses(newStatuses);
@@ -163,7 +163,7 @@ export default function DevicesScreen() {
       // This prevents full page refresh and scroll jumping
     },
   });
-  
+
   // Update prevDeviceStatusesRef when devices change
   useEffect(() => {
     const currentStatuses: Record<string, boolean> = {};
@@ -183,7 +183,7 @@ export default function DevicesScreen() {
       if (shouldRefresh) {
         // Use a small delay to prevent scroll jump
         setTimeout(() => {
-          refresh();
+      refresh();
         }, 100);
       }
     }, [refresh])
@@ -226,26 +226,26 @@ export default function DevicesScreen() {
     ...climateHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
       .map(h => {
-        const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
+      const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
         // Use roomId from hub, ensuring it's a string
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         console.log('[DevicesScreen] Mapping climate hub:', { hubId: h.id, hubName: h.name, roomId, hasRoomId: !!h.roomId, hasRoom_id: !!h.room_id });
-        return {
-          id: h.id,
-          name: h.name,
-          type: h.hubType || 'airguard',
-          category: 'climate' as const,
-          isActive: isOnline,
-          value: undefined,
-          unit: undefined,
+      return {
+        id: h.id,
+        name: h.name,
+        type: h.hubType || 'airguard',
+        category: 'climate' as const,
+        isActive: isOnline,
+        value: undefined,
+        unit: undefined,
           roomId: roomId, // Use the properly extracted roomId
-          homeId: h.homeId,
-          status: isOnline ? 'online' : 'offline',
-          hubType: h.hubType,
-          serialNumber: h.serialNumber,
-          metadata: h.metadata
-        };
-      })
+        homeId: h.homeId,
+        status: isOnline ? 'online' : 'offline',
+        hubType: h.hubType,
+        serialNumber: h.serialNumber,
+        metadata: h.metadata
+      };
+    })
   ];
   const securityDevices = [
     ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
@@ -254,16 +254,16 @@ export default function DevicesScreen() {
       .map(h => {
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-          id: h.id,
-          name: h.name,
-          type: h.hubType,
-          category: 'security' as const,
-          isActive: h.status === 'online',
-          value: undefined,
-          unit: undefined,
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'security' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
           roomId: roomId,
-          homeId: h.homeId,
-          status: h.status
+      homeId: h.homeId,
+      status: h.status
         };
       })
   ];
@@ -274,16 +274,16 @@ export default function DevicesScreen() {
       .map(h => {
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-          id: h.id,
-          name: h.name,
-          type: h.hubType,
-          category: 'utility' as const,
-          isActive: h.status === 'online',
-          value: undefined,
-          unit: undefined,
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'utility' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
           roomId: roomId,
-          homeId: h.homeId,
-          status: h.status
+      homeId: h.homeId,
+      status: h.status
         };
       })
   ];
@@ -294,16 +294,16 @@ export default function DevicesScreen() {
       .map(h => {
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-          id: h.id,
-          name: h.name,
-          type: h.hubType,
-          category: 'lighting' as const,
-          isActive: h.status === 'online',
-          value: undefined,
-          unit: undefined,
+      id: h.id,
+      name: h.name,
+      type: h.hubType,
+      category: 'lighting' as const,
+      isActive: h.status === 'online',
+      value: undefined,
+      unit: undefined,
           roomId: roomId,
-          homeId: h.homeId,
-          status: h.status
+      homeId: h.homeId,
+      status: h.status
         };
       })
   ];

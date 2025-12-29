@@ -16,6 +16,8 @@ export const useRealtime = (handlers: RealtimeEventHandlers) => {
       onDeviceUpdate: (data) => handlersRef.current.onDeviceUpdate?.(data),
       onEnergyUpdate: (data) => handlersRef.current.onEnergyUpdate?.(data),
       onHubStatus: (data) => handlersRef.current.onHubStatus?.(data),
+      onHomeInvitation: (data) => handlersRef.current.onHomeInvitation?.(data),
+      onHomeRemoved: (data) => handlersRef.current.onHomeRemoved?.(data),
       onError: (error) => handlersRef.current.onError?.(error),
     };
   }, []);

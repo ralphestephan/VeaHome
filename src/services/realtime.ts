@@ -10,6 +10,8 @@ export interface RealtimeEventHandlers {
   onDeviceUpdate?: (data: { deviceId: string; state: any }) => void;
   onEnergyUpdate?: (data: any) => void;
   onHubStatus?: (data: { hubId: string; status: string }) => void;
+  onHomeInvitation?: (data: { invitationId: string; invitationToken: string; homeId: string; homeName: string; role: string; message: string }) => void;
+  onHomeRemoved?: (data: { homeId: string; homeName: string; message: string }) => void;
   onError?: (error: Error) => void;
 }
 
@@ -50,6 +52,14 @@ export class RealtimeService {
 
       this.socket.on('hub:status', (data) => {
         handlers.onHubStatus?.(data);
+      });
+
+      this.socket.on('home_invitation', (data) => {
+        handlers.onHomeInvitation?.(data);
+      });
+
+      this.socket.on('home_removed', (data) => {
+        handlers.onHomeRemoved?.(data);
       });
 
       this.socket.on('error', (error) => {

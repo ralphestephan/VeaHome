@@ -175,12 +175,12 @@ export default function EnergyScreen() {
             </View>
           </View>
           {safeEnergyData.length > 0 && (
-            <View style={styles.trendBadge}>
+          <View style={styles.trendBadge}>
               <Zap size={14} color={colors.primary} />
               <Text style={styles.trendText}>
                 {totalEnergy > 0 ? `${totalEnergy.toFixed(1)} kWh total` : 'No data yet'}
               </Text>
-            </View>
+          </View>
           )}
         </View>
 

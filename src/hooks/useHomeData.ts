@@ -565,7 +565,7 @@ export const useHomeData = (homeId: string | null | undefined) => {
         lights: room.lights || 1,
       },
     };
-    
+
     // Only include optional fields if they have valid values
     if (room.scene && room.scene.trim()) {
       payload.scene = room.scene.trim();

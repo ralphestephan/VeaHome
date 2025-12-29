@@ -180,6 +180,27 @@ export const homeMembersRepository = {
     }));
   },
 
+  // Get pending invitations for a user (by email)
+  async getPendingInvitationsForUser(email: string): Promise<HomeInvitation[]> {
+    const result = await pool.query(
+      `SELECT * FROM home_invitations 
+       WHERE email = $1 AND accepted_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC`,
+      [email]
+    );
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      homeId: row.home_id,
+      email: row.email,
+      role: row.role,
+      invitedBy: row.invited_by,
+      token: row.token,
+      expiresAt: row.expires_at,
+      acceptedAt: row.accepted_at,
+      createdAt: row.created_at
+    }));
+  },
+
   // Get invitation by token
   async getInvitationByToken(token: string): Promise<HomeInvitation | null> {
     const result = await pool.query(

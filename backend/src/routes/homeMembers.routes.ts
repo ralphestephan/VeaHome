@@ -3,6 +3,7 @@ import {
   getHomeMembers,
   createInvitation,
   getPendingInvitations,
+  getMyPendingInvitations,
   acceptInvitation,
   cancelInvitation,
   removeMember,
@@ -24,6 +25,9 @@ router.post('/:homeId/invitations', createInvitation);
 
 // Get pending invitations
 router.get('/:homeId/invitations', getPendingInvitations);
+
+// Get pending invitations for current user
+router.get('/invitations/my', getMyPendingInvitations);
 
 // Accept invitation
 router.post('/invitations/:token/accept', acceptInvitation);

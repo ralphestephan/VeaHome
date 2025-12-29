@@ -95,8 +95,6 @@ export const HubApi = (client: AxiosInstance) => ({
   connectWifi: (hubId: string, ssid: string, password: string) => client.post(`/hubs/${hubId}/wifi`, { ssid, password }),
   assignRooms: (hubId: string, roomIds: string[]) => client.post(`/hubs/${hubId}/rooms`, { roomIds }),
   getHubStatus: (hubId: string) => client.get(`/hubs/${hubId}/status`),
-  // Get hubs
-  listHubs: (homeId: string) => client.get(`/homes/${homeId}/hubs`),
   deleteHub: (homeId: string, hubId: string) => client.delete(`/homes/${homeId}/hubs/${hubId}`),
   updateHub: (homeId: string, hubId: string, data: { name?: string; roomId?: string | null }) => 
     client.patch(`/homes/${homeId}/hubs/${hubId}`, data),
@@ -189,7 +187,9 @@ export const HomeMembersApi = (client: AxiosInstance) => ({
   createInvitation: (homeId: string, email: string, role?: string) => 
     client.post(`/homes/${homeId}/invitations`, { email, role }),
   getPendingInvitations: (homeId: string) => client.get(`/homes/${homeId}/invitations`),
+  getMyPendingInvitations: () => client.get(`/homes/invitations/my`),
   acceptInvitation: (token: string) => client.post(`/homes/invitations/${token}/accept`),
+  declineInvitation: (token: string) => client.post(`/homes/invitations/${token}/decline`),
   cancelInvitation: (invitationId: string, homeId: string) => 
     client.delete(`/homes/invitations/${invitationId}`, { data: { homeId } }),
   removeMember: (homeId: string, memberId: string) => 

@@ -47,12 +47,14 @@ import {
   ChevronDown,
   Home,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { Device } from '../types';
 import { getApiClient, PublicAirguardApi } from '../services/api';
 import AirguardAlertBanner, { getAlertInfo, decodeAlertFlags } from './AirguardAlertBanner';
+import { reprovisionDevice, cleanupBLE } from '../utils/bleReprovision';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAL_SIZE = 220;
@@ -150,6 +152,12 @@ export default function DeviceControlModal({
   // Room assignment state
   const [showRoomPicker, setShowRoomPicker] = useState(false);
   
+  // Reprovision state
+  const [showReprovisionModal, setShowReprovisionModal] = useState(false);
+  const [reprovisionSSID, setReprovisionSSID] = useState(device.wifiSsid || '');
+  const [reprovisionPassword, setReprovisionPassword] = useState('');
+  const [reprovisioning, setReprovisioning] = useState(false);
+  
   // Local state to track current display values (updates immediately after save)
   const [displayName, setDisplayName] = useState(device.name);
   const [displayRoomId, setDisplayRoomId] = useState(device.roomId);
@@ -163,7 +171,18 @@ export default function DeviceControlModal({
       console.log('[DeviceControlModal] Updating displayRoomId from', displayRoomId, 'to', newRoomId);
       setDisplayRoomId(newRoomId);
     }
-  }, [device?.id, device?.name, device?.roomId]);
+    // Update reprovision SSID if device has wifiSsid
+    if (device.wifiSsid) {
+      setReprovisionSSID(device.wifiSsid);
+    }
+  }, [device?.id, device?.name, device?.roomId, device?.wifiSsid]);
+
+  // Cleanup BLE on unmount
+  useEffect(() => {
+    return () => {
+      cleanupBLE();
+    };
+  }, []);
   
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
@@ -606,6 +625,16 @@ export default function DeviceControlModal({
                 </View>
               </View>
               <View style={styles.headerRight}>
+                {/* Reprovision button - only show for devices that support BLE */}
+                {device.type === 'airguard' || device.hubType === 'airguard' ? (
+                  <TouchableOpacity 
+                    onPress={() => setShowReprovisionModal(true)} 
+                    style={styles.reprovisionButton}
+                    disabled={reprovisioning}
+                  >
+                    <RefreshCw size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                ) : null}
                 {onDelete && (
                   <TouchableOpacity onPress={() => onDelete(device.id)} style={styles.trashButton}>
                     <Trash2 size={18} color="#FF6B6B" />
@@ -1527,6 +1556,183 @@ export default function DeviceControlModal({
           </View>
         </View>
       </Modal>
+
+      {/* Reprovision Modal */}
+      <Modal
+        visible={showReprovisionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !reprovisioning && setShowReprovisionModal(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity 
+            style={StyleSheet.absoluteFill} 
+            onPress={() => !reprovisioning && setShowReprovisionModal(false)} 
+            activeOpacity={1}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
+          </TouchableOpacity>
+          
+          <View style={styles.reprovisionModalContent}>
+            <LinearGradient
+              colors={[colors.card, colors.cardAlt]}
+              style={styles.reprovisionModalInner}
+            >
+              {/* Header */}
+              <View style={styles.reprovisionModalHeader}>
+                <View style={styles.reprovisionIconWrapper}>
+                  <LinearGradient
+                    colors={[colors.primary, colors.neonCyan]}
+                    style={styles.reprovisionIconGradient}
+                  >
+                    <RefreshCw size={24} color="#fff" />
+                  </LinearGradient>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reprovisionModalTitle}>Reprovision Device</Text>
+                  <Text style={styles.reprovisionModalSubtitle}>
+                    Resend WiFi credentials via Bluetooth
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => !reprovisioning && setShowReprovisionModal(false)}
+                  style={styles.reprovisionModalClose}
+                  disabled={reprovisioning}
+                >
+                  <X size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Instructions */}
+              <View style={styles.reprovisionInstructions}>
+                <Text style={styles.reprovisionInstructionsText}>
+                  1. Make sure the device is nearby and in pairing mode{'\n'}
+                  2. Enter your WiFi network credentials{'\n'}
+                  3. The device will reconnect to WiFi automatically
+                </Text>
+              </View>
+
+              {/* WiFi SSID Input */}
+              <View style={styles.reprovisionInputGroup}>
+                <Text style={styles.reprovisionLabel}>WiFi Network (SSID)</Text>
+                <View style={styles.reprovisionInputWrapper}>
+                  <Wifi size={20} color={colors.mutedForeground} style={{ marginRight: spacing.sm }} />
+                  <TextInput
+                    style={styles.reprovisionInput}
+                    value={reprovisionSSID}
+                    onChangeText={setReprovisionSSID}
+                    placeholder="Enter WiFi network name"
+                    placeholderTextColor={colors.mutedForeground}
+                    editable={!reprovisioning}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              {/* WiFi Password Input */}
+              <View style={styles.reprovisionInputGroup}>
+                <Text style={styles.reprovisionLabel}>WiFi Password</Text>
+                <View style={styles.reprovisionInputWrapper}>
+                  <Lock size={20} color={colors.mutedForeground} style={{ marginRight: spacing.sm }} />
+                  <TextInput
+                    style={styles.reprovisionInput}
+                    value={reprovisionPassword}
+                    onChangeText={setReprovisionPassword}
+                    placeholder="Enter WiFi password"
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry
+                    editable={!reprovisioning}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.reprovisionActions}>
+                <TouchableOpacity
+                  style={[styles.reprovisionButtonCancel, reprovisioning && styles.reprovisionButtonDisabled]}
+                  onPress={() => setShowReprovisionModal(false)}
+                  disabled={reprovisioning}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.reprovisionButtonCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.reprovisionButtonSave, reprovisioning && styles.reprovisionButtonDisabled]}
+                  onPress={async () => {
+                    if (!reprovisionSSID.trim()) {
+                      Alert.alert('Error', 'Please enter a WiFi network name');
+                      return;
+                    }
+                    if (!reprovisionPassword.trim()) {
+                      Alert.alert('Error', 'Please enter a WiFi password');
+                      return;
+                    }
+
+                    setReprovisioning(true);
+                    try {
+                      const result = await reprovisionDevice({
+                        ssid: reprovisionSSID.trim(),
+                        password: reprovisionPassword.trim(),
+                        deviceName: device.name,
+                        timeout: 15000,
+                      });
+
+                      if (result.success) {
+                        setConfirmPopup({
+                          visible: true,
+                          type: 'success',
+                          title: 'Reprovisioning Successful',
+                          message: result.message,
+                        });
+                        setShowReprovisionModal(false);
+                        setReprovisionPassword(''); // Clear password for security
+                      } else {
+                        setConfirmPopup({
+                          visible: true,
+                          type: 'error',
+                          title: 'Reprovisioning Failed',
+                          message: result.error || result.message,
+                        });
+                      }
+                    } catch (error: any) {
+                      console.error('[DeviceControlModal] Reprovision error:', error);
+                      setConfirmPopup({
+                        visible: true,
+                        type: 'error',
+                        title: 'Reprovisioning Failed',
+                        message: error.message || 'An unexpected error occurred',
+                      });
+                    } finally {
+                      setReprovisioning(false);
+                    }
+                  }}
+                  disabled={reprovisioning || !reprovisionSSID.trim() || !reprovisionPassword.trim()}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={
+                      reprovisioning || !reprovisionSSID.trim() || !reprovisionPassword.trim()
+                        ? [colors.muted, colors.muted]
+                        : [colors.primary, colors.neonCyan]
+                    }
+                    style={styles.reprovisionButtonGradient}
+                  >
+                    {reprovisioning ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <RefreshCw size={16} color="#fff" />
+                        <Text style={styles.reprovisionButtonSaveText}>Reprovision</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -1625,6 +1831,14 @@ const createStyles = (colors: any, shadows: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
+    },
+    reprovisionButton: {
+      width: 36,
+      height: 36,
+      borderRadius: borderRadius.md,
+      backgroundColor: colors.primary + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     trashButton: {
       width: 36,
@@ -2585,5 +2799,129 @@ const createStyles = (colors: any, shadows: any) =>
       textAlign: 'center',
       paddingHorizontal: spacing.xl,
       lineHeight: 22,
+    },
+    // Reprovision Modal Styles
+    reprovisionModalContent: {
+      marginHorizontal: spacing.lg,
+      marginVertical: 'auto',
+      borderRadius: borderRadius.xl,
+      overflow: 'hidden',
+      maxWidth: 500,
+      width: '100%',
+      alignSelf: 'center',
+      ...shadows.xl,
+    },
+    reprovisionModalInner: {
+      padding: spacing.xl,
+    },
+    reprovisionModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      marginBottom: spacing.lg,
+    },
+    reprovisionIconWrapper: {
+      width: 48,
+      height: 48,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      ...shadows.md,
+    },
+    reprovisionIconGradient: {
+      width: '100%',
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    reprovisionModalTitle: {
+      fontSize: fontSize.xl,
+      fontWeight: '700',
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    reprovisionModalSubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    reprovisionModalClose: {
+      padding: spacing.xs,
+      marginTop: -4,
+    },
+    reprovisionInstructions: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    reprovisionInstructionsText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      lineHeight: 20,
+    },
+    reprovisionInputGroup: {
+      marginBottom: spacing.md,
+    },
+    reprovisionLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: '600',
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    reprovisionInputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    reprovisionInput: {
+      flex: 1,
+      paddingVertical: spacing.md,
+      fontSize: fontSize.md,
+      color: colors.foreground,
+    },
+    reprovisionActions: {
+      flexDirection: 'row',
+      gap: spacing.md,
+      marginTop: spacing.md,
+    },
+    reprovisionButtonCancel: {
+      flex: 1,
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    reprovisionButtonCancelText: {
+      fontSize: fontSize.md,
+      fontWeight: '600',
+      color: colors.mutedForeground,
+    },
+    reprovisionButtonSave: {
+      flex: 1.5,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+    },
+    reprovisionButtonDisabled: {
+      opacity: 0.5,
+    },
+    reprovisionButtonGradient: {
+      padding: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    reprovisionButtonSaveText: {
+      fontSize: fontSize.md,
+      fontWeight: '700',
+      color: '#fff',
     },
   });
