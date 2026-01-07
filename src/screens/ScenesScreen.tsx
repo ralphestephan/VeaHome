@@ -19,16 +19,16 @@ import { useHomeData } from '../hooks/useHomeData';
 import { getApiClient, ScenesApi, AutomationsApi } from '../services/api';
 import type { RootStackParamList } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { 
-  Plus, 
-  Edit, 
-  Lightbulb, 
-  Fan, 
-  Music, 
-  Target, 
-  CheckCircle, 
-  Clock, 
-  Play, 
+import {
+  Plus,
+  Edit,
+  Lightbulb,
+  Fan,
+  Music,
+  Target,
+  CheckCircle,
+  Clock,
+  Play,
   LucideIcon,
   Coffee,
   Book,
@@ -175,7 +175,7 @@ const normalizeAutomations = (list: any[]): AutomationPreview[] => {
     // Handle both old format (trigger) and new format (triggers/conditions)
     let trigger = undefined;
     let conditions: any[] = [];
-    
+
     if (automation?.trigger && typeof automation.trigger === 'object') {
       // Check if it's the new format with conditions array
       if (automation.trigger.conditions && Array.isArray(automation.trigger.conditions) && automation.trigger.conditions.length > 0) {
@@ -209,7 +209,7 @@ const normalizeAutomations = (list: any[]): AutomationPreview[] => {
         deviceId: firstTrigger.deviceId,
       };
     }
-    
+
     // Extract devices from actions (unique deviceIds)
     const actions = ensureArray(automation?.actions);
     const deviceIds = new Set<string>();
@@ -219,7 +219,7 @@ const normalizeAutomations = (list: any[]): AutomationPreview[] => {
       }
     });
     const devices = Array.from(deviceIds).map((deviceId: string) => ({ id: deviceId }));
-    
+
     return {
       id: automation?.id || `automation-${idx}`,
       name: automation?.name || 'Untitled automation',
@@ -386,8 +386,8 @@ export default function ScenesScreen() {
 
     if (!homeId) {
       // Local state only if no homeId
-      const nextScenes = scenes.map(scene => 
-        scene.id === id 
+      const nextScenes = scenes.map(scene =>
+        scene.id === id
           ? { ...scene, isActive: !scene.isActive }
           : { ...scene, isActive: false }
       );
@@ -404,7 +404,7 @@ export default function ScenesScreen() {
     try {
       const scene = scenes.find(s => s.id === id);
       const isCurrentlyActive = scene?.isActive === true || scene?.is_active === true;
-      
+
       if (scene && isCurrentlyActive) {
         // Deactivate scene
         await scenesApi.deactivateScene(homeId, id);
@@ -414,7 +414,7 @@ export default function ScenesScreen() {
         await scenesApi.activateScene(homeId, id);
         showToast(`"${scene.name}" activated`, { type: 'success' });
       }
-      
+
       // Refresh scenes to get updated state from backend
       await loadScenes();
       // Also refresh home data to update rooms with active scene
@@ -574,7 +574,7 @@ export default function ScenesScreen() {
                           if (scene.deviceTypeRules || scene.device_type_rules) {
                             const rules = scene.deviceTypeRules || scene.device_type_rules || [];
                             let totalDevices = 0;
-                            
+
                             rules.forEach((rule: any) => {
                               if (rule.mode === 'specific' && rule.deviceIds) {
                                 totalDevices += rule.deviceIds.length;
@@ -583,41 +583,41 @@ export default function ScenesScreen() {
                                 totalDevices += typeDevices.length;
                               }
                             });
-                            
+
                             return totalDevices;
                           }
-                          
+
                           return Object.keys(scene.device_states || scene.deviceStates || {}).length;
                         })()} devices active • {scene.description || 'Custom scene'}
                       </Text>
                     </View>
                   </View>
                   <View style={styles.activeSceneActions}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.editButton}
                       onPress={() => toggleScene(scene.id)}
                     >
                       <Power size={16} color="white" />
                     </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => handleEditScene(scene.id)}
-                  >
-                    <Edit size={16} color="white" />
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={() => handleEditScene(scene.id)}
+                    >
+                      <Edit size={16} color="white" />
+                    </TouchableOpacity>
                   </View>
                 </View>
                 <View style={styles.activeSceneControls}>
                   {(() => {
                     // Extract actions from deviceTypeRules or deviceStates
                     const actions: Array<{ type: string; icon: LucideIcon; label: string }> = [];
-                    
+
                     if (scene.deviceTypeRules || scene.device_type_rules) {
                       const rules = scene.deviceTypeRules || scene.device_type_rules || [];
                       rules.forEach((rule: any) => {
                         const IconComponent = deviceTypeIconMap[rule.type] || Lightbulb;
                         let label = '';
-                        
+
                         if (rule.state) {
                           if (rule.type === 'light' && typeof rule.state.value === 'number') {
                             label = `Lights: ${rule.state.value}%`;
@@ -632,7 +632,7 @@ export default function ScenesScreen() {
                             label = `Lock: ${rule.state.isActive ? 'Locked' : 'Unlocked'}`;
                           }
                         }
-                        
+
                         if (label) {
                           actions.push({ type: rule.type, icon: IconComponent, label });
                         }
@@ -645,7 +645,7 @@ export default function ScenesScreen() {
                         const deviceType = device?.type || 'light';
                         const IconComponent = deviceTypeIconMap[deviceType] || Lightbulb;
                         let label = '';
-                        
+
                         if (deviceType === 'light' && typeof state.value === 'number') {
                           label = `Lights: ${state.value}%`;
                         } else if ((deviceType === 'ac' || deviceType === 'thermostat') && typeof state.value === 'number') {
@@ -656,29 +656,29 @@ export default function ScenesScreen() {
                           const typeName = deviceType.charAt(0).toUpperCase() + deviceType.slice(1);
                           label = `${typeName}: ${state.isActive ? 'On' : 'Off'}`;
                         }
-                        
+
                         if (label && !actions.find(a => a.type === deviceType)) {
                           actions.push({ type: deviceType, icon: IconComponent, label });
                         }
                       });
                     }
-                    
+
                     // Limit to first 3 actions for display
                     const displayActions = actions.slice(0, 3);
-                    
+
                     if (displayActions.length === 0) {
                       return (
-                  <View style={styles.controlItem}>
+                        <View style={styles.controlItem}>
                           <Text style={styles.controlText}>No actions configured</Text>
-                  </View>
+                        </View>
                       );
                     }
-                    
+
                     return displayActions.map((action, index) => (
                       <View key={index} style={styles.controlItem}>
                         {React.createElement(action.icon, { size: 16, color: "white" })}
                         <Text style={styles.controlText}>{action.label}</Text>
-                  </View>
+                      </View>
                     ));
                   })()}
                 </View>
@@ -689,27 +689,36 @@ export default function ScenesScreen() {
 
         {/* Quick Stats */}
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
+          <LinearGradient
+            colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+            style={styles.statCard}
+          >
             <View style={styles.statIcon}>
               <Target size={20} color={colors.primary} />
             </View>
-            <Text style={styles.statValue}>{scenes.length}</Text>            
+            <Text style={styles.statValue}>{scenes.length}</Text>
             <Text style={styles.statLabel}>Total Scenes</Text>
-          </View>
-          <View style={styles.statCard}>
+          </LinearGradient>
+          <LinearGradient
+            colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+            style={styles.statCard}
+          >
             <View style={styles.statIcon}>
               <CheckCircle size={20} color={colors.primary} />
             </View>
             <Text style={styles.statValue}>{activeScenes.length}</Text>
             <Text style={styles.statLabel}>Active</Text>
-          </View>
-          <View style={styles.statCard}>
+          </LinearGradient>
+          <LinearGradient
+            colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+            style={styles.statCard}
+          >
             <View style={styles.statIcon}>
               <Clock size={20} color={colors.primary} />
             </View>
             <Text style={styles.statValue}>{scenes.filter(s => s.schedule).length}</Text>
             <Text style={styles.statLabel}>Scheduled</Text>
-          </View>
+          </LinearGradient>
         </View>
 
         {/* Popular Scenes */}
@@ -719,55 +728,60 @@ export default function ScenesScreen() {
             {inactiveScenes.slice(0, 6).map((scene) => (
               <TouchableOpacity
                 key={scene.id}
-                style={styles.sceneCard}
+                style={styles.sceneCardWrapper}
                 onPress={() => toggleScene(scene.id)}
               >
-                <View style={styles.sceneCardHeader}>
-                  <View style={styles.sceneCardIcon}>
-                    {React.createElement(sceneIconMap[scene.icon] || Lightbulb, { size: 24, color: colors.primary })}
+                <LinearGradient
+                  colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                  style={styles.sceneCard}
+                >
+                  <View style={styles.sceneCardHeader}>
+                    <View style={styles.sceneCardIcon}>
+                      {React.createElement(sceneIconMap[scene.icon] || Lightbulb, { size: 24, color: '#4D7BFE' })}
+                    </View>
+                    <Play size={16} color={colors.mutedForeground} />
                   </View>
-                  <Play size={16} color={colors.mutedForeground} />
-                </View>
-                <Text style={styles.sceneCardName}>{scene.name}</Text>
-                <View style={styles.sceneCardDetails}>
-                  <Text style={styles.sceneCardDevices}>{(() => {
-                    // Count devices from deviceTypeRules (new format) or deviceStates (old format)
-                    if (scene.deviceTypeRules || scene.device_type_rules) {
-                      const rules = scene.deviceTypeRules || scene.device_type_rules || [];
-                      let totalDevices = 0;
-                      
-                      rules.forEach((rule: any) => {
-                        if (rule.mode === 'specific' && rule.deviceIds) {
-                          totalDevices += rule.deviceIds.length;
-                        } else if (rule.mode === 'all') {
-                          // Count all devices of this type
-                          const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
-                          totalDevices += typeDevices.length;
-                        }
-                      });
-                      
-                      if (totalDevices === 0) return 'No devices';
-                      return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
-                    }
-                    
-                    // Fallback to old format
-                    const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
-                    const count = deviceIds.length;
-                    if (count === 0) return 'No devices';
-                    if (count === 1) {
-                      const device = devices?.find(d => d.id === deviceIds[0]);
-                      return device?.name || '1 device';
-                    }
-                    return `${count} devices`;
-                  })()}</Text>
-                  {scene.time && (
-                    <>
-                      <Text style={styles.sceneCardSeparator}> • </Text>
-                      <Clock size={12} color={colors.mutedForeground} />
-                      <Text style={styles.sceneCardTime}> {scene.time}</Text>               
-                    </>
-                  )}
-                </View>
+                  <Text style={styles.sceneCardName}>{scene.name}</Text>
+                  <View style={styles.sceneCardDetails}>
+                    <Text style={styles.sceneCardDevices}>{(() => {
+                      // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                      if (scene.deviceTypeRules || scene.device_type_rules) {
+                        const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                        let totalDevices = 0;
+
+                        rules.forEach((rule: any) => {
+                          if (rule.mode === 'specific' && rule.deviceIds) {
+                            totalDevices += rule.deviceIds.length;
+                          } else if (rule.mode === 'all') {
+                            // Count all devices of this type
+                            const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
+                            totalDevices += typeDevices.length;
+                          }
+                        });
+
+                        if (totalDevices === 0) return 'No devices';
+                        return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
+                      }
+
+                      // Fallback to old format
+                      const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
+                      const count = deviceIds.length;
+                      if (count === 0) return 'No devices';
+                      if (count === 1) {
+                        const device = devices?.find(d => d.id === deviceIds[0]);
+                        return device?.name || '1 device';
+                      }
+                      return `${count} devices`;
+                    })()}</Text>
+                    {scene.time && (
+                      <>
+                        <Text style={styles.sceneCardSeparator}> • </Text>
+                        <Clock size={12} color={colors.mutedForeground} />
+                        <Text style={styles.sceneCardTime}> {scene.time}</Text>
+                      </>
+                    )}
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
             ))}
           </View>
@@ -780,65 +794,70 @@ export default function ScenesScreen() {
             {inactiveScenes.map((scene) => (
               <TouchableOpacity
                 key={scene.id}
-                style={styles.sceneListItem}
+                style={styles.sceneListItemWrapper}
                 onPress={() => toggleScene(scene.id)}
                 onLongPress={() => handleDeleteScene(scene.id)}
               >
-                <View style={styles.sceneListIcon}>
-                  {React.createElement(sceneIconMap[scene.icon] || Lightbulb, { size: 20, color: colors.primary })}
-                </View>
-                <View style={styles.sceneListContent}>
-                  <Text style={styles.sceneListName}>{scene.name}</Text>
-                  <Text style={styles.sceneListDescription}>
-                    {(() => {
-                      // Count devices from deviceTypeRules (new format) or deviceStates (old format)
-                      if (scene.deviceTypeRules || scene.device_type_rules) {
-                        const rules = scene.deviceTypeRules || scene.device_type_rules || [];
-                        let totalDevices = 0;
-                        
-                        rules.forEach((rule: any) => {
-                          if (rule.mode === 'specific' && rule.deviceIds) {
-                            totalDevices += rule.deviceIds.length;
-                          } else if (rule.mode === 'all') {
-                            const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
-                            totalDevices += typeDevices.length;
-                          }
-                        });
-                        
-                        if (totalDevices === 0) return 'No devices configured';
-                        return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
-                      }
-                      
-                      // Fallback to old format
-                      const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
-                      const count = deviceIds.length;
-                      if (count === 0) return 'No devices configured';
-                      if (count === 1) {
-                        const device = devices?.find(d => d.id === deviceIds[0]);
-                        return device?.name || '1 device';
-                      }
-                      return `${count} devices`;
-                    })()}
-                  </Text>
-                </View>
-                {scene.time && (
-                  <View style={styles.sceneListTime}>
-                    <Clock size={12} color={colors.mutedForeground} />
-                    <Text style={styles.sceneListTimeText}>{scene.time}</Text>
+                <LinearGradient
+                  colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                  style={styles.sceneListItem}
+                >
+                  <View style={styles.sceneListIcon}>
+                    {React.createElement(sceneIconMap[scene.icon] || Lightbulb, { size: 20, color: '#4D7BFE' })}
                   </View>
-                )}
-                <View style={styles.sceneListActions}>
-                  <TouchableOpacity
-                    style={styles.sceneEditButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleEditScene(scene.id);
-                    }}
-                  >
-                    <Edit size={14} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                  <Play size={16} color={colors.mutedForeground} />
-                </View>
+                  <View style={styles.sceneListContent}>
+                    <Text style={styles.sceneListName}>{scene.name}</Text>
+                    <Text style={styles.sceneListDescription}>
+                      {(() => {
+                        // Count devices from deviceTypeRules (new format) or deviceStates (old format)
+                        if (scene.deviceTypeRules || scene.device_type_rules) {
+                          const rules = scene.deviceTypeRules || scene.device_type_rules || [];
+                          let totalDevices = 0;
+
+                          rules.forEach((rule: any) => {
+                            if (rule.mode === 'specific' && rule.deviceIds) {
+                              totalDevices += rule.deviceIds.length;
+                            } else if (rule.mode === 'all') {
+                              const typeDevices = devices?.filter((d: any) => d.type === rule.type) || [];
+                              totalDevices += typeDevices.length;
+                            }
+                          });
+
+                          if (totalDevices === 0) return 'No devices configured';
+                          return `${totalDevices} ${totalDevices === 1 ? 'device' : 'devices'}`;
+                        }
+
+                        // Fallback to old format
+                        const deviceIds = Object.keys(scene.device_states || scene.deviceStates || {});
+                        const count = deviceIds.length;
+                        if (count === 0) return 'No devices configured';
+                        if (count === 1) {
+                          const device = devices?.find(d => d.id === deviceIds[0]);
+                          return device?.name || '1 device';
+                        }
+                        return `${count} devices`;
+                      })()}
+                    </Text>
+                  </View>
+                  {scene.time && (
+                    <View style={styles.sceneListTime}>
+                      <Clock size={12} color={colors.mutedForeground} />
+                      <Text style={styles.sceneListTimeText}>{scene.time}</Text>
+                    </View>
+                  )}
+                  <View style={styles.sceneListActions}>
+                    <TouchableOpacity
+                      style={styles.sceneEditButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleEditScene(scene.id);
+                      }}
+                    >
+                      <Edit size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                    <Play size={16} color={colors.mutedForeground} />
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
             ))}
           </View>
@@ -848,7 +867,7 @@ export default function ScenesScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleContainer}>
-            <Text style={styles.sectionTitle}>Smart Automations</Text>
+              <Text style={styles.sectionTitle}>Smart Automations</Text>
               <Text style={styles.sectionDescription}>
                 Automate lighting, security, and comfort flows to match your routine.
               </Text>
@@ -920,7 +939,11 @@ export default function ScenesScreen() {
                 {otherAutomations.length > 0 && (
                   <View style={styles.automationGrid}>
                     {otherAutomations.slice(0, 3).map((automation) => (
-                      <View key={automation.id} style={styles.automationMiniCard}>
+                      <LinearGradient
+                        key={automation.id}
+                        colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                        style={styles.automationMiniCard}
+                      >
                         <View style={styles.automationMiniHeader}>
                           <Text style={styles.automationMiniName}>{automation.name}</Text>
                           <View style={[styles.automationStatusDot, automation.isActive ? styles.automationStatusActive : styles.automationStatusPaused]} />
@@ -943,7 +966,7 @@ export default function ScenesScreen() {
                             {automation.isActive ? 'Pause' : 'Resume'}
                           </Text>
                         </TouchableOpacity>
-                      </View>
+                      </LinearGradient>
                     ))}
                   </View>
                 )}
@@ -1108,18 +1131,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     },
     statCard: {
       flex: 1,
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       alignItems: 'center',
       gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
       ...shadows.lg,
     },
     statIcon: {
       width: 32,
       height: 32,
       borderRadius: borderRadius.md,
-      backgroundColor: `${colors.primary}20`,
+      backgroundColor: 'rgba(77, 123, 254, 0.2)',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -1137,12 +1161,18 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       flexWrap: 'wrap',
       gap: spacing.md,
     },
-    sceneCard: {
+    sceneCardWrapper: {
       width: '47%',
-      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      marginBottom: spacing.xs,
+      ...shadows.md,
+    },
+    sceneCard: {
+      width: '100%',
       borderRadius: borderRadius.lg,
       padding: spacing.md,
-      ...shadows.md,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     sceneCardHeader: {
       flexDirection: 'row',
@@ -1154,7 +1184,7 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       width: 40,
       height: 40,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.muted,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -1183,20 +1213,24 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     allScenesList: {
       gap: spacing.sm,
     },
+    sceneListItemWrapper: {
+      borderRadius: borderRadius.lg,
+      ...shadows.sm,
+    },
     sceneListItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       gap: spacing.md,
-      ...shadows.sm,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     sceneListIcon: {
       width: 40,
       height: 40,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.muted,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -1215,7 +1249,7 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     sceneListTime: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.muted,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
       borderRadius: borderRadius.sm,
       paddingHorizontal: spacing.sm,
       paddingVertical: 4,
@@ -1236,113 +1270,6 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     automationsList: {
       gap: spacing.sm,
     },
-    automationLoadingState: {
-      backgroundColor: colors.secondary,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    automationHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: spacing.md,
-    },
-    automationInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    automationControls: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    automationBadge: {
-      borderRadius: borderRadius.sm,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
-    },
-    automationBadgeActive: {
-      backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    automationBadgePaused: {
-      backgroundColor: 'rgba(0,0,0,0.2)',
-    },
-    automationBadgeText: {
-      fontSize: fontSize.sm,
-      color: colors.foreground,
-      fontWeight: '600',
-    },
-    featuredAutomationCard: {
-      borderRadius: borderRadius.xxl,
-      padding: spacing.lg,
-      ...shadows.neonPrimary,
-    },
-    featuredAutomationIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: borderRadius.lg,
-      backgroundColor: 'rgba(255,255,255,0.12)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    featuredAutomationName: {
-      fontSize: fontSize.lg + 2,
-      fontWeight: '600',
-      color: 'white',
-      marginBottom: 2,
-    },
-    featuredAutomationTime: {
-      fontSize: fontSize.md - 1,
-      color: 'rgba(255,255,255,0.7)',
-    },
-    featuredAutomationStats: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: spacing.md,
-    },
-    featuredAutomationStat: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.xs,
-    },
-    featuredAutomationStatText: {
-      fontSize: fontSize.md - 1,
-      color: 'rgba(255,255,255,0.9)',
-    },
-    automationHeaderSection: {
-      marginBottom: spacing.lg,
-    },
-    automationHeaderTitle: {
-      fontSize: fontSize.xl,
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-      marginBottom: spacing.xs,
-    },
-    automationHeaderDescription: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-      lineHeight: fontSize.sm * 1.5,
-    },
-    automationEmptyState: {
-      backgroundColor: colors.secondary,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    automationEmptyTitle: {
-      fontSize: fontSize.md,
-      color: colors.foreground,
-      fontWeight: '600',
-    },
-    automationEmptySubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-      textAlign: 'center',
-    },
     automationGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1351,11 +1278,10 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     automationMiniCard: {
       flex: 1,
       minWidth: '46%',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
       ...shadows.md,
     },
     automationMiniHeader: {

@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -94,64 +95,91 @@ export default function ProfileScreen() {
         showBack
         showSettings={false}
       />
-      
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <MaterialCommunityIcons name="account" size={48} color="white" />
-          </View>
-          <Text style={styles.profileName}>{user?.name || 'User'}</Text>
-          <Text style={styles.profileRole}>{user?.email || 'Smart Home Owner'}</Text>
-          
-          <View style={styles.statsRow}>
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Devices</Text>
-              <Text style={styles.statValue}>{devices.length}</Text>
+        <View style={styles.profileHeaderWrapper}>
+          <LinearGradient
+            colors={gradients.accent}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.profileHeader}
+          >
+            <View style={styles.avatarContainer}>
+              <MaterialCommunityIcons name="account" size={48} color="white" />
             </View>
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Rooms</Text>
-              <Text style={styles.statValue}>{rooms.length}</Text>
+            <Text style={styles.profileName}>{user?.name || 'User'}</Text>
+            <Text style={styles.profileRole}>{user?.email || 'Smart Home Owner'}</Text>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statBadge}>
+                <Text style={styles.statLabel}>Devices</Text>
+                <Text style={styles.statValue}>{devices.length}</Text>
+              </View>
+              <View style={styles.statBadge}>
+                <Text style={styles.statLabel}>Rooms</Text>
+                <Text style={styles.statValue}>{rooms.length}</Text>
+              </View>
+              <View style={styles.statBadge}>
+                <Text style={styles.statLabel}>Scenes</Text>
+                <Text style={styles.statValue}>{scenes.length}</Text>
+              </View>
             </View>
-            <View style={styles.statBadge}>
-              <Text style={styles.statLabel}>Scenes</Text>
-              <Text style={styles.statValue}>{scenes.length}</Text>
-            </View>
-          </View>
+          </LinearGradient>
         </View>
 
         {/* Quick Stats */}
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <MaterialCommunityIcons name="home" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statNumber}>{devices.length}</Text>
-            <Text style={styles.statText}>Devices</Text>
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.statCard}
+            >
+              <View style={styles.statIcon}>
+                <MaterialCommunityIcons name="home" size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.statNumber}>{devices.length}</Text>
+              <Text style={styles.statText}>Devices</Text>
+            </LinearGradient>
           </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <MaterialCommunityIcons name="calendar" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statNumber}>{automations.length}</Text>
-            <Text style={styles.statText}>Automations</Text>
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.statCard}
+            >
+              <View style={styles.statIcon}>
+                <MaterialCommunityIcons name="calendar" size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.statNumber}>{automations.length}</Text>
+              <Text style={styles.statText}>Automations</Text>
+            </LinearGradient>
           </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <MaterialCommunityIcons name="target" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statNumber}>{scenes.length}</Text>
-            <Text style={styles.statText}>Scenes</Text>
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.statCard}
+            >
+              <View style={styles.statIcon}>
+                <MaterialCommunityIcons name="target" size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.statNumber}>{scenes.length}</Text>
+              <Text style={styles.statText}>Scenes</Text>
+            </LinearGradient>
           </View>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <MaterialCommunityIcons name="home-variant" size={16} color={colors.primary} />
-            </View>
-            <Text style={styles.statNumber}>{rooms.length}</Text>
-            <Text style={styles.statText}>Rooms</Text>
+          <View style={styles.statCardWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.statCard}
+            >
+              <View style={styles.statIcon}>
+                <MaterialCommunityIcons name="home-variant" size={16} color={colors.primary} />
+              </View>
+              <Text style={styles.statNumber}>{rooms.length}</Text>
+              <Text style={styles.statText}>Rooms</Text>
+            </LinearGradient>
           </View>
         </View>
 
@@ -163,31 +191,41 @@ export default function ProfileScreen() {
               <Text style={styles.updateText}>Update</Text>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.infoCard}>
-            <View style={styles.infoIcon}>
-              <MaterialCommunityIcons name="email" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{user?.email || 'No email'}</Text>
-            </View>
-            {user?.email && <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />}
+
+          <View style={styles.infoCardWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.infoCard}
+            >
+              <View style={styles.infoIcon}>
+                <MaterialCommunityIcons name="email" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || 'No email'}</Text>
+              </View>
+              {user?.email && <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />}
+            </LinearGradient>
           </View>
 
-          <TouchableOpacity style={styles.infoCard} onPress={handleAddress}>
-            <View style={styles.infoIcon}>
-              <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Home</Text>
-              <Text style={styles.infoValue}>{home?.name || home?.address || 'No home set'}</Text>
-            </View>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={16}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.infoCardWrapper} onPress={handleAddress}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.infoCard}
+            >
+              <View style={styles.infoIcon}>
+                <MaterialCommunityIcons name="map-marker" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Home</Text>
+                <Text style={styles.infoValue}>{home?.name || home?.address || 'No home set'}</Text>
+              </View>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={16}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
@@ -200,7 +238,7 @@ export default function ProfileScreen() {
                 <Text style={styles.updateText}>See All</Text>
               </TouchableOpacity>
             </View>
-            
+
             {devices.slice(0, 3).map((device) => {
               const deviceIcons: Record<string, string> = {
                 light: 'lightbulb',
@@ -217,19 +255,24 @@ export default function ProfileScreen() {
               };
               const iconName = deviceIcons[device.type] || 'devices';
               return (
-                <View key={device.id} style={styles.deviceCard}>
-                  <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
-                    <MaterialCommunityIcons name={iconName as any} size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.deviceInfo}>
-                    <Text style={styles.deviceName}>{device.name}</Text>
-                    <Text style={styles.deviceUsage}>{device.type} • {device.isActive ? 'Active' : 'Inactive'}</Text>
-                  </View>
-                  <MaterialCommunityIcons 
-                    name={device.isActive ? "check-circle" : "circle-outline"} 
-                    size={20} 
-                    color={device.isActive ? colors.success : colors.mutedForeground} 
-                  />
+                <View key={device.id} style={styles.deviceCardWrapper}>
+                  <LinearGradient
+                    colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                    style={styles.deviceCard}
+                  >
+                    <View style={[styles.deviceIcon, { backgroundColor: `${colors.primary}20` }]}>
+                      <MaterialCommunityIcons name={iconName as any} size={20} color={colors.primary} />
+                    </View>
+                    <View style={styles.deviceInfo}>
+                      <Text style={styles.deviceName}>{device.name}</Text>
+                      <Text style={styles.deviceUsage}>{device.type} • {device.isActive ? 'Active' : 'Inactive'}</Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name={device.isActive ? "check-circle" : "circle-outline"}
+                      size={20}
+                      color={device.isActive ? colors.success : colors.mutedForeground}
+                    />
+                  </LinearGradient>
                 </View>
               );
             })}
@@ -244,7 +287,7 @@ export default function ProfileScreen() {
               <Text style={styles.updateText}>View All</Text>
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.achievementsGrid}>
             <View style={styles.achievementBadge}>
               <View style={styles.achievementIcon}>
@@ -273,11 +316,21 @@ export default function ProfileScreen() {
             <MaterialCommunityIcons name="pencil" size={16} color="white" />
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={handlePrivacySettings}>
-            <Text style={styles.secondaryButtonText}>Privacy Settings</Text>
+          <TouchableOpacity style={styles.secondaryButtonWrapper} onPress={handlePrivacySettings}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Privacy Settings</Text>
+            </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleSubscription}>
-            <Text style={styles.secondaryButtonText}>Subscription Management</Text>
+          <TouchableOpacity style={styles.secondaryButtonWrapper} onPress={handleSubscription}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Subscription Management</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -295,13 +348,15 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       padding: spacing.lg,
       paddingBottom: 100,
     },
-    profileHeader: {
-      backgroundColor: colors.primary,
-      borderRadius: borderRadius.xxl,
-      padding: spacing.xl,
-      alignItems: 'center',
+    profileHeaderWrapper: {
       marginBottom: spacing.lg,
+      borderRadius: borderRadius.xxl,
       ...shadows.neonPrimary,
+    },
+    profileHeader: {
+      padding: spacing.xl,
+      borderRadius: borderRadius.xxl,
+      alignItems: 'center',
     },
     avatarContainer: {
       width: 96,
@@ -349,14 +404,16 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       gap: spacing.md,
       marginBottom: spacing.lg,
     },
-    statCard: {
+    statCardWrapper: {
       width: '47%',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: `${colors.primary}20`,
       ...shadows.md,
+    },
+    statCard: {
+      padding: spacing.md,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     statIcon: {
       width: 32,
@@ -399,15 +456,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       fontSize: fontSize.sm,
       color: colors.primary,
     },
+    infoCardWrapper: {
+      marginBottom: spacing.sm,
+      borderRadius: borderRadius.lg,
+      ...shadows.sm,
+    },
     infoCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
-      marginBottom: spacing.sm,
       gap: spacing.md,
-      ...shadows.sm,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     infoIcon: {
       width: 40,
@@ -429,15 +490,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       fontSize: fontSize.md,
       color: colors.foreground,
     },
+    deviceCardWrapper: {
+      marginBottom: spacing.sm,
+      borderRadius: borderRadius.lg,
+      ...shadows.sm,
+    },
     deviceCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
-      marginBottom: spacing.sm,
       gap: spacing.md,
-      ...shadows.sm,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     deviceIcon: {
       width: 40,
@@ -507,12 +572,16 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       fontWeight: '600',
       color: 'white',
     },
-    secondaryButton: {
-      backgroundColor: colors.secondary,
+    secondaryButtonWrapper: {
       borderRadius: borderRadius.lg,
-      padding: spacing.md,
-      alignItems: 'center',
       ...shadows.sm,
+    },
+    secondaryButton: {
+      padding: spacing.md,
+      borderRadius: borderRadius.lg,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     secondaryButtonText: {
       fontSize: fontSize.md,

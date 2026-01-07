@@ -52,7 +52,7 @@ import {
   EmptyState,
   StatusBadge,
 } from '../components/ui';
-import type { RootStackParamList, Device } from '../types';
+import type { RootStackParamList, Device, Hub } from '../types';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Use c.gif for hero animation
@@ -200,6 +200,7 @@ export default function DevicesScreen() {
     { key: 'climate', title: 'Climate' },
     { key: 'windows', title: 'Windows' },
     { key: 'media', title: 'Media' },
+    { key: 'security', title: 'Security' },
   ]);
 
   // Map hub types to categories (for client-facing display)
@@ -223,7 +224,7 @@ export default function DevicesScreen() {
   // Filter devices by category - hubs are already included in devices array from useHomeData
   // Only add hubs separately if they're NOT already in the devices array (to avoid duplicates)
   const climateDevices = [
-    ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
+    ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard' || d.type === 'fan' || d.type === 'sensor'),
     ...climateHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id) && (d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'))) // Only add hubs not already in filtered devices
       .map(h => {
@@ -302,6 +303,28 @@ export default function DevicesScreen() {
           name: h.name,
           type: h.hubType,
           category: 'lighting' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId,
+          homeId: h.homeId,
+          hubId: h.id,
+          status: h.status
+        } as any;
+      })
+  ];
+  const securityDevices = [
+    ...devices.filter(d => d.category === 'security' || d.type === 'lock' || d.type === 'camera'),
+    // Add security hubs if any (rare for this app context but good for completeness)
+    ...hubs
+      .filter(h => getHubCategory(h.hubType || 'media') === 'security' && !devices.some(d => String(d.id) === String(h.id)))
+      .map(h => {
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'security' as const,
           isActive: h.status === 'online',
           value: undefined,
           unit: undefined,
@@ -527,22 +550,17 @@ export default function DevicesScreen() {
               {roomDevices.map(device => (
                 <View key={device.id} style={styles.deviceTileWrapper}>
                   <DeviceTileComponent
-                    icon={getDeviceIcon(device.type)}
-                    name={device.name}
-                    value={device.value}
-                    unit={device.unit || '%'}
-                    isActive={device.isActive}
-                    isOnline={(() => {
-                      // For hubs, use live status from hubStatuses
-                      if (device.hubId && hubs.some(h => h.id === device.id)) {
-                        const liveStatus = hubStatuses[device.id];
-                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
-                      }
-                      return device.isOnline !== false;
-                    })()}
-                    type={device.type}
+                    device={{
+                      ...device,
+                      isOnline: (() => {
+                        if (device.hubId && hubs.some(h => h.id === device.id)) {
+                          const liveStatus = hubStatuses[device.id];
+                          return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                        }
+                        return device.isOnline !== false;
+                      })()
+                    }}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
                   />
                 </View>
               ))}
@@ -582,22 +600,17 @@ export default function DevicesScreen() {
               {roomDevices.map(device => (
                 <View key={device.id} style={styles.deviceTileWrapper}>
                   <DeviceTileComponent
-                    icon={getDeviceIcon(device.type)}
-                    name={device.name}
-                    value={device.value}
-                    unit={device.unit || '°C'}
-                    isActive={device.isActive}
-                    isOnline={(() => {
-                      // For hubs, use live status from hubStatuses
-                      if (device.hubId && hubs.some(h => h.id === device.id)) {
-                        const liveStatus = hubStatuses[device.id];
-                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
-                      }
-                      return device.isOnline !== false;
-                    })()}
-                    type={device.type}
+                    device={{
+                      ...device,
+                      isOnline: (() => {
+                        if (device.hubId && hubs.some(h => h.id === device.id)) {
+                          const liveStatus = hubStatuses[device.id];
+                          return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                        }
+                        return device.isOnline !== false;
+                      })()
+                    }}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={device.type !== 'airguard' ? () => handleDeviceToggle(device) : undefined}
                   />
                 </View>
               ))}
@@ -652,22 +665,17 @@ export default function DevicesScreen() {
               {roomDevices.map(device => (
                 <View key={device.id} style={styles.deviceTileWrapper}>
                   <DeviceTileComponent
-                    icon={getDeviceIcon(device.type)}
-                    name={device.name}
-                    value={device.value}
-                    unit={device.unit || '%'}
-                    isActive={device.isActive}
-                    isOnline={(() => {
-                      // For hubs, use live status from hubStatuses
-                      if (device.hubId && hubs.some(h => h.id === device.id)) {
-                        const liveStatus = hubStatuses[device.id];
-                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
-                      }
-                      return device.isOnline !== false;
-                    })()}
-                    type={device.type}
+                    device={{
+                      ...device,
+                      isOnline: (() => {
+                        if (device.hubId && hubs.some(h => h.id === device.id)) {
+                          const liveStatus = hubStatuses[device.id];
+                          return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                        }
+                        return device.isOnline !== false;
+                      })()
+                    }}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={() => handleDeviceToggle(device)}
                   />
                 </View>
               ))}
@@ -707,22 +715,17 @@ export default function DevicesScreen() {
               {roomDevices.map(device => (
                 <View key={device.id} style={styles.deviceTileWrapper}>
                   <DeviceTileComponent
-                    icon={getDeviceIcon(device.type)}
-                    name={device.name}
-                    value={device.value}
-                    unit={device.unit}
-                    isOnline={(() => {
-                      // For hubs, use live status from hubStatuses
-                      if (device.hubId && hubs.some(h => h.id === device.id)) {
-                        const liveStatus = hubStatuses[device.id];
-                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
-                      }
-                      return device.isOnline !== false;
-                    })()}
-                    isActive={device.isActive}
-                    type={device.type}
+                    device={{
+                      ...device,
+                      isOnline: (() => {
+                        if (device.hubId && hubs.some(h => h.id === device.id)) {
+                          const liveStatus = hubStatuses[device.id];
+                          return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                        }
+                        return device.isOnline !== false;
+                      })()
+                    }}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={() => handleDeviceToggle(device)}
                   />
                 </View>
               ))}
@@ -733,8 +736,8 @@ export default function DevicesScreen() {
     );
   };
 
-  const SecurityRoute = () => { // This route is no longer used in the new TabView structure
-    const groupedDevices = devicesByRoom([]); // Empty array as security tab is removed
+  const SecurityRoute = () => {
+    const groupedDevices = devicesByRoom(securityDevices);
 
     if (loading) {
       return (
@@ -762,22 +765,17 @@ export default function DevicesScreen() {
               {roomDevices.map(device => (
                 <View key={device.id} style={styles.deviceTileWrapper}>
                   <DeviceTileComponent
-                    icon={getDeviceIcon(device.type)}
-                    name={device.name}
-                    value={device.value}
-                    unit={device.unit}
-                    isOnline={(() => {
-                      // For hubs, use live status from hubStatuses
-                      if (device.hubId && hubs.some(h => h.id === device.id)) {
-                        const liveStatus = hubStatuses[device.id];
-                        return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
-                      }
-                      return device.isOnline !== false;
-                    })()}
-                    isActive={device.isActive}
-                    type={device.type}
+                    device={{
+                      ...device,
+                      isOnline: (() => {
+                        if (device.hubId && hubs.some(h => h.id === device.id)) {
+                          const liveStatus = hubStatuses[device.id];
+                          return liveStatus !== undefined ? liveStatus : (device.isOnline !== false);
+                        }
+                        return device.isOnline !== false;
+                      })()
+                    }}
                     onPress={() => handleDeviceLongPress(device)}
-                    onToggle={() => handleDeviceToggle(device)}
                   />
                 </View>
               ))}
@@ -790,9 +788,10 @@ export default function DevicesScreen() {
 
   const renderScene = SceneMap({
     climate: ClimateRoute,
-    security: SecurityRoute, // This will not be rendered based on new routes
-    utility: UtilityRoute, // This will not be rendered based on new routes
+    windows: WindowsRoute,
+    media: UtilityRoute,
     lighting: LightsRoute,
+    security: SecurityRoute,
   });
 
   const renderTabBar = (props: any) => (
@@ -828,7 +827,12 @@ export default function DevicesScreen() {
             <Text style={styles.headerSubtitle}>
               {(() => {
                 const totalDevices = devices.length + hubs.length;
-                const onlineDevices = [...devices, ...hubs].filter(d => d.isOnline !== false).length;
+                const onlineDevices = [...devices, ...hubs].filter(d => {
+                  if ('hubType' in d) {
+                    return (d as Hub).status === 'online';
+                  }
+                  return (d as Device).isOnline !== false;
+                }).length;
                 return `${onlineDevices} of ${totalDevices} devices connected`;
               })()}
             </Text>

@@ -69,8 +69,8 @@ export interface Hub {
 export interface Device {
   id: string;
   name: string;
-  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan';
-  category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi';
+  type: 'light' | 'thermostat' | 'tv' | 'ac' | 'blind' | 'shutter' | 'lock' | 'camera' | 'speaker' | 'sensor' | 'fan' | 'airguard' | 'ir_blaster';
+  category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi' | 'climate' | 'media' | 'security' | 'lighting' | 'windows';
   isActive: boolean;
   isOnline?: boolean;
   value?: number;
@@ -153,8 +153,12 @@ export interface Scene {
   icon: string;
   schedule?: string;
   isActive: boolean;
+  is_active?: boolean; // For API compatibility
   devices?: number;
   description?: string;
   deviceStates?: Record<string, any>;
+  device_states?: Record<string, any>; // For API compatibility
   deviceActions?: DeviceAction[];
+  deviceTypeRules?: Record<string, any>;
+  device_type_rules?: Record<string, any>; // For API compatibility
 }

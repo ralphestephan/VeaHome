@@ -12,29 +12,30 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  User, 
-  ChevronRight, 
-  Home, 
-  Wifi, 
-  Smartphone, 
-  Bell, 
-  Sun, 
-  Monitor, 
-  Zap, 
-  BellRing, 
-  Mail, 
-  Volume2, 
-  Vibrate, 
-  Cloud, 
-  RotateCcw, 
-  Download, 
-  Trash2, 
-  Shield, 
-  Lock, 
-  Eye, 
-  HelpCircle, 
-  MessageCircle, 
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  User,
+  ChevronRight,
+  Home,
+  Wifi,
+  Smartphone,
+  Bell,
+  Sun,
+  Monitor,
+  Zap,
+  BellRing,
+  Mail,
+  Volume2,
+  Vibrate,
+  Cloud,
+  RotateCcw,
+  Download,
+  Trash2,
+  Shield,
+  Lock,
+  Eye,
+  HelpCircle,
+  MessageCircle,
   Star,
   QrCode,
   LogOut,
@@ -86,11 +87,11 @@ export default function SettingsScreen() {
               const homeId = user?.homeId || '';
               console.log('[SettingsScreen] Deleting home:', homeId);
               console.log('[SettingsScreen] User ID:', user?.id);
-              
+
               const client = getApiClient(async () => token);
               const homeApi = HomeApi(client);
               await homeApi.deleteHome(homeId);
-              
+
               console.log('[SettingsScreen] Home deleted successfully');
               Alert.alert('Success', 'Home deleted successfully', [
                 { text: 'OK', onPress: () => logout() }
@@ -200,415 +201,540 @@ export default function SettingsScreen() {
         {/* Home Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Home Settings</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={handleHomeInfoPress}>
-            <View style={styles.settingIcon}>
-              <Home size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Home Information</Text>
-              <Text style={styles.settingValue}>{home?.name || 'Manage your home'}</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleHomeInfoPress}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Home size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Home Information</Text>
+                <Text style={styles.settingValue}>{home?.name || 'Manage your home'}</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.settingItem}
+            style={styles.settingItemWrapper}
             onPress={() => showInfo('Network & Connection', 'Manage Wi-Fi from your linked hub app.')}
           >
-            <View style={styles.settingIcon}>
-              <Wifi size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Network & Connection</Text>
-              <Text style={styles.settingValue}>{home?.address || 'Connected'}</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Wifi size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Network & Connection</Text>
+                <Text style={styles.settingValue}>{home?.address || 'Connected'}</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleDevicesPress}>
-            <View style={styles.settingIcon}>
-              <Smartphone size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Devices & Integrations</Text>
-              <Text style={styles.settingValue}>{devices.length} {devices.length === 1 ? 'device' : 'devices'} connected</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleDevicesPress}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Smartphone size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Devices & Integrations</Text>
+                <Text style={styles.settingValue}>{devices.length} {devices.length === 1 ? 'device' : 'devices'} connected</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleAddHub}>
-            <View style={styles.settingIcon}>
-              <QrCode size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Add VeaHub</Text>
-              <Text style={styles.settingValue}>Scan QR code to pair</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleAddHub}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <QrCode size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Add VeaHub</Text>
+                <Text style={styles.settingValue}>Scan QR code to pair</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Preferences */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Bell size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Notifications</Text>
-              <Text style={styles.settingValue}>Push & Email alerts</Text>
-            </View>
-            <Switch
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Bell size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Notifications</Text>
+                <Text style={styles.settingValue}>Push & Email alerts</Text>
+              </View>
+              <Switch
+                value={notifications}
+                onValueChange={setNotifications}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Sun size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Dark Mode</Text>
-              <Text style={styles.settingValue}>
-                {mode === 'dark' ? 'Ambient glow' : 'Soft daylight'}
-              </Text>
-            </View>
-            <Switch
-              value={mode === 'dark'}
-              onValueChange={handleThemeToggle}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Sun size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Dark Mode</Text>
+                <Text style={styles.settingValue}>
+                  {mode === 'dark' ? 'Ambient glow' : 'Soft daylight'}
+                </Text>
+              </View>
+              <Switch
+                value={mode === 'dark'}
+                onValueChange={handleThemeToggle}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Monitor size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Auto Mode</Text>
-              <Text style={styles.settingValue}>Adjust with sunlight</Text>
-            </View>
-            <Switch
-              value={autoMode}
-              onValueChange={setAutoMode}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Monitor size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Auto Mode</Text>
+                <Text style={styles.settingValue}>Adjust with sunlight</Text>
+              </View>
+              <Switch
+                value={autoMode}
+                onValueChange={setAutoMode}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Zap size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Energy Saving</Text>
-              <Text style={styles.settingValue}>Auto optimize power</Text>
-            </View>
-            <Switch
-              value={energySaving}
-              onValueChange={setEnergySaving}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Zap size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Energy Saving</Text>
+                <Text style={styles.settingValue}>Auto optimize power</Text>
+              </View>
+              <Switch
+                value={energySaving}
+                onValueChange={setEnergySaving}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
         </View>
 
         {/* Notifications */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Settings</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <BellRing size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Push Notifications</Text>
-              <Text style={styles.settingValue}>Real-time alerts</Text>
-            </View>
-            <Switch
-              value={pushNotifs}
-              onValueChange={setPushNotifs}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <BellRing size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Push Notifications</Text>
+                <Text style={styles.settingValue}>Real-time alerts</Text>
+              </View>
+              <Switch
+                value={pushNotifs}
+                onValueChange={setPushNotifs}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Mail size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Email Notifications</Text>
-              <Text style={styles.settingValue}>Daily summary</Text>
-            </View>
-            <Switch
-              value={emailNotifs}
-              onValueChange={setEmailNotifs}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Mail size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Email Notifications</Text>
+                <Text style={styles.settingValue}>Daily summary</Text>
+              </View>
+              <Switch
+                value={emailNotifs}
+                onValueChange={setEmailNotifs}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Volume2 size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Sound Effects</Text>
-              <Text style={styles.settingValue}>App sounds</Text>
-            </View>
-            <Switch
-              value={soundEffects}
-              onValueChange={setSoundEffects}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Volume2 size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Sound Effects</Text>
+                <Text style={styles.settingValue}>App sounds</Text>
+              </View>
+              <Switch
+                value={soundEffects}
+                onValueChange={setSoundEffects}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Vibrate size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Vibration</Text>
-              <Text style={styles.settingValue}>Haptic feedback</Text>
-            </View>
-            <Switch
-              value={vibration}
-              onValueChange={setVibration}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Vibrate size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Vibration</Text>
+                <Text style={styles.settingValue}>Haptic feedback</Text>
+              </View>
+              <Switch
+                value={vibration}
+                onValueChange={setVibration}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
         </View>
 
         {/* Data & Storage */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data & Storage</Text>
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Cloud size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Cloud Sync</Text>
-              <Text style={styles.settingValue}>Auto sync enabled</Text>
-            </View>
-            <Switch
-              value={cloudSync}
-              onValueChange={setCloudSync}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Cloud size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Cloud Sync</Text>
+                <Text style={styles.settingValue}>Auto sync enabled</Text>
+              </View>
+              <Switch
+                value={cloudSync}
+                onValueChange={setCloudSync}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <RotateCcw size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Auto Backup</Text>
-              <Text style={styles.settingValue}>Daily backups</Text>
-            </View>
-            <Switch
-              value={autoBackup}
-              onValueChange={setAutoBackup}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.foreground}
-            />
+          <View style={styles.settingItemWrapper}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <RotateCcw size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Auto Backup</Text>
+                <Text style={styles.settingValue}>Daily backups</Text>
+              </View>
+              <Switch
+                value={autoBackup}
+                onValueChange={setAutoBackup}
+                trackColor={{ false: colors.muted, true: colors.primary }}
+                thumbColor={colors.foreground}
+              />
+            </LinearGradient>
           </View>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleDownloadData}>
-            <View style={styles.settingIcon}>
-              <Download size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Download Data</Text>
-              <Text style={styles.settingValue}>Export your data</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleDownloadData}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Download size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Download Data</Text>
+                <Text style={styles.settingValue}>Export your data</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleClearCache}>
-            <View style={styles.settingIcon}>
-              <Trash2 size={20} color={colors.destructive} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Clear Cache</Text>
-              <Text style={styles.settingValue}>Free up space</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleClearCache}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Trash2 size={20} color={colors.destructive} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: colors.destructive }]}>Clear Cache</Text>
+                <Text style={styles.settingValue}>Free up space</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Security */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Security & Privacy</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={handleInviteUser}>
-            <View style={styles.settingIcon}>
-              <UserPlus size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Invite User</Text>
-              <Text style={styles.settingValue}>Share home access</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleInviteUser}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <UserPlus size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Invite User</Text>
+                <Text style={styles.settingValue}>Share home access</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleSecuritySettings}>
-            <View style={styles.settingIcon}>
-              <Shield size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Security Settings</Text>
-              <Text style={styles.settingValue}>PIN & Biometric auth</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleSecuritySettings}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Shield size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Security Settings</Text>
+                <Text style={styles.settingValue}>PIN & Biometric auth</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
-            <View style={styles.settingIcon}>
-              <Lock size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Change Password</Text>
-              <Text style={styles.settingValue}>Update your password</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleChangePassword}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Lock size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Change Password</Text>
+                <Text style={styles.settingValue}>Update your password</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handlePrivacyPolicy}>
-            <View style={styles.settingIcon}>
-              <Eye size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Privacy Policy</Text>
-              <Text style={styles.settingValue}>View policy</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handlePrivacyPolicy}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Eye size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Privacy Policy</Text>
+                <Text style={styles.settingValue}>View policy</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support & Help</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={handleHelpCenter}>
-            <View style={styles.settingIcon}>
-              <HelpCircle size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Help Center</Text>
-              <Text style={styles.settingValue}>FAQ & Guides</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleHelpCenter}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <HelpCircle size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Help Center</Text>
+                <Text style={styles.settingValue}>FAQ & Guides</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleSupport}>
-            <View style={styles.settingIcon}>
-              <MessageCircle size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Contact Support</Text>
-              <Text style={styles.settingValue}>Get help from our team</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleSupport}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <MessageCircle size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Contact Support</Text>
+                <Text style={styles.settingValue}>Get help from our team</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingItem} onPress={handleRateApp}>
-            <View style={styles.settingIcon}>
-              <Star size={20} color={colors.primary} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingLabel}>Rate App</Text>
-              <Text style={styles.settingValue}>Share your feedback</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleRateApp}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <Star size={20} color={colors.primary} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingLabel}>Rate App</Text>
+                <Text style={styles.settingValue}>Share your feedback</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Danger Zone */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.destructive }]}>Danger Zone</Text>
-          <TouchableOpacity 
-            style={[styles.settingItem, deleteLoading && styles.settingItemDisabled]} 
+          <TouchableOpacity
+            style={[styles.settingItemWrapper, deleteLoading && styles.settingItemDisabled]}
             onPress={handleDeleteHome}
             disabled={deleteLoading}
           >
-            <View style={styles.settingIcon}>
-              {deleteLoading ? (
-                <ActivityIndicator size="small" color={colors.destructive} />
-              ) : (
-                <Trash2 size={20} color={colors.destructive} />
-              )}
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Delete Home</Text>
-              <Text style={styles.settingValue}>Permanently delete this home</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color={colors.destructive} />
+                ) : (
+                  <Trash2 size={20} color={colors.destructive} />
+                )}
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: colors.destructive }]}>Delete Home</Text>
+                <Text style={styles.settingValue}>Permanently delete this home</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <TouchableOpacity style={styles.settingItem} onPress={handleLogout}>
-            <View style={styles.settingIcon}>
-              <LogOut size={20} color={colors.destructive} />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingLabel, { color: colors.destructive }]}>Logout</Text>
-              <Text style={styles.settingValue}>Sign out of your account</Text>
-            </View>
-            <ChevronRight
-              size={20}
-              color={colors.mutedForeground}
-            />
+          <TouchableOpacity style={styles.settingItemWrapper} onPress={handleLogout}>
+            <LinearGradient
+              colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+              style={styles.settingItemGradient}
+            >
+              <View style={styles.settingIcon}>
+                <LogOut size={20} color={colors.destructive} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingLabel, { color: colors.destructive }]}>Logout</Text>
+                <Text style={styles.settingValue}>Sign out of your account</Text>
+              </View>
+              <ChevronRight
+                size={20}
+                color={colors.mutedForeground}
+              />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
@@ -685,15 +811,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       color: colors.mutedForeground,
       marginBottom: spacing.md,
     },
-    settingItem: {
+    settingItemWrapper: {
+      marginBottom: spacing.sm,
+      borderRadius: borderRadius.lg,
+      ...shadows.sm,
+    },
+    settingItemGradient: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.secondary,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
-      marginBottom: spacing.sm,
       gap: spacing.md,
-      ...shadows.sm,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     settingItemDisabled: {
       opacity: 0.5,
@@ -702,7 +832,7 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       width: 40,
       height: 40,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.muted,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
       justifyContent: 'center',
       alignItems: 'center',
     },
