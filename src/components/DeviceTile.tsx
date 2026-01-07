@@ -41,8 +41,14 @@ const getDeviceIcon = (type: string) => {
 
 export default function DeviceTile({ device, onPress }: DeviceTileProps) {
   const { colors } = useTheme();
+
+  // Safety check - if device is undefined/null, render nothing
+  if (!device) {
+    return null;
+  }
+
   const IconComponent = getDeviceIcon(device.type);
-  const isActive = device.value === 1 || device.value === 'on' || device.value === true;
+  const isActive = device.value === 1 || device.value === '1' || device.value === 'on' || device.value === true;
   const isOnline = device.isOnline !== false;
 
   return (
