@@ -1891,6 +1891,7 @@ const createStyles = (colors: any, shadows: any) =>
       paddingTop: 50, // Leave space for status bar
     },
     modal: {
+      flex: 1,
       borderTopLeftRadius: borderRadius.xxl,
       borderTopRightRadius: borderRadius.xxl,
       padding: spacing.xl,
