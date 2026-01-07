@@ -660,21 +660,20 @@ export default function DeviceControlModal({
                 >
                   {/* Online/Offline Status Badge */}
                   <View style={styles.statusBadgeContainer}>
-                    <View style={[
-                      styles.statusBadge,
-                      liveAirguardData?.isOnline ? styles.statusOnline : styles.statusOffline
-                    ]}>
+                    <LinearGradient
+                      colors={liveAirguardData?.isOnline
+                        ? ['rgba(77, 123, 254, 0.3)', 'rgba(77, 123, 254, 0.1)']
+                        : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']}
+                      style={styles.statusBadge}
+                    >
                       <View style={[
                         styles.statusDot,
                         liveAirguardData?.isOnline ? styles.dotOnline : styles.dotOffline
                       ]} />
-                      <Text style={[
-                        styles.statusText,
-                        liveAirguardData?.isOnline ? styles.statusTextOnline : styles.statusTextOffline
-                      ]}>
-                        {liveAirguardData?.isOnline ? 'Online' : 'Offline'}
+                      <Text style={styles.statusText}>
+                        {liveAirguardData?.isOnline ? 'ONLINE' : 'OFFLINE'}
                       </Text>
-                    </View>
+                    </LinearGradient>
                   </View>
 
                   {/* Signal Strength Indicator - Only show when online with signal */}
@@ -2626,43 +2625,40 @@ const createStyles = (colors: any, shadows: any) =>
     },
     statusBadgeContainer: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
+      marginBottom: spacing.sm,
     },
     statusBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 12,
+      gap: 6,
+      paddingHorizontal: spacing.sm,
       paddingVertical: 6,
-      borderRadius: 20,
-    },
-    statusOnline: {
-      backgroundColor: 'rgba(0, 229, 160, 0.15)',
-    },
-    statusOffline: {
-      backgroundColor: 'rgba(107, 114, 128, 0.15)',
+      borderRadius: borderRadius.md,
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     statusDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
-      marginRight: 6,
     },
     dotOnline: {
-      backgroundColor: '#00E5A0',
+      backgroundColor: '#4D7BFE',
+      shadowColor: '#4D7BFE',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8,
+      shadowRadius: 4,
+      elevation: 4,
     },
     dotOffline: {
-      backgroundColor: '#6B7280',
+      backgroundColor: '#EF4444',
     },
     statusText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
-    },
-    statusTextOnline: {
-      color: '#00E5A0',
-    },
-    statusTextOffline: {
-      color: '#6B7280',
+      color: '#FFFFFF',
+      letterSpacing: 0.5,
     },
     editIconButton: {
       padding: 4,
