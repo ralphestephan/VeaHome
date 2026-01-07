@@ -1886,7 +1886,9 @@ const createStyles = (colors: any, shadows: any) =>
       ...StyleSheet.absoluteFillObject,
     },
     modalContainer: {
-      maxHeight: SCREEN_HEIGHT * 0.95,  // Increased from 0.85 for fuller screen
+      flex: 1,
+      justifyContent: 'flex-end',
+      paddingTop: 50, // Leave space for status bar
     },
     modal: {
       borderTopLeftRadius: borderRadius.xxl,
@@ -2241,7 +2243,6 @@ const createStyles = (colors: any, shadows: any) =>
 
     airguardControl: {
       flex: 1,
-      maxHeight: '95%',  // Increased from 80% for fuller screen
     },
     airguardControlContent: {
       gap: spacing.sm,
