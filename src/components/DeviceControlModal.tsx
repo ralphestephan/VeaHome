@@ -765,37 +765,57 @@ export default function DeviceControlModal({
                         )}
 
                         <View style={styles.airguardMetrics}>
-                          <View style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}>
-                            <Thermometer size={24} color={tempAlert ? '#FF6B6B' : colors.primary} />
+                          <LinearGradient
+                            colors={tempAlert ? ['rgba(255, 107, 107, 0.3)', 'rgba(255, 107, 107, 0.1)'] : ['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                            style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}
+                          >
+                            <View style={styles.metricIconContainer}>
+                              <Thermometer size={28} color={tempAlert ? '#FF6B6B' : '#4D7BFE'} strokeWidth={2.5} />
+                            </View>
                             <Text style={[styles.airguardMetricValue, tempAlert && { color: '#FF6B6B' }]}>
-                              {liveAirguardData?.isOnline === false ? '-' : (temp != null ? `${Number(temp).toFixed(1)}°C` : '--')}
+                              {liveAirguardData?.isOnline === false ? '-' : (temp != null ? `${Number(temp).toFixed(1)}°` : '--')}
                             </Text>
-                            <Text style={styles.airguardMetricLabel}>Temp</Text>
-                          </View>
+                            <Text style={styles.airguardMetricLabel}>TEMPERATURE</Text>
+                          </LinearGradient>
 
-                          <View style={[styles.airguardMetricCard, humAlert && styles.alertMetricCard]}>
-                            <Droplets size={24} color={humAlert ? '#FF6B6B' : colors.primary} />
+                          <LinearGradient
+                            colors={humAlert ? ['rgba(255, 107, 107, 0.3)', 'rgba(255, 107, 107, 0.1)'] : ['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                            style={[styles.airguardMetricCard, humAlert && styles.alertMetricCard]}
+                          >
+                            <View style={styles.metricIconContainer}>
+                              <Droplets size={28} color={humAlert ? '#FF6B6B' : '#4D7BFE'} strokeWidth={2.5} />
+                            </View>
                             <Text style={[styles.airguardMetricValue, humAlert && { color: '#FF6B6B' }]}>
                               {liveAirguardData?.isOnline === false ? '-' : (hum != null ? `${Math.round(hum)}%` : '--')}
                             </Text>
-                            <Text style={styles.airguardMetricLabel}>Humidity</Text>
-                          </View>
+                            <Text style={styles.airguardMetricLabel}>HUMIDITY</Text>
+                          </LinearGradient>
 
-                          <View style={[styles.airguardMetricCard, dustAlert && styles.alertMetricCard]}>
-                            <Wind size={24} color={dustAlert ? '#FF6B6B' : colors.primary} />
+                          <LinearGradient
+                            colors={dustAlert ? ['rgba(255, 107, 107, 0.3)', 'rgba(255, 107, 107, 0.1)'] : ['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                            style={[styles.airguardMetricCard, dustAlert && styles.alertMetricCard]}
+                          >
+                            <View style={styles.metricIconContainer}>
+                              <Wind size={28} color={dustAlert ? '#FF6B6B' : '#4D7BFE'} strokeWidth={2.5} />
+                            </View>
                             <Text style={[styles.airguardMetricValue, dustAlert && { color: '#FF6B6B' }]}>
                               {liveAirguardData?.isOnline === false ? '-' : (dust != null ? `${dust}` : '--')}
                             </Text>
-                            <Text style={styles.airguardMetricLabel}>Dust</Text>
-                          </View>
+                            <Text style={styles.airguardMetricLabel}>DUST</Text>
+                          </LinearGradient>
 
-                          <View style={[styles.airguardMetricCard, mq2Alert && styles.alertMetricCard]}>
-                            <Fan size={24} color={mq2Alert ? '#FF6B6B' : colors.primary} />
+                          <LinearGradient
+                            colors={mq2Alert ? ['rgba(255, 107, 107, 0.3)', 'rgba(255, 107, 107, 0.1)'] : ['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                            style={[styles.airguardMetricCard, mq2Alert && styles.alertMetricCard]}
+                          >
+                            <View style={styles.metricIconContainer}>
+                              <Fan size={28} color={mq2Alert ? '#FF6B6B' : '#4D7BFE'} strokeWidth={2.5} />
+                            </View>
                             <Text style={[styles.airguardMetricValue, mq2Alert && { color: '#FF6B6B' }]}>
                               {liveAirguardData?.isOnline === false ? '-' : (mq2 != null ? `${mq2}` : '--')}
                             </Text>
-                            <Text style={styles.airguardMetricLabel}>Gas/Smoke</Text>
-                          </View>
+                            <Text style={styles.airguardMetricLabel}>GAS/SMOKE</Text>
+                          </LinearGradient>
                         </View>
 
                         <TouchableOpacity
@@ -2303,27 +2323,37 @@ const createStyles = (colors: any, shadows: any) =>
     airguardMetricCard: {
       width: '48%',
       alignItems: 'center',
-      backgroundColor: colors.muted,
       borderRadius: borderRadius.lg,
-      padding: spacing.md,
-      gap: spacing.xs,
+      padding: spacing.lg,
+      gap: spacing.sm,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      ...shadows.md,
+    },
+    metricIconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: borderRadius.md,
+      backgroundColor: 'rgba(77, 123, 254, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     alertMetricCard: {
       borderColor: '#FF6B6B',
       borderWidth: 2,
-      backgroundColor: 'rgba(255, 107, 107, 0.1)',
     },
     airguardMetricValue: {
-      fontSize: fontSize.xl,
+      fontSize: 28,
       fontWeight: '700',
-      color: colors.foreground,
+      color: '#FFFFFF',
     },
     airguardMetricLabel: {
-      fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      fontSize: 10,
+      fontWeight: '600',
+      color: 'rgba(255, 255, 255, 0.5)',
       textAlign: 'center',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
     },
     muteButton: {
       borderRadius: borderRadius.lg,
