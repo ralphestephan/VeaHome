@@ -225,7 +225,7 @@ export default function DevicesScreen() {
   const climateDevices = [
     ...devices.filter(d => d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'),
     ...climateHubs
-      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .filter(h => !devices.some(d => String(d.id) === String(h.id) && (d.category === 'climate' || d.type === 'thermostat' || d.type === 'ac' || d.type === 'airguard'))) // Only add hubs not already in filtered devices
       .map(h => {
         const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
         // Use roomId from hub, ensuring it's a string
