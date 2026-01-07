@@ -185,3 +185,38 @@ export async function setSmartMonitorThresholds(req: Request, res: Response) {
     return errorResponse(res, error.message || 'Failed to publish thresholds command', 500);
   }
 }
+
+export async function publishAirguardCommand(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { topic, payload } = req.body;
+
+    if (!topic || !payload) {
+      return errorResponse(res, 'Topic and payload are required', 400);
+    }
+
+    console.log(`[Airguard] Publishing command to ${topic}:`, payload);
+    const published = publishCommand(topic, payload);
+
+    if (!published) {
+      console.warn(`[Airguard] MQTT not connected, command not sent to ${topic}`);
+      return successResponse(res, {
+        message: 'Command queued (MQTT not connected)',
+        topic,
+        payload,
+        mqttConnected: false,
+        warning: 'MQTT broker is not connected. Please check MQTT_URL environment variable.',
+      });
+    }
+
+    return successResponse(res, {
+      message: 'Command published successfully',
+      topic,
+      payload,
+      mqttConnected: true,
+    });
+  } catch (error: any) {
+    console.error('publishAirguardCommand error:', error);
+    return errorResponse(res, error.message || 'Failed to publish command', 500);
+  }
+}

@@ -5,6 +5,7 @@ import {
   getPendingInvitations,
   getMyPendingInvitations,
   acceptInvitation,
+  declineInvitation,
   cancelInvitation,
   removeMember,
   updateMember,
@@ -31,6 +32,9 @@ router.get('/invitations/my', getMyPendingInvitations);
 
 // Accept invitation
 router.post('/invitations/:token/accept', acceptInvitation);
+
+// Decline invitation
+router.post('/invitations/:token/decline', declineInvitation);
 
 // Cancel invitation
 router.delete('/invitations/:invitationId', cancelInvitation);

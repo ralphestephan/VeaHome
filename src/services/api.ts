@@ -200,4 +200,25 @@ export const HomeMembersApi = (client: AxiosInstance) => ({
     client.patch(`/homes/${homeId}/members/${memberId}`, payload),
 });
 
+// Tuya Integration
+export const TuyaApi = (client: AxiosInstance) => ({
+  getAuthUrl: (redirectUri: string) => client.get('/tuya/auth/url', { params: { redirectUri } }),
+  handleCallback: (code: string, redirectUri: string) => 
+    client.post('/tuya/auth/callback', { code, redirectUri }),
+  getIntegration: () => client.get('/tuya/integration'),
+  disconnect: () => client.delete('/tuya/integration'),
+  listDevices: (homeId?: string) => {
+    const params = homeId ? { homeId } : {};
+    return client.get('/tuya/devices', { params });
+  },
+  syncDevices: () => client.get('/tuya/devices/sync'),
+  getDeviceStatus: (deviceId: string) => client.get(`/tuya/devices/${deviceId}/status`),
+  getDeviceReadings: (deviceId: string, params?: { limit?: number; startTime?: string; endTime?: string }) =>
+    client.get(`/tuya/devices/${deviceId}/readings`, { params }),
+  controlDevice: (deviceId: string, commands: Array<{ code: string; value: any }>) =>
+    client.post(`/tuya/devices/${deviceId}/control`, { commands }),
+  updateDevice: (deviceId: string, payload: { home_id?: string | null; name?: string }) =>
+    client.patch(`/tuya/devices/${deviceId}`, payload),
+});
+
 

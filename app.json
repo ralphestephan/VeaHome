@@ -3,6 +3,7 @@
     "name": "VeaHome",
     "slug": "veahome",
     "version": "1.0.0",
+    "scheme": "veahome",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

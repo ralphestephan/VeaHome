@@ -5,6 +5,7 @@ import {
   setSmartMonitorBuzzer,
   getSmartMonitorThresholds,
   setSmartMonitorThresholds,
+  publishAirguardCommand,
 } from '../controllers/publicAirguard.controller';
 
 const router = Router();
@@ -21,5 +22,6 @@ router.get('/:id/status', getSmartMonitorOnlineStatus);
 router.post('/:id/buzzer', setSmartMonitorBuzzer);
 router.get('/:id/thresholds', getSmartMonitorThresholds);
 router.post('/:id/thresholds', setSmartMonitorThresholds);
+router.post('/:id/command', publishAirguardCommand);
 
 export default router;

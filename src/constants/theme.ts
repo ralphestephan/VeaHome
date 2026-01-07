@@ -24,11 +24,15 @@ export type ThemeColors = {
   neonPink: string;
   online: string;
   offline: string;
+  // Glassmorphism utility colors
+  glassLight: string;
+  glassDark: string;
+  glassBlur: string;
 };
 
 // Dark futuristic neon-blue/purple theme (main theme)
 export const darkColors: ThemeColors = {
-  primary: '#4F6EF7',
+  primary: '#4D7BFE', // Updated to match reference neon blue
   primaryLight: '#7B93FF',
   primaryDark: '#2A3A8F',
   secondary: '#0D1129',
@@ -45,17 +49,21 @@ export const darkColors: ThemeColors = {
   success: '#00E5A0',
   warning: '#FFB547',
   info: '#00C2FF',
-  neonBlue: '#00C2FF',
+  neonBlue: '#4D7BFE', // Match primary for consistency
   neonPurple: '#B366FF',
   neonCyan: '#00FFF0',
   neonPink: '#FF66B2',
   online: '#00E5A0',
-  offline: '#374151', // Darker grey for better contrast with online green
+  offline: '#374151',
+  // Glassmorphism utility colors
+  glassLight: 'rgba(255, 255, 255, 0.08)',
+  glassDark: 'rgba(0, 0, 0, 0.3)',
+  glassBlur: 'rgba(255, 255, 255, 0.15)',
 };
 
 // Light theme variant (kept for compatibility but not primary)
 export const lightColors: ThemeColors = {
-  primary: '#4F6EF7',
+  primary: '#4D7BFE',
   primaryLight: '#7B93FF',
   primaryDark: '#2E338E',
   secondary: '#F0F2FF',
@@ -72,12 +80,16 @@ export const lightColors: ThemeColors = {
   success: '#13A480',
   warning: '#E8A04D',
   info: '#2E6BFF',
-  neonBlue: '#2E6BFF',
+  neonBlue: '#4D7BFE',
   neonPurple: '#7C3AED',
   neonCyan: '#06B6D4',
   neonPink: '#EC4899',
   online: '#13A480',
-  offline: '#374151', // Darker grey for better contrast with online green
+  offline: '#374151',
+  // Glassmorphism utility colors
+  glassLight: 'rgba(0, 0, 0, 0.05)',
+  glassDark: 'rgba(0, 0, 0, 0.1)',
+  glassBlur: 'rgba(0, 0, 0, 0.08)',
 };
 
 export const getThemeColors = (mode: ThemeMode): ThemeColors =>
@@ -125,14 +137,14 @@ export const fontWeight = {
 
 // Expanded gradients for futuristic UI (dark mode)
 export const darkGradients = {
-  background: ['#060816', '#0A1025'] as const,
-  backgroundRadial: ['#0D1129', '#060816'] as const,
+  background: ['#1a0f2e', '#0a0514'] as const, // Deep purple-blue to dark
+  backgroundRadial: ['#2E1065', '#060816'] as const, // Purple to dark blue
   card: ['rgba(15, 20, 40, 0.95)', 'rgba(10, 14, 31, 0.98)'] as const,
   cardHover: ['rgba(20, 26, 53, 0.95)', 'rgba(15, 20, 40, 0.98)'] as const,
-  cardActive: ['rgba(79, 110, 247, 0.15)', 'rgba(15, 20, 40, 0.95)'] as const,
-  accent: ['#4F6EF7', '#7B93FF'] as const,
-  accentAlt: ['#B366FF', '#4F6EF7'] as const,
-  neonBlue: ['#00C2FF', '#4F6EF7'] as const,
+  cardActive: ['rgba(77, 123, 254, 0.2)', 'rgba(15, 20, 40, 0.95)'] as const,
+  accent: ['#4D7BFE', '#7B93FF'] as const, // Updated to match new primary
+  accentAlt: ['#B366FF', '#4D7BFE'] as const,
+  neonBlue: ['#4D7BFE', '#7B93FF'] as const, // Updated for consistency
   neonPurple: ['#B366FF', '#7C3AED'] as const,
   neonCyan: ['#00FFF0', '#00C2FF'] as const,
   neonPink: ['#FF66B2', '#B366FF'] as const,
@@ -143,6 +155,7 @@ export const darkGradients = {
   glassEdge: ['rgba(255, 255, 255, 0.12)', 'rgba(255, 255, 255, 0.04)'] as const,
   overlay: ['rgba(6, 8, 22, 0)', 'rgba(6, 8, 22, 0.95)'] as const,
   overlayTop: ['rgba(6, 8, 22, 0.9)', 'rgba(6, 8, 22, 0)'] as const,
+  deepPurple: ['#2E1065', '#0F172A'] as const,
 };
 
 // Light mode gradients
@@ -165,14 +178,15 @@ export const lightGradients = {
   glassEdge: ['rgba(0, 0, 0, 0.06)', 'rgba(0, 0, 0, 0.02)'] as const,
   overlay: ['rgba(255, 255, 255, 0)', 'rgba(248, 250, 252, 0.95)'] as const,
   overlayTop: ['rgba(248, 250, 252, 0.9)', 'rgba(255, 255, 255, 0)'] as const,
+  deepPurple: ['#7C3AED', '#E0E7FF'] as const,
 };
 
 // For backwards compatibility, export gradients as dark gradients
 export const gradients = darkGradients;
 
 // Get theme gradients based on mode
-export type ThemeGradients = typeof darkGradients;
-export const getThemeGradients = (mode: ThemeMode): ThemeGradients =>
+export type ThemeGradients = typeof darkGradients | typeof lightGradients;
+export const getThemeGradients = (mode: ThemeMode) =>
   mode === 'light' ? lightGradients : darkGradients;
 
 // Shadow presets for depth and glow effects
@@ -199,11 +213,11 @@ export const shadows = {
     elevation: 8,
   },
   neonBlue: {
-    shadowColor: '#00C2FF',
+    shadowColor: '#4D7BFE', // Updated to match new primary
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.6, // Stronger glow
+    shadowRadius: 16,
+    elevation: 8,
   },
   neonPurple: {
     shadowColor: '#B366FF',
@@ -213,18 +227,18 @@ export const shadows = {
     elevation: 6,
   },
   neonPrimary: {
-    shadowColor: '#4F6EF7',
+    shadowColor: '#4D7BFE',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  glow: {
-    shadowColor: '#4F6EF7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.5, // Stronger for active states
     shadowRadius: 20,
     elevation: 10,
+  },
+  glow: {
+    shadowColor: '#4D7BFE',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
   },
 };
 

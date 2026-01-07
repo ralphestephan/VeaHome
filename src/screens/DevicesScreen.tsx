@@ -17,19 +17,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { 
-  Lightbulb, 
-  Thermometer, 
-  Blinds, 
-  Tv, 
+import {
+  Lightbulb,
+  Thermometer,
+  Blinds,
+  Tv,
   Shield,
   Plus,
   Sparkles,
 } from 'lucide-react-native';
-import { 
-  spacing, 
-  borderRadius, 
-  fontSize, 
+import {
+  spacing,
+  borderRadius,
+  fontSize,
   fontWeight,
   ThemeColors,
 } from '../constants/theme';
@@ -45,10 +45,10 @@ import { getApiClient, HubApi, PublicAirguardApi } from '../services/api';
 import { useRealtime } from '../hooks/useRealtime';
 import { useTheme } from '../context/ThemeContext';
 import { useDemo } from '@/context/DemoContext';
-import { 
-  NeonCard, 
-  SectionHeader, 
-  SkeletonLoader, 
+import {
+  NeonCard,
+  SectionHeader,
+  SkeletonLoader,
   EmptyState,
   StatusBadge,
 } from '../components/ui';
@@ -72,11 +72,11 @@ export default function DevicesScreen() {
   console.log('[DevicesScreen] HomeId:', homeId, 'User:', user?.email);
   const { devices: homeDevices, rooms: homeRooms, loading, refresh, isDemoMode } = useHomeData(homeId);
   const demo = useDemo();
-  
+
   // Use demo data if in demo mode
   const devices: Device[] = isDemoMode ? (demo.devices || []) : (homeDevices || []);
   const rooms = isDemoMode ? (demo.rooms || []) : (homeRooms || []);
-  
+
   const { hubs: fetchedHubs, refresh: refreshHubs } = useHubs(homeId);
   console.log('[DevicesScreen] Fetched hubs:', fetchedHubs?.length || 0);
   const hubs = Array.isArray(fetchedHubs) ? fetchedHubs : [];
@@ -85,17 +85,17 @@ export default function DevicesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVealiveModal, setShowVealiveModal] = useState(false);
-  
+
   // Track live online/offline status for hubs
   const [hubStatuses, setHubStatuses] = useState<Record<string, boolean>>({});
-  
+
   // Track previous statuses to only refresh on change
   const prevDeviceStatusesRef = useRef<Record<string, boolean>>({});
   const prevHubStatusesRef = useRef<Record<string, boolean>>({});
-  
+
   // Scroll position refs for each tab
   const scrollPositionsRef = useRef<Record<number, number>>({});
-  
+
   // Modal state
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -108,13 +108,13 @@ export default function DevicesScreen() {
     const fetchStatuses = async () => {
       const client = getApiClient(async () => token);
       const airguardApi = PublicAirguardApi(client);
-      
+
       const statusPromises = airguardHubs.map(async (hub) => {
         try {
-          const smartMonitorId = hub.metadata?.smartMonitorId || 
-                                 (hub.serialNumber?.match(/SM_(\d+)/i)?.[1] ? parseInt(hub.serialNumber.match(/SM_(\d+)/i)![1], 10) : null);
+          const smartMonitorId = hub.metadata?.smartMonitorId ||
+            (hub.serialNumber?.match(/SM_(\d+)/i)?.[1] ? parseInt(hub.serialNumber.match(/SM_(\d+)/i)![1], 10) : null);
           if (!smartMonitorId) return { hubId: hub.id, isOnline: false };
-          
+
           const statusRes = await airguardApi.getStatus(smartMonitorId);
           const statusWrapper = statusRes.data?.data;
           const status = statusWrapper?.data || statusWrapper;
@@ -130,18 +130,18 @@ export default function DevicesScreen() {
       results.forEach(({ hubId, isOnline }) => {
         newStatuses[hubId] = isOnline;
       });
-      
+
       // Only update state if status changed - don't refresh the whole page
-      const hasChanged = Object.keys(newStatuses).some(hubId => 
+      const hasChanged = Object.keys(newStatuses).some(hubId =>
         newStatuses[hubId] !== prevHubStatusesRef.current[hubId]
       ) || Object.keys(prevHubStatusesRef.current).some(hubId =>
         prevHubStatusesRef.current[hubId] !== newStatuses[hubId]
       );
-      
+
       if (hasChanged) {
         prevHubStatusesRef.current = newStatuses;
         // Only update state - this will cause device cards to re-render without full page refresh
-      setHubStatuses(newStatuses);
+        setHubStatuses(newStatuses);
       } else {
         // Still update state even if no change to keep it in sync
         setHubStatuses(newStatuses);
@@ -183,7 +183,7 @@ export default function DevicesScreen() {
       if (shouldRefresh) {
         // Use a small delay to prevent scroll jump
         setTimeout(() => {
-      refresh();
+          refresh();
         }, 100);
       }
     }, [refresh])
@@ -194,30 +194,31 @@ export default function DevicesScreen() {
     await Promise.all([refresh(), refreshHubs()]);
     setRefreshing(false);
   }, [refresh, refreshHubs]);
+
   const [routes] = useState([
+    { key: 'lighting', title: 'Lights' },
     { key: 'climate', title: 'Climate' },
-    { key: 'security', title: 'Security' },
-    { key: 'utility', title: 'Utility' },
-    { key: 'lighting', title: 'Lighting' },
+    { key: 'windows', title: 'Windows' },
+    { key: 'media', title: 'Media' },
   ]);
 
   // Map hub types to categories (for client-facing display)
   const getHubCategory = (hubType: string) => {
     const categoryMap: Record<string, string> = {
       'airguard': 'climate', // Air quality monitoring
-      'ir_blaster': 'utility', // Controls various devices
+      'ir_blaster': 'media', // Controls various devices
       'zigbee': 'lighting', // Often used for smart lights
-      'matter': 'utility',
-      'wifi': 'utility',
+      'matter': 'media',
+      'wifi': 'media',
     };
-    return categoryMap[hubType] || 'utility';
+    return categoryMap[hubType] || 'media';
   };
 
   // Filter hubs by category (shown as "devices" to client)
-  const climateHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'climate');
-  const securityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'security');
-  const utilityHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'utility');
-  const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'utility') === 'lighting');
+  const climateHubs = hubs.filter(h => getHubCategory(h.hubType || 'media') === 'climate');
+  const windowsHubs = hubs.filter(h => getHubCategory(h.hubType || 'media') === 'windows');
+  const mediaHubs = hubs.filter(h => getHubCategory(h.hubType || 'media') === 'media');
+  const lightingHubs = hubs.filter(h => getHubCategory(h.hubType || 'media') === 'lighting');
 
   // Filter devices by category - hubs are already included in devices array from useHomeData
   // Only add hubs separately if they're NOT already in the devices array (to avoid duplicates)
@@ -226,65 +227,68 @@ export default function DevicesScreen() {
     ...climateHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
       .map(h => {
-      const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
+        const isOnline = hubStatuses[h.id] !== undefined ? hubStatuses[h.id] : (h.status === 'online');
         // Use roomId from hub, ensuring it's a string
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         console.log('[DevicesScreen] Mapping climate hub:', { hubId: h.id, hubName: h.name, roomId, hasRoomId: !!h.roomId, hasRoom_id: !!h.room_id });
-      return {
-        id: h.id,
-        name: h.name,
-        type: h.hubType || 'airguard',
-        category: 'climate' as const,
-        isActive: isOnline,
-        value: undefined,
-        unit: undefined,
-          roomId: roomId, // Use the properly extracted roomId
-        homeId: h.homeId,
-        status: isOnline ? 'online' : 'offline',
-        hubType: h.hubType,
-        serialNumber: h.serialNumber,
-        metadata: h.metadata
-      };
-    })
-  ];
-  const securityDevices = [
-    ...devices.filter(d => d.category === 'security' || d.type === 'camera' || d.type === 'lock'),
-    ...securityHubs
-      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
-      .map(h => {
-        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'security' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
+          id: h.id,
+          name: h.name,
+          type: h.hubType || 'airguard',
+          category: 'climate' as const,
+          isActive: isOnline,
+          value: undefined,
+          unit: undefined,
           roomId: roomId,
-      homeId: h.homeId,
-      status: h.status
-        };
+          homeId: h.homeId,
+          hubId: h.id,
+          status: isOnline ? 'online' : 'offline',
+          hubType: h.hubType,
+          serialNumber: h.serialNumber,
+          metadata: h.metadata
+        } as any;
       })
   ];
-  const utilityDevices = [
-    ...devices.filter(d => d.category === 'utility' || d.type === 'tv' || d.type === 'speaker'),
-    ...utilityHubs
+  const windowDevices = [
+    ...devices.filter(d => d.category === 'windows' || d.type === 'blind' || d.type === 'shutter'),
+    ...windowsHubs
       .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
       .map(h => {
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'utility' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'windows' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
           roomId: roomId,
-      homeId: h.homeId,
-      status: h.status
-        };
+          homeId: h.homeId,
+          hubId: h.id,
+          status: h.status
+        } as any;
+      })
+  ];
+  const mediaDevices = [
+    ...devices.filter(d => d.category === 'media' || d.type === 'tv' || d.type === 'speaker' || d.type === 'ir_blaster'),
+    ...mediaHubs
+      .filter(h => !devices.some(d => String(d.id) === String(h.id))) // Only add hubs not already in devices
+      .map(h => {
+        const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
+        return {
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'media' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
+          roomId: roomId,
+          homeId: h.homeId,
+          hubId: h.id,
+          status: h.status
+        } as any;
       })
   ];
   const lightsDevices = [
@@ -294,17 +298,18 @@ export default function DevicesScreen() {
       .map(h => {
         const roomId = h.roomId ? String(h.roomId) : (h.room_id ? String(h.room_id) : '');
         return {
-      id: h.id,
-      name: h.name,
-      type: h.hubType,
-      category: 'lighting' as const,
-      isActive: h.status === 'online',
-      value: undefined,
-      unit: undefined,
+          id: h.id,
+          name: h.name,
+          type: h.hubType,
+          category: 'lighting' as const,
+          isActive: h.status === 'online',
+          value: undefined,
+          unit: undefined,
           roomId: roomId,
-      homeId: h.homeId,
-      status: h.status
-        };
+          homeId: h.homeId,
+          hubId: h.id,
+          status: h.status
+        } as any;
       })
   ];
 
@@ -313,21 +318,21 @@ export default function DevicesScreen() {
   const deviceCounts = useMemo(() => {
     // Total count is just devices.length (hubs are already included)
     const total = devices.length;
-    
+
     // Create a set of hub IDs for quick lookup
     const hubIds = new Set(hubs.map(h => String(h.id)));
-    
+
     // Count online devices
     // For devices that are hubs, check live status if available
     const online = devices.filter(d => {
       const deviceId = String(d.id);
       const isHub = hubIds.has(deviceId);
-      
+
       if (isHub) {
         // For hubs, check live status for AirGuard, or backend status for others
         const hub = hubs.find(h => String(h.id) === deviceId);
         if (!hub) return false;
-        
+
         if (hub.hubType === 'airguard') {
           const liveStatus = hubStatuses[hub.id];
           if (liveStatus !== undefined) return liveStatus;
@@ -335,11 +340,11 @@ export default function DevicesScreen() {
         }
         return hub.status === 'online';
       }
-      
+
       // For regular devices, check isOnline
       return d.isOnline !== false;
     }).length;
-    
+
     return { total, online };
   }, [devices, hubs, hubStatuses]);
 
@@ -361,7 +366,7 @@ export default function DevicesScreen() {
       refresh();
     }
   };
-  
+
   const handleDeviceLongPress = (device: Device) => {
     console.log('[DevicesScreen] Opening modal for device:', {
       id: device.id,
@@ -372,7 +377,7 @@ export default function DevicesScreen() {
     setSelectedDevice(device);
     setModalVisible(true);
   };
-  
+
   const handleModalToggle = (deviceId: string) => {
     if (isDemoMode) {
       demo.toggleDevice(deviceId);
@@ -381,7 +386,7 @@ export default function DevicesScreen() {
       refresh();
     }
   };
-  
+
   const handleModalSetValue = (deviceId: string, value: number) => {
     if (isDemoMode) {
       demo.setDeviceValue(deviceId, value);
@@ -397,8 +402,8 @@ export default function DevicesScreen() {
       'Are you sure you want to delete this device? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -495,7 +500,7 @@ export default function DevicesScreen() {
 
   const LightsRoute = () => {
     const groupedDevices = devicesByRoom(lightsDevices);
-    
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -550,7 +555,7 @@ export default function DevicesScreen() {
 
   const ClimateRoute = () => {
     const groupedDevices = devicesByRoom(climateDevices);
-    
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -605,7 +610,7 @@ export default function DevicesScreen() {
 
   const WindowsRoute = () => {
     const groupedDevices = devicesByRoom(windowDevices);
-    
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -624,7 +629,7 @@ export default function DevicesScreen() {
     }
 
     return (
-      <ScrollView 
+      <ScrollView
         ref={(ref) => {
           if (ref) {
             const savedPosition = scrollPositionsRef.current[2];
@@ -633,7 +638,7 @@ export default function DevicesScreen() {
             }
           }
         }}
-        style={styles.tabContent} 
+        style={styles.tabContent}
         contentContainerStyle={styles.tabScrollContent}
         onScroll={(e) => {
           scrollPositionsRef.current[2] = e.nativeEvent.contentOffset.y;
@@ -673,9 +678,9 @@ export default function DevicesScreen() {
     );
   };
 
-  const UtilityRoute = () => {
-    const groupedDevices = devicesByRoom(utilityDevices);
-    
+  const UtilityRoute = () => { // Renamed to MediaRoute conceptually, but keeping UtilityRoute function name for now
+    const groupedDevices = devicesByRoom(mediaDevices);
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -685,10 +690,10 @@ export default function DevicesScreen() {
       );
     }
 
-    if (utilityDevices.length === 0) {
+    if (mediaDevices.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No utility devices found</Text>
+          <Text style={styles.emptyText}>No media devices found</Text>
         </View>
       );
     }
@@ -728,9 +733,9 @@ export default function DevicesScreen() {
     );
   };
 
-  const SecurityRoute = () => {
-    const groupedDevices = devicesByRoom(securityDevices);
-    
+  const SecurityRoute = () => { // This route is no longer used in the new TabView structure
+    const groupedDevices = devicesByRoom([]); // Empty array as security tab is removed
+
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
@@ -740,7 +745,7 @@ export default function DevicesScreen() {
       );
     }
 
-    if (securityDevices.length === 0) {
+    if (groupedDevices.length === 0) {
       return (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No security devices found</Text>
@@ -785,256 +790,182 @@ export default function DevicesScreen() {
 
   const renderScene = SceneMap({
     climate: ClimateRoute,
-    security: SecurityRoute,
-    utility: UtilityRoute,
+    security: SecurityRoute, // This will not be rendered based on new routes
+    utility: UtilityRoute, // This will not be rendered based on new routes
     lighting: LightsRoute,
   });
 
   const renderTabBar = (props: any) => (
-    <LinearGradient colors={gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tabBarWrapper}>
+    <View style={styles.tabBarContainer}>
       <TabBar
         {...props}
-        indicatorStyle={{ backgroundColor: 'transparent' }}
+        renderLabel={({ route, focused }) => (
+          <Text style={[
+            styles.tabLabel,
+            focused && styles.tabLabelFocused
+          ]}>
+            {route.title}
+          </Text>
+        )}
+        indicatorStyle={styles.tabIndicator}
         style={styles.tabBar}
         tabStyle={styles.tab}
-        renderLabel={({ route, focused }: { route: any; focused: boolean }) => (
-          focused ? (
-            <LinearGradient colors={gradients.accent} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tabButton}>
-              <Text style={styles.tabTextActive} numberOfLines={1} ellipsizeMode="clip">
-                {route.title}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.tabButton, styles.tabButtonInactive]}>
-              <Text style={styles.tabText} numberOfLines={1} ellipsizeMode="clip">
-                {route.title}
-              </Text>
-            </View>
-          )
-        )}
+        pressColor="transparent"
+        scrollEnabled
       />
-    </LinearGradient>
+    </View>
   );
 
   return (
-    <View style={styles.container}>
-      <Header title="Devices" />
-      <View style={styles.subHeader}>
-        <View style={styles.subHeaderLeft}>
-          <Text style={styles.subtitle}>
-            {deviceCounts.online === 0 
-              ? `0 devices connected`
-              : deviceCounts.online === deviceCounts.total
-              ? `${deviceCounts.online} ${deviceCounts.online === 1 ? 'device' : 'devices'} connected`
-              : `${deviceCounts.online} ${deviceCounts.online === 1 ? 'device' : 'devices'} out of ${deviceCounts.total} ${deviceCounts.total === 1 ? 'device' : 'devices'} connected`
-            }
-          </Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.addButtonWrapper}
-          onPress={() => setShowAddModal(true)}
-        >
-          <LinearGradient
-            colors={gradients.accent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+    <LinearGradient
+      colors={gradients.deepPurple || ['#2E1065', '#0F172A']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>Devices</Text>
+            <Text style={styles.headerSubtitle}>
+              {(() => {
+                const totalDevices = devices.length + hubs.length;
+                const onlineDevices = [...devices, ...hubs].filter(d => d.isOnline !== false).length;
+                return `${onlineDevices} of ${totalDevices} devices connected`;
+              })()}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setShowAddModal(true)}
             style={styles.addButton}
+            activeOpacity={0.8}
           >
-            <Text style={styles.addButtonText}>Add Device</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+            <LinearGradient
+              colors={[colors.primary, colors.neonCyan]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.addButtonGradient}
+            >
+              <Plus size={20} color="#fff" />
+              <Text style={styles.addButtonText}>Add Device</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
-      {/* Hero Image */}
-      <View style={styles.heroContainer}>
-        <ImageBackground
-          source={smartHomeImage}
-          style={styles.heroImage}
-          imageStyle={styles.heroImageStyle}
-        >
-          <LinearGradient
-            colors={['transparent', 'rgba(19, 21, 42, 0.9)']}
-            style={styles.heroGradient}
+        {/* Hero Section with GIF */}
+        <View style={styles.heroContainer}>
+          <ImageBackground
+            source={require('../../assets/SmartHome_DM_1.gif')}
+            style={styles.heroImage}
+            resizeMode="cover"
           >
-            <Text style={styles.heroTitle}>All Devices</Text>
-            <Text style={styles.heroSubtitle}>Control everything from one place</Text>
-          </LinearGradient>
-        </ImageBackground>
-      </View>
+            <LinearGradient
+              colors={['rgba(26, 15, 46, 0.7)', 'rgba(10, 5, 20, 0.95)']}
+              style={styles.heroOverlay}
+            >
+              <View style={styles.heroContent}>
+                <View style={styles.heroBadge}>
+                  <Sparkles size={14} color="#4D7BFE" />
+                  <Text style={styles.heroBadgeText}>Smart Home Control</Text>
+                </View>
+                <Text style={styles.heroTitle}>Manage Your Devices</Text>
+                <Text style={styles.heroSubtitle}>
+                  Control all your smart devices from one place
+                </Text>
+              </View>
+            </LinearGradient>
+          </ImageBackground>
+        </View>
 
-      {/* Tabs */}
-      <TabView
-        navigationState={{ index, routes }}
-        renderScene={renderScene}
-        renderTabBar={renderTabBar}
-        onIndexChange={setIndex}
-        initialLayout={{ width: layout.width }}
-      />
+        <TabView
+          navigationState={{ index, routes }}
+          renderScene={({ route }) => {
+            switch (route.key) {
+              case 'lighting': return <LightsRoute />;
+              case 'climate': return <ClimateRoute />;
+              case 'windows': return <WindowsRoute />; // Need to Ensure WindowsRoute is defined and used
+              case 'media': return <UtilityRoute /> as any;
+              default: return null;
+            }
+          }}
+          onIndexChange={setIndex}
+          initialLayout={{ width: layout.width }}
+          renderTabBar={renderTabBar}
+          lazy
+        />
+      </SafeAreaView>
 
       {/* Device Control Modal */}
-      {selectedDevice && (
-        <DeviceControlModal
-          visible={modalVisible}
-          device={selectedDevice}
-          onClose={() => {
+      <DeviceControlModal
+        visible={modalVisible}
+        device={selectedDevice}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedDevice(null);
+        }}
+        onToggle={handleModalToggle}
+        onSetValue={handleModalSetValue}
+        onToggleMute={handleMuteToggle}
+        onDelete={async (deviceId) => {
+          if (isDemoMode) {
             setModalVisible(false);
             setSelectedDevice(null);
-          }}
-          onToggle={handleModalToggle}
-          onSetValue={handleModalSetValue}
-          onToggleMute={handleMuteToggle}
-          onDelete={(deviceId) => {
-            if (isDemoMode) {
-              setModalVisible(false);
-              setSelectedDevice(null);
-              return;
+            return;
+          }
+          // Logic for deleting device
+          try {
+            const api = HubApi(getApiClient(async () => token));
+            const isHub = hubs.some(h => h.id === deviceId);
+
+            if (isHub) {
+              await api.deleteHub(homeId!, deviceId);
+              await refreshHubs();
+            } else {
+              await api.deleteDevice(homeId!, deviceId);
             }
-            if (!homeId) return;
-            Alert.alert('Remove Device', 'Are you sure you want to remove this device?', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Remove',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    console.log('[DevicesScreen] Deleting device:', deviceId, 'from home:', homeId);
-                    const api = HubApi(getApiClient(async () => token));
-                    
-                    // Check if this is a hub - look in hubs array
-                    const isHub = hubs.some(h => h.id === deviceId);
-                    
-                    // Delete from backend
-                    if (isHub) {
-                      console.log('[DevicesScreen] Deleting hub:', deviceId);
-                      await api.deleteHub(homeId, deviceId);
-                    } else {
-                      console.log('[DevicesScreen] Deleting regular device:', deviceId);
-                      await api.deleteDevice(homeId, deviceId);
-                    }
-                    console.log('[DevicesScreen] Device deleted successfully from backend');
-                    
-                    // Close modal immediately
-                    setModalVisible(false);
-                    setSelectedDevice(null);
-                    
-                    // Force immediate refresh to clear cache
-                    console.log('[DevicesScreen] Force refreshing device list...');
-                    setRefreshing(true);
-                    await refresh();
-                    await refreshHubs();
-                    setRefreshing(false);
-                    console.log('[DevicesScreen] Device list refreshed and cache cleared');
-                  } catch (e: any) {
-                    console.error('[DevicesScreen] Failed to delete device:', e);
-                    console.error('[DevicesScreen] Error response:', e.response?.data);
-                    Alert.alert('Error', e.response?.data?.error || 'Failed to delete device');
-                    setRefreshing(false);
-                  }
-                },
-              },
-            ]);
-          }}
-          onUpdateName={async (deviceId, newName) => {
-            if (isDemoMode) return;
-            if (!homeId) return;
-            try {
-              console.log('[DevicesScreen] Updating device name:', deviceId, 'to:', newName);
-              const api = HubApi(getApiClient(async () => token));
-              
-              // Check if this is a hub
-              const isHub = hubs.some(h => h.id === deviceId);
-              
-              if (isHub) {
-                await api.updateHub(homeId, deviceId, { name: newName });
-                console.log('[DevicesScreen] Hub name updated successfully');
-              } else {
-                // Update regular device name (you'll need to add this API method)
-                console.log('[DevicesScreen] Regular device name update not yet implemented');
-              }
-              
-              // Refresh to show updated name
-              await Promise.all([refresh(), refreshHubs()]);
-            } catch (e: any) {
-              console.error('[DevicesScreen] Failed to update device name:', e);
-              Alert.alert('Error', e.response?.data?.error || 'Failed to update device name');
+
+            setModalVisible(false);
+            setSelectedDevice(null);
+            await refresh();
+          } catch (e: any) {
+            Alert.alert('Error', e.message || 'Failed to delete device');
+          }
+        }}
+        onUpdateName={async (deviceId, newName) => {
+          if (isDemoMode) return;
+          try {
+            const api = HubApi(getApiClient(async () => token));
+            const isHub = hubs.some(h => h.id === deviceId);
+
+            if (isHub) {
+              await api.updateHub(homeId!, deviceId, { name: newName });
+              await refreshHubs();
+            } else {
+              // Not implemented for regular devices yet? Using logic from previous file
+              console.log('Update name for regular device not implemented');
             }
-          }}
-          onUpdateRoom={async (deviceId, roomId) => {
-            console.log('[DevicesScreen] onUpdateRoom called:', { deviceId, roomId, isDemoMode, homeId });
-            if (isDemoMode) {
-              console.log('[DevicesScreen] Demo mode - skipping room update');
-              return;
+            await refresh();
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+        onUpdateRoom={async (deviceId, roomId) => {
+          if (isDemoMode) return;
+          try {
+            const api = HubApi(getApiClient(async () => token));
+            const isHub = hubs.some(h => h.id === deviceId);
+            if (isHub) {
+              await api.updateHub(homeId!, deviceId, { roomId });
+              await refreshHubs();
+            } else {
+              await api.updateDevice(homeId!, deviceId, { roomId });
             }
-            if (!homeId) {
-              console.log('[DevicesScreen] No homeId - cannot update room');
-              return;
-            }
-            try {
-              console.log('[DevicesScreen] Updating device room:', deviceId, 'to:', roomId);
-              console.log('[DevicesScreen] Available hubs:', hubs.map(h => ({ id: h.id, name: h.name })));
-              
-              // Check if this is a hub
-              const isHub = hubs.some(h => h.id === deviceId);
-              console.log('[DevicesScreen] Is hub?', isHub);
-              
-              if (isHub) {
-                console.log('[DevicesScreen] Updating hub room via updateHub API');
-                const hubApi = HubApi(getApiClient(async () => token));
-                const response = await hubApi.updateHub(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Hub API response:', response);
-                const updatedHub = response?.data?.data || response?.data;
-                console.log('[DevicesScreen] Hub room updated successfully:', updatedHub);
-                console.log('[DevicesScreen] Updated hub roomId:', updatedHub?.room_id || updatedHub?.roomId);
-                
-                // Verify the update was saved
-                if (updatedHub) {
-                  const savedRoomId = updatedHub.room_id || updatedHub.roomId;
-                  console.log('[DevicesScreen] Saved roomId in backend:', savedRoomId, 'Expected:', roomId);
-                  if (String(savedRoomId) !== String(roomId)) {
-                    console.warn('[DevicesScreen] WARNING: RoomId mismatch! Backend returned:', savedRoomId, 'but we sent:', roomId);
-                  }
-                }
-              } else {
-                console.log('[DevicesScreen] Updating regular device room via updateDevice API');
-                // Update regular device room
-                const hubApi = HubApi(getApiClient(async () => token));
-                const response = await hubApi.updateDevice(homeId, deviceId, { roomId });
-                console.log('[DevicesScreen] Device API response:', response);
-                const updatedDevice = response?.data?.data?.device || response?.data?.device || response?.data;
-                console.log('[DevicesScreen] Device room updated successfully:', updatedDevice);
-                console.log('[DevicesScreen] Updated device roomId:', updatedDevice?.room_id || updatedDevice?.roomId);
-                
-                // Verify the update was saved
-                if (updatedDevice) {
-                  const savedRoomId = updatedDevice.room_id || updatedDevice.roomId;
-                  console.log('[DevicesScreen] Saved roomId in backend:', savedRoomId, 'Expected:', roomId);
-                  if (String(savedRoomId) !== String(roomId)) {
-                    console.warn('[DevicesScreen] WARNING: RoomId mismatch! Backend returned:', savedRoomId, 'but we sent:', roomId);
-                  }
-                }
-              }
-              
-              // Force refresh both data sources immediately
-              console.log('[DevicesScreen] Refreshing data sources...');
-              await Promise.all([refresh(), refreshHubs()]);
-              console.log('[DevicesScreen] First refresh complete');
-              
-              // Wait and refresh again to ensure backend changes are reflected
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              await Promise.all([refresh(), refreshHubs()]);
-              console.log('[DevicesScreen] Second refresh complete - room assignment should be visible now');
-            } catch (e: any) {
-              console.error('[DevicesScreen] Failed to update device room:', e);
-              console.error('[DevicesScreen] Error message:', e.message);
-              console.error('[DevicesScreen] Error response:', e.response?.data);
-              console.error('[DevicesScreen] Error status:', e.response?.status);
-              console.error('[DevicesScreen] Full error:', JSON.stringify(e, null, 2));
-              Alert.alert('Error', e.response?.data?.error || e.message || 'Failed to update device room');
-            }
-          }}
-          rooms={rooms}
-        />
-      )}
+            await refresh();
+          } catch (e) {
+            console.error(e);
+          }
+        }}
+        rooms={rooms}
+      />
+
 
       {/* Add Device Modal */}
       <Modal
@@ -1047,7 +978,7 @@ export default function DevicesScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Device</Text>
             <Text style={styles.modalDescription}>Choose device type to add</Text>
-            
+
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
@@ -1069,7 +1000,7 @@ export default function DevicesScreen() {
               style={styles.modalButton}
               onPress={() => {
                 setShowAddModal(false);
-                Alert.alert('Coming Soon', 'Tuya and eWeLink device integration coming soon!');
+                navigation.navigate('TuyaIntegration', { homeId });
               }}
             >
               <View style={styles.modalButtonSecondary}>
@@ -1098,16 +1029,16 @@ export default function DevicesScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Vealive Device</Text>
             <Text style={styles.modalDescription}>Select your device type</Text>
-            
+
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
                 setShowVealiveModal(false);
-                navigation.navigate('BLEDeviceWizard', { 
+                navigation.navigate('BLEDeviceWizard', {
                   homeId: homeId,
                   hubId: hubs?.[0]?.id,
                   roomId: rooms?.[0]?.id, // Use first room as default
-                  deviceType: 'SmartMonitor' 
+                  deviceType: 'SmartMonitor'
                 });
               }}
             >
@@ -1154,7 +1085,7 @@ export default function DevicesScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -1162,104 +1093,108 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: colors.background, // Will be overridden by LinearGradient
+    },
+    safeArea: {
+      flex: 1,
     },
     header: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
+      marginBottom: spacing.sm,
     },
-    subHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
-      paddingBottom: spacing.md,
+    headerTitle: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: 'white',
+      letterSpacing: -0.5,
     },
-    subHeaderLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
-    },
-    statusCard: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.lg,
-      borderWidth: 1,
-    },
-    statusCardOnline: {
-      backgroundColor: colors.success + '15',
-      borderColor: colors.success + '30',
-    },
-    statusCardOffline: {
-      backgroundColor: colors.offline + '15',
-      borderColor: colors.offline + '30',
-      opacity: 0.6,
-    },
-    title: {
-      fontSize: 22,
-      fontWeight: '600',
-      color: colors.foreground,
-    },
-    subtitle: {
-      fontSize: fontSize.xs,
-      color: colors.mutedForeground,
-      marginTop: 2,
-    },
-    addButtonWrapper: {
-      borderRadius: borderRadius.md,
-      overflow: 'hidden',
-      ...shadows.neonPrimary,
+    headerSubtitle: {
+      fontSize: 13,
+      color: 'rgba(255, 255, 255, 0.6)',
+      marginTop: 4,
+      fontWeight: '500',
     },
     addButton: {
-      paddingHorizontal: spacing.lg,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      ...shadows.md,
+    },
+    addButtonGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
     },
     addButtonText: {
-      color: 'white',
-      fontSize: fontSize.sm,
+      color: '#fff',
+      fontSize: 14,
       fontWeight: '600',
     },
     heroContainer: {
       marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
-      height: 180,
-      borderRadius: borderRadius.xxl,
+      marginBottom: spacing.lg,
+      borderRadius: borderRadius.xl,
       overflow: 'hidden',
       ...shadows.lg,
     },
     heroImage: {
+      height: 160,
+      width: '100%',
+    },
+    heroOverlay: {
       flex: 1,
-      justifyContent: 'flex-end',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
     },
-    heroImageStyle: {
-      borderRadius: borderRadius.xxl,
+    heroContent: {
+      gap: spacing.xs,
     },
-    heroGradient: {
-      padding: spacing.md,
-      justifyContent: 'flex-end',
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      backgroundColor: 'rgba(77, 123, 254, 0.15)',
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.md,
+      borderWidth: 1,
+      borderColor: 'rgba(77, 123, 254, 0.3)',
+    },
+    heroBadgeText: {
+      color: '#4D7BFE',
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     heroTitle: {
-      fontSize: fontSize.lg,
+      fontSize: 24,
       fontWeight: '700',
-      color: 'white',
+      color: '#fff',
+      marginTop: spacing.xs,
+      letterSpacing: -0.5,
     },
     heroSubtitle: {
-      fontSize: fontSize.xs,
+      fontSize: 13,
       color: 'rgba(255, 255, 255, 0.7)',
+      fontWeight: '500',
       marginTop: 2,
     },
-    tabBarWrapper: {
+    tabBarContainer: {
+      paddingHorizontal: spacing.md,
+      marginBottom: spacing.lg,
+      backgroundColor: 'rgba(255, 255, 255, 0.05)', // Frosted glass background
+      borderRadius: borderRadius.xl,
       marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
-      borderRadius: borderRadius.lg,
-      padding: 4,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     tabBar: {
       backgroundColor: 'transparent',
@@ -1267,103 +1202,101 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       shadowOpacity: 0,
     },
     tab: {
-      padding: 0,
+      width: 'auto',
+      paddingHorizontal: spacing.lg,
+      minHeight: 48, // Increased for better touch target
     },
-    tabButton: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.md,
-      minWidth: 110,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    tabButtonInactive: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.muted,
-    },
-    tabText: {
-      fontSize: fontSize.xs,
-      color: colors.mutedForeground,
-      flexWrap: 'nowrap',
-      flexShrink: 1,
-      textAlign: 'center',
-    },
-    tabTextActive: {
-      color: 'white',
+    tabLabel: {
+      fontSize: 15,
+      color: 'rgba(255, 255, 255, 0.5)',
       fontWeight: '600',
-      flexWrap: 'nowrap',
-      textAlign: 'center',
-      fontSize: fontSize.xs,
+      textTransform: 'none',
+    },
+    tabLabelFocused: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 15,
+    },
+    tabIndicator: {
+      backgroundColor: '#4D7BFE', // Neon blue accent
+      height: 3,
+      borderRadius: 2,
     },
     tabContent: {
       flex: 1,
     },
     tabScrollContent: {
-      padding: spacing.lg,
+      paddingHorizontal: spacing.lg,
       paddingBottom: 100,
     },
     deviceSection: {
-      marginBottom: spacing.lg,
+      marginBottom: spacing.xl,
     },
     deviceSectionTitle: {
-      fontSize: fontSize.sm,
-      fontWeight: '600',
-      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '700',
+      color: 'rgba(255, 255, 255, 0.6)', // Improved contrast
       marginBottom: spacing.md,
+      marginLeft: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 1.5,
     },
     devicesGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: spacing.sm,
+      gap: spacing.md,
     },
     deviceTileWrapper: {
-      width: (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2,
+      width: (Dimensions.get('window').width - spacing.lg * 2 - spacing.md) / 2,
     },
     loadingContainer: {
-      padding: spacing.xl,
+      flex: 1,
+      justifyContent: 'center',
       alignItems: 'center',
-      gap: spacing.md,
+      marginTop: 100,
     },
     loadingText: {
-      color: colors.mutedForeground,
-      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.5)',
+      marginTop: spacing.md,
+      fontSize: 14,
     },
     emptyContainer: {
-      padding: spacing.xl,
+      flex: 1,
+      justifyContent: 'center',
       alignItems: 'center',
-      gap: spacing.md,
+      marginTop: 100,
     },
     emptyText: {
-      color: colors.mutedForeground,
-      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.3)',
+      fontSize: 14,
     },
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
       justifyContent: 'center',
       alignItems: 'center',
       padding: spacing.xl,
     },
     modalContent: {
-      backgroundColor: colors.card,
+      backgroundColor: '#1E1E1E', // Darker modal background
       borderRadius: borderRadius.xl,
       padding: spacing.xl,
       width: '100%',
       maxWidth: 400,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: 'rgba(255,255,255,0.1)',
+      ...shadows.lg,
     },
     modalTitle: {
-      fontSize: fontSize.xl,
+      fontSize: 20,
       fontWeight: '700',
-      color: colors.foreground,
+      color: 'white',
       marginBottom: spacing.sm,
       textAlign: 'center',
     },
     modalDescription: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      fontSize: 14,
+      color: 'rgba(255,255,255,0.6)',
       marginBottom: spacing.xl,
       textAlign: 'center',
     },
@@ -1379,21 +1312,19 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     },
     modalButtonText: {
       color: 'white',
-      fontSize: fontSize.md,
+      fontSize: 16,
       fontWeight: '600',
     },
     modalButtonSecondary: {
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
-      backgroundColor: colors.muted,
+      backgroundColor: 'rgba(255,255,255,0.1)',
       borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     modalButtonSecondaryText: {
-      color: colors.foreground,
-      fontSize: fontSize.md,
+      color: 'white',
+      fontSize: 16,
       fontWeight: '600',
     },
     modalCancelButton: {
@@ -1401,8 +1332,68 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       marginTop: spacing.sm,
     },
     modalCancelText: {
-      color: colors.mutedForeground,
-      fontSize: fontSize.md,
+      color: 'rgba(255,255,255,0.5)',
+      fontSize: 16,
       textAlign: 'center',
+    },
+    // Missing properties from previous code that might be referenced (legacy)
+    subHeader: { display: 'none' },
+    subHeaderLeft: { display: 'none' },
+    addButtonWrapper: { display: 'none' },
+    addButton: { display: 'none' },
+    addButtonText: { display: 'none' },
+    heroContainer: { display: 'none' },
+    heroImage: { display: 'none' },
+    heroImageStyle: { display: 'none' },
+    heroGradient: { display: 'none' },
+    heroTitle: { display: 'none' },
+    heroSubtitle: { display: 'none' },
+    tabBarWrapper: { display: 'none' },
+    tabButton: { display: 'none' },
+    tabButtonInactive: { display: 'none' },
+    tabText: { display: 'none' },
+    tabTextActive: { display: 'none' },
+    offlineBanner: {
+      backgroundColor: colors.destructive,
+      padding: spacing.xs,
+      alignItems: 'center',
+    },
+    offlineBannerText: {
+      color: 'white',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    vealiveModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    vealiveModalContent: {
+      width: '80%',
+      padding: spacing.xl,
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.xl,
+      alignItems: 'center',
+    },
+    closeButton: {
+      position: 'absolute',
+      top: spacing.md,
+      right: spacing.md,
+      padding: spacing.xs,
+    },
+    closeButtonText: {
+      color: colors.mutedForeground,
+      fontSize: 20,
+    },
+    vealiveTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    vealiveSubtitle: {
+      fontSize: 16,
+      color: colors.mutedForeground,
     },
   });

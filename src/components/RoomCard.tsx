@@ -59,7 +59,7 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
   // Alert badge component for top-left
   const renderAlertBadge = () => {
     if (!isAlert) return null;
-    
+
     return (
       <View style={styles.alertBadge}>
         <MaterialCommunityIcons name={getAlertIcon()} size={14} color="#fff" />
@@ -75,20 +75,20 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
       {showTempHum && (
         <View style={styles.stats}>
           <View style={[styles.stat, alertReasons.includes('Temp') && styles.statAlert]}>
-            <MaterialCommunityIcons 
-              name={alertReasons.includes('Temp') ? 'thermometer-alert' : 'thermometer'} 
-              size={14} 
-              color={alertReasons.includes('Temp') ? '#FF6B6B' : colors.primary} 
+            <MaterialCommunityIcons
+              name={alertReasons.includes('Temp') ? 'thermometer-alert' : 'thermometer'}
+              size={14}
+              color={alertReasons.includes('Temp') ? '#FF6B6B' : colors.primary}
             />
             <Text style={[styles.statText, alertReasons.includes('Temp') && styles.statTextAlert]}>
               {temperatureText}
             </Text>
           </View>
           <View style={[styles.stat, alertReasons.includes('Humidity') && styles.statAlert]}>
-            <MaterialCommunityIcons 
-              name={alertReasons.includes('Humidity') ? 'water-alert' : 'water-percent'} 
-              size={14} 
-              color={alertReasons.includes('Humidity') ? '#FF6B6B' : colors.primary} 
+            <MaterialCommunityIcons
+              name={alertReasons.includes('Humidity') ? 'water-alert' : 'water-percent'}
+              size={14}
+              color={alertReasons.includes('Humidity') ? '#FF6B6B' : colors.primary}
             />
             <Text style={[styles.statText, alertReasons.includes('Humidity') && styles.statTextAlert]}>
               {humidityText}
@@ -126,7 +126,7 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
     <TouchableOpacity
       style={styles.container}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
       {room.image ? (
         <ImageBackground
@@ -136,7 +136,7 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
         >
           {renderAlertBadge()}
           <LinearGradient
-            colors={['transparent', 'rgba(19, 21, 42, 0.9)']}
+            colors={['rgba(26, 15, 46, 0.3)', 'rgba(6, 8, 22, 0.95)']} // Updated for luxurious dark gradient
             style={styles.gradient}
           >
             <View style={styles.content}>
@@ -155,7 +155,7 @@ export default function RoomCard({ room, onPress }: RoomCardProps) {
         <View style={[styles.image, styles.imageStyle, { backgroundColor: colors.card }]}>
           {renderAlertBadge()}
           <LinearGradient
-            colors={['rgba(19, 21, 42, 0.4)', 'rgba(19, 21, 42, 0.9)']}
+            colors={['rgba(26, 15, 46, 0.6)', 'rgba(6, 8, 22, 0.95)']}
             style={styles.gradient}
           >
             <View style={styles.content}>
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   image: {
-    height: 160,
+    height: 180, // Increased for better prominence
     width: '100%',
     position: 'relative',
   },
@@ -189,27 +189,27 @@ const styles = StyleSheet.create({
   },
   alertBadge: {
     position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
+    top: spacing.md,
+    left: spacing.md,
     backgroundColor: '#FF6B6B',
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     zIndex: 10,
     shadowColor: '#FF6B6B',
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
+    elevation: 6,
   },
   alertBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#fff',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   gradient: {
     flex: 1,
@@ -217,8 +217,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xxl,
   },
   content: {
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: spacing.lg, // Increased padding for better spacing
+    gap: spacing.sm + 2,
   },
   header: {
     flexDirection: 'row',
@@ -226,44 +226,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   name: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20, // Slightly larger for premium feel
+    fontWeight: '700',
     color: 'white',
+    letterSpacing: 0.3,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Frosted glass
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
     gap: 4,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '600',
     color: 'white',
   },
   stats: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm + 2,
     flexWrap: 'wrap',
   },
   stat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)', // Frosted glass effect
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.md,
   },
   statAlert: {
-    backgroundColor: 'rgba(255, 107, 107, 0.25)',
+    backgroundColor: 'rgba(255, 107, 107, 0.3)',
   },
   statText: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '600',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '700',
   },
   statTextAlert: {
     color: '#FF6B6B',
@@ -271,35 +273,35 @@ const styles = StyleSheet.create({
   airStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.sm + 2,
     flexWrap: 'wrap',
   },
   airAlertChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 107, 107, 0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(255, 107, 107, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.md,
   },
   airAlertText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#FF6B6B',
   },
   airOkChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    backgroundColor: 'rgba(76, 175, 80, 0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: borderRadius.md,
   },
   airOkText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#4CAF50',
   },
 });

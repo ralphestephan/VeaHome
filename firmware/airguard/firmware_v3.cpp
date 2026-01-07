@@ -14,6 +14,17 @@
 // SUBSCRIBE (App -> ESP):
 //   vealive/smartmonitor/1/command/buzzer      - {"state":"ON"} or {"state":"OFF"}
 //   vealive/smartmonitor/1/command/thresholds  - Set new thresholds from app
+//   vealive/smartmonitor/1/command/ac          - {"power":"ON/OFF", "temp":24, "mode":"COOL/HEAT/AUTO/FAN"}
+//   vealive/smartmonitor/1/command/dehumidifier - {"power":"ON/OFF", "level":1-5}
+//   vealive/smartmonitor/1/command/shutters    - {"action":"OPEN/CLOSE/STOP"}
+//   vealive/smartmonitor/1/command/learn/ir    - {"device":"ac", "action":"power_on"}
+//   vealive/smartmonitor/1/command/learn/rf    - {"device":"dehumidifier", "action":"power_on"}
+//   vealive/smartmonitor/1/command/getcodes    - Get all learned codes
+//
+// PUBLISH (ESP -> App):
+//   vealive/smartmonitor/1/learned/ir          - IR code learned confirmation
+//   vealive/smartmonitor/1/learned/rf          - RF code learned confirmation
+//   vealive/smartmonitor/1/codes               - All learned codes
 //
 // === TELEMETRY JSON FORMAT ===
 // {
@@ -56,6 +67,11 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <time.h>
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
+#include <IRrecv.h>
+#include <IRutils.h>
 
 // -------------------------------------------------------------
 // Pins
@@ -74,10 +90,16 @@
 #define RESET_BUTTON_PIN     17
 #define BUZZER_BUTTON_PIN    16
 
+// IR/RF Pins
+#define IR_PIN               4   // IR LED transmitter
+#define IR_RECV_PIN          35  // IR receiver (must be ADC capable)
+#define RF_PIN               5   // 433MHz RF transmitter
+#define RF_RECV_PIN          36  // RF receiver (must be ADC capable)
+
 // -------------------------------------------------------------
 // Device / MQTT
 // -------------------------------------------------------------
-static const int   DEVICE_ID = 1;
+int DEVICE_ID = 1;  // Will be loaded from preferences or set via BLE
 static const char* MQTT_HOST = "63.34.243.171";
 static const int   MQTT_PORT = 1883;
 
@@ -87,6 +109,12 @@ String topicStatus;
 String topicThresholds;
 String topicCmdBuzzer;
 String topicCmdThresholds;
+String topicCmdAC;
+String topicCmdDehumidifier;
+String topicCmdShutters;
+String topicCmdLearnIR;
+String topicCmdLearnRF;
+String topicCmdGetCodes;
 String mqttClientId;
 
 // BLE UUIDs (must match mobile app)
@@ -165,22 +193,25 @@ static const uint32_t TELEMETRY_INTERVAL_MS  = 2000;
 static const uint32_t THRESHOLD_INTERVAL_MS  = 60000;
 
 // -------------------------------------------------------------
-// UI Constants (LANDSCAPE 320x240)
+// UI Constants (PORTRAIT 240x320 after rotation 2)
 // -------------------------------------------------------------
-static const int W = 320;
-static const int H = 240;
+static const int W = 240;  // Width after rotation 2
+static const int H = 320;  // Height after rotation 2
 
-static const int TOP_H   = 28;
-static const int HEAD_H  = 50;
+static const int TOP_H   = 0;  // Top bar removed
+static const int HEAD_H  = 50;  // Reduced since date removed
 static const int FOOT_H  = 20;
 
-static const int CARDS_Y = TOP_H + HEAD_H + 6;
+static const int CARDS_Y = TOP_H + HEAD_H + 8;  // More spacing
 static const int CARDS_H = H - FOOT_H - CARDS_Y - 6;
 
 static const int MARGIN_X = 8;
+static const int MARGIN_Y = 6;
 static const int GAP_X    = 6;
-static const int CARD_W   = (W - 2*MARGIN_X - 3*GAP_X) / 4;
-static const int CARD_H   = CARDS_H;
+static const int GAP_Y    = 6;
+// 2x2 grid: 2 columns, 2 rows
+static const int CARD_W   = (W - 2*MARGIN_X - GAP_X) / 2;
+static const int CARD_H   = (CARDS_H - GAP_Y) / 2;
 
 // Colors
 static const uint16_t COL_BG     = 0x0841;
@@ -203,6 +234,34 @@ int lastMq2  = INT32_MIN;
 bool lastAlertState = false;
 bool lastMuteState  = true;
 
+// Device States (AC, Dehumidifier, Shutters)
+struct DeviceState {
+  bool power;
+  int temp;        // AC only
+  String mode;     // AC only: "COOL", "HEAT", "AUTO", "FAN"
+  int level;       // Dehumidifier only: 1-5
+  String action;   // Shutters only: "OPEN", "CLOSE", "STOP"
+  String status;   // Display status string
+};
+
+DeviceState acState = {false, 24, "COOL", 0, "", "OFF"};
+DeviceState dehumidifierState = {false, 0, "", 3, "", "OFF"};
+DeviceState shuttersState = {false, 0, "", 0, "STOP", "STOP"};
+
+// IR Receiver for learning
+IRrecv irReceiver(IR_RECV_PIN);
+decode_results irResults;
+bool learningIR = false;
+String learningIRDevice = "";
+String learningIRAction = "";
+
+// RF Receiver state for learning
+bool learningRF = false;
+String learningRFDevice = "";
+String learningRFAction = "";
+unsigned long rfCodeStart = 0;
+uint32_t learnedRFCode = 0;
+
 // -------------------------------------------------------------
 // Forward Declarations
 // -------------------------------------------------------------
@@ -223,6 +282,7 @@ void drawHeader(const String& timeStr, bool alert);
 void drawCards(int temp, int hum, int dust, int mq2);
 void drawFooter();
 void drawMuteIcon(bool muted);
+void drawSensorIcon(int x, int y, int sensorIndex);
 void setLED(const String& status);
 
 // BLE Callbacks
@@ -361,6 +421,12 @@ void setup() {
   topicThresholds   = "vealive/smartmonitor/" + devId + "/thresholds";
   topicCmdBuzzer    = "vealive/smartmonitor/" + devId + "/command/buzzer";
   topicCmdThresholds= "vealive/smartmonitor/" + devId + "/command/thresholds";
+  topicCmdAC        = "vealive/smartmonitor/" + devId + "/command/ac";
+  topicCmdDehumidifier = "vealive/smartmonitor/" + devId + "/command/dehumidifier";
+  topicCmdShutters  = "vealive/smartmonitor/" + devId + "/command/shutters";
+  topicCmdLearnIR   = "vealive/smartmonitor/" + devId + "/command/learn/ir";
+  topicCmdLearnRF   = "vealive/smartmonitor/" + devId + "/command/learn/rf";
+  topicCmdGetCodes  = "vealive/smartmonitor/" + devId + "/command/getcodes";
 
   // Unique client ID
   uint64_t mac = ESP.getEfuseMac();
@@ -374,7 +440,7 @@ void setup() {
 
   // TFT init
   tft.init();
-  tft.setRotation(1);
+  tft.setRotation(2); // Rotated 90 degrees clockwise from rotation 1
   tft.fillScreen(COL_BG);
 
   // Sensors
@@ -391,6 +457,17 @@ void setup() {
   Serial2.end();
   pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUZZER_BUTTON_PIN, INPUT_PULLUP);
+
+  // IR/RF setup
+  static IRsend irSender(IR_PIN);
+  irSender.begin();
+  irReceiver.enableIRIn();  // Start IR receiver for learning
+  pinMode(RF_PIN, OUTPUT);
+  pinMode(RF_RECV_PIN, INPUT);
+  digitalWrite(RF_PIN, LOW);
+  
+  // Load learned codes
+  loadLearnedCodes();
 
   // Preferences
   prefs.begin("monitor", false);
@@ -558,6 +635,81 @@ void loop() {
     mqtt.loop();
   }
 
+  // Check for IR signals (learning mode)
+  if (learningIR && irReceiver.decode(&irResults)) {
+    uint32_t code = irResults.value;
+    int protocol = irResults.decode_type;
+    
+    Serial.printf("[IR LEARN] Received code: 0x%08X, protocol: %d\n", code, protocol);
+    
+    // Save learned code
+    saveLearnedCode(learningIRDevice, learningIRAction, code, protocol, true);
+    
+    // Publish confirmation
+    if (mqtt.connected()) {
+      StaticJsonDocument<256> doc;
+      doc["device"] = learningIRDevice;
+      doc["action"] = learningIRAction;
+      doc["code"] = String(code, HEX);
+      doc["protocol"] = protocol;
+      doc["success"] = true;
+      
+      char buf[256];
+      serializeJson(doc, buf);
+      String topic = "vealive/smartmonitor/" + String(DEVICE_ID) + "/learned/ir";
+      mqtt.publish(topic.c_str(), buf);
+    }
+    
+    learningIR = false;
+    learningIRDevice = "";
+    learningIRAction = "";
+    irReceiver.resume();
+  } else if (learningIR) {
+    irReceiver.resume(); // Continue listening
+  }
+
+  // Check for RF signals (learning mode)
+  if (learningRF) {
+    int rfValue = analogRead(RF_RECV_PIN);
+    static int lastRFValue = 0;
+    static unsigned long lastRFChange = 0;
+    
+    if (rfValue != lastRFValue) {
+      lastRFChange = millis();
+      lastRFValue = rfValue;
+    }
+    
+    // If signal stable for 100ms, consider it learned
+    if (millis() - lastRFChange > 100 && rfValue > 100) {
+      // Simple RF code extraction
+      learnedRFCode = (uint32_t)rfValue;
+      learnedRFCode = (learnedRFCode << 16) | (millis() & 0xFFFF);
+      
+      Serial.printf("[RF LEARN] Received code: 0x%08X\n", learnedRFCode);
+      
+      // Save learned code
+      saveLearnedCode(learningRFDevice, learningRFAction, learnedRFCode, 32, false);
+      
+      // Publish confirmation
+      if (mqtt.connected()) {
+        StaticJsonDocument<256> doc;
+        doc["device"] = learningRFDevice;
+        doc["action"] = learningRFAction;
+        doc["code"] = String(learnedRFCode, HEX);
+        doc["success"] = true;
+        
+        char buf[256];
+        serializeJson(doc, buf);
+        String topic = "vealive/smartmonitor/" + String(DEVICE_ID) + "/learned/rf";
+        mqtt.publish(topic.c_str(), buf);
+      }
+      
+      learningRF = false;
+      learningRFDevice = "";
+      learningRFAction = "";
+    }
+  }
+
   // Update sensors + UI
   static unsigned long lastUpdate = 0;
   if (millis() - lastUpdate >= 500) {
@@ -682,6 +834,7 @@ bool loadPrefs() {
   mq2Threshold  = prefs.getInt("mq2High", 60);
   buzzerEnabled = prefs.getBool("buzzer", true);
   timezoneOffset= prefs.getInt("tz", 10800);
+  DEVICE_ID     = prefs.getInt("deviceId", 1);  // Load device ID
 
   return ssid.length() > 0;
 }
@@ -697,6 +850,7 @@ void savePrefs() {
   prefs.putInt("mq2High", mq2Threshold);
   prefs.putBool("buzzer", buzzerEnabled);
   prefs.putInt("tz", timezoneOffset);
+  prefs.putInt("deviceId", DEVICE_ID);
 }
 
 // -------------------------------------------------------------
@@ -738,6 +892,165 @@ void mqttCallback(char* topic, byte* payload, unsigned int len) {
         forceTelemetryPublish = true;
       }
     }
+    return;
+  }
+
+  // ===== AC COMMAND =====
+  if (t == topicCmdAC) {
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, msg);
+    
+    if (!err) {
+      if (doc.containsKey("power")) {
+        String powerStr = doc["power"].as<String>();
+        powerStr.toUpperCase();
+        acState.power = (powerStr == "ON" || powerStr == "1" || powerStr == "TRUE");
+      }
+      
+      if (doc.containsKey("temp")) {
+        acState.temp = doc["temp"].as<int>();
+        if (acState.temp < 16) acState.temp = 16;
+        if (acState.temp > 30) acState.temp = 30;
+      }
+      
+      if (doc.containsKey("mode")) {
+        acState.mode = doc["mode"].as<String>();
+        acState.mode.toUpperCase();
+      }
+      
+      // Update status string
+      if (acState.power) {
+        acState.status = acState.mode + " " + String(acState.temp) + "C";
+      } else {
+        acState.status = "OFF";
+      }
+      
+      // Send IR command
+      if (acState.power) {
+        uint32_t irCode = 0x00000000;
+        if (acState.mode == "COOL") irCode |= 0x01000000;
+        else if (acState.mode == "HEAT") irCode |= 0x02000000;
+        else if (acState.mode == "AUTO") irCode |= 0x03000000;
+        else if (acState.mode == "FAN") irCode |= 0x04000000;
+        
+        irCode |= (acState.temp - 16) << 16;
+        irCode |= 0x80000000;
+        
+        sendIRCommand(irCode, 0);
+        Serial.printf("[AC] Power: ON, Mode: %s, Temp: %dC\n", acState.mode.c_str(), acState.temp);
+      } else {
+        sendIRCommand(0x80000000, 0);
+        Serial.println("[AC] Power: OFF");
+      }
+      
+      drawDeviceControls();
+      forceTelemetryPublish = true;
+    }
+    return;
+  }
+
+  // ===== DEHUMIDIFIER COMMAND =====
+  if (t == topicCmdDehumidifier) {
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, msg);
+    
+    if (!err) {
+      if (doc.containsKey("power")) {
+        String powerStr = doc["power"].as<String>();
+        powerStr.toUpperCase();
+        dehumidifierState.power = (powerStr == "ON" || powerStr == "1" || powerStr == "TRUE");
+      }
+      
+      if (doc.containsKey("level")) {
+        dehumidifierState.level = doc["level"].as<int>();
+        if (dehumidifierState.level < 1) dehumidifierState.level = 1;
+        if (dehumidifierState.level > 5) dehumidifierState.level = 5;
+      }
+      
+      if (dehumidifierState.power) {
+        dehumidifierState.status = "L" + String(dehumidifierState.level);
+      } else {
+        dehumidifierState.status = "OFF";
+      }
+      
+      if (dehumidifierState.power) {
+        uint32_t rfCode = 0x10000000;
+        rfCode |= 0x01000000;
+        rfCode |= (dehumidifierState.level & 0x0F) << 20;
+        sendRFCommand(rfCode, 32);
+        Serial.printf("[DEHUMIDIFIER] Power: ON, Level: %d\n", dehumidifierState.level);
+      } else {
+        uint32_t rfCode = 0x10000000;
+        sendRFCommand(rfCode, 32);
+        Serial.println("[DEHUMIDIFIER] Power: OFF");
+      }
+      
+      drawDeviceControls();
+      forceTelemetryPublish = true;
+    }
+    return;
+  }
+
+  // ===== SHUTTERS COMMAND =====
+  if (t == topicCmdShutters) {
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, msg);
+    
+    if (!err) {
+      if (doc.containsKey("action")) {
+        shuttersState.action = doc["action"].as<String>();
+        shuttersState.action.toUpperCase();
+        shuttersState.status = shuttersState.action;
+        
+        uint32_t rfCode = 0x20000000;
+        
+        if (shuttersState.action == "OPEN") {
+          rfCode |= 0x01000000;
+        } else if (shuttersState.action == "CLOSE") {
+          rfCode |= 0x02000000;
+        } else if (shuttersState.action == "STOP") {
+          rfCode |= 0x03000000;
+        }
+        
+        sendRFCommand(rfCode, 32);
+        Serial.printf("[SHUTTERS] Action: %s\n", shuttersState.action.c_str());
+      }
+      
+      drawDeviceControls();
+      forceTelemetryPublish = true;
+    }
+    return;
+  }
+
+  // ===== LEARN IR COMMAND =====
+  if (t == topicCmdLearnIR) {
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, msg);
+    
+    if (!err && doc.containsKey("device") && doc.containsKey("action")) {
+      String device = doc["device"].as<String>();
+      String action = doc["action"].as<String>();
+      learnIRCode(device, action);
+    }
+    return;
+  }
+
+  // ===== LEARN RF COMMAND =====
+  if (t == topicCmdLearnRF) {
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, msg);
+    
+    if (!err && doc.containsKey("device") && doc.containsKey("action")) {
+      String device = doc["device"].as<String>();
+      String action = doc["action"].as<String>();
+      learnRFCode(device, action);
+    }
+    return;
+  }
+
+  // ===== GET CODES COMMAND =====
+  if (t == topicCmdGetCodes) {
+    publishLearnedCodes();
     return;
   }
 
@@ -801,9 +1114,14 @@ void connectMQTT() {
     // Subscribe to command topics
     mqtt.subscribe(topicCmdBuzzer.c_str(), 1);
     mqtt.subscribe(topicCmdThresholds.c_str(), 1);
+    mqtt.subscribe(topicCmdAC.c_str(), 1);
+    mqtt.subscribe(topicCmdDehumidifier.c_str(), 1);
+    mqtt.subscribe(topicCmdShutters.c_str(), 1);
+    mqtt.subscribe(topicCmdLearnIR.c_str(), 1);
+    mqtt.subscribe(topicCmdLearnRF.c_str(), 1);
+    mqtt.subscribe(topicCmdGetCodes.c_str(), 1);
 
-    Serial.printf("[MQTT] Subscribed:\n  - %s\n  - %s\n", 
-                  topicCmdBuzzer.c_str(), topicCmdThresholds.c_str());
+    Serial.printf("[MQTT] Subscribed to command topics\n");
 
     // Publish current state
     forceThresholdPublish = true;
@@ -1021,23 +1339,31 @@ void updateSensorsAndUI() {
 // -------------------------------------------------------------
 void drawFullUI() {
   tft.fillScreen(COL_BG);
-  drawTopBar();
+  // Top bar removed
   
-  // Draw card frames
-  for (int i = 0; i < 4; i++) {
-    int x = MARGIN_X + i * (CARD_W + GAP_X);
-    tft.fillRoundRect(x, CARDS_Y, CARD_W, CARD_H, 8, COL_CARD);
-    tft.drawRoundRect(x, CARDS_Y, CARD_W, CARD_H, 8, COL_EDGE);
-  }
-
-  // Card labels
+  // Draw card frames in 2x2 grid
   const char* labels[] = {"TEMP", "HUM", "DUST", "GAS"};
-  const char* units[]  = {"C", "%", "ug", "ppm"};
+  const char* units[]  = {"C", "%", "ug/m3", "ppm"};
   
-  for (int i = 0; i < 4; i++) {
-    int x = MARGIN_X + i * (CARD_W + GAP_X);
-    drawCentered(x + CARD_W/2, CARDS_Y + CARD_H - 10, labels[i], 1, COL_MUTED, COL_CARD);
-    drawRight(x + CARD_W - 4, CARDS_Y + 4, units[i], 1, COL_MUTED, COL_CARD);
+  for (int row = 0; row < 2; row++) {
+    for (int col = 0; col < 2; col++) {
+      int i = row * 2 + col;  // Index: 0=TEMP, 1=HUM, 2=DUST, 3=GAS
+      int x = MARGIN_X + col * (CARD_W + GAP_X);
+      int y = CARDS_Y + row * (CARD_H + GAP_Y);
+      
+      tft.fillRoundRect(x, y, CARD_W, CARD_H, 8, COL_CARD);
+      tft.drawRoundRect(x, y, CARD_W, CARD_H, 8, COL_EDGE);
+      
+      // Draw icon at top of card - prominent and visible
+      int iconX = x + CARD_W/2;
+      int iconY = y + 16;  // Positioned at top of card
+      drawSensorIcon(iconX, iconY, i);
+      
+      // Card labels
+      drawCentered(x + CARD_W/2, y + CARD_H - 10, labels[i], 1, COL_MUTED, COL_CARD);
+      // Draw unit - no degree symbol for temperature
+      drawRight(x + CARD_W - 4, y + 4, units[i], 1, COL_MUTED, COL_CARD);
+    }
   }
 
   // Footer bar
@@ -1054,21 +1380,18 @@ void drawFullUI() {
 }
 
 void drawTopBar() {
-  tft.fillRect(0, 0, W, TOP_H, COL_TOPBAR);
-  tft.drawFastHLine(0, TOP_H - 1, W, COL_EDGE);
-  
-  drawLeft(8, 6, "Vealive360", 2, COL_TEXT, COL_TOPBAR);
-  drawRight(W - 8, 6, "ID:" + String(DEVICE_ID), 2, COL_TEXT, COL_TOPBAR);
+  // Top bar removed - function kept for compatibility but does nothing
 }
 
 void drawHeader(const String& timeStr, bool alert) {
   bool timeChanged = (timeStr != lastTimeStr);
   bool alertChanged = (alert != lastAlertState);
 
+  // Date removed - no longer needed
   if (!timeChanged && !alertChanged) return;
 
-  // Clear header area
-  tft.fillRect(0, TOP_H, W, HEAD_H, COL_BG);
+  // Clear header area (start from top to avoid cutoff)
+  tft.fillRect(0, 0, W, HEAD_H, COL_BG);
 
   if (apModeActive) {
     // Setup mode display
@@ -1078,26 +1401,29 @@ void drawHeader(const String& timeStr, bool alert) {
     drawLeft(20, TOP_H + 10, "SETUP MODE", 2, COL_WARN, COL_CARD);
     drawLeft(20, TOP_H + 28, "WiFi: SmartMonitor_Setup", 2, COL_MUTED, COL_CARD);
   } else {
-    // Time display
+    // Status dot - at top left
+    uint16_t dotColor = alert ? COL_ALERT : COL_OK;
+    tft.fillCircle(12, 20, 5, dotColor);
+    
+    // Time display - centered, lowered a bit
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(COL_TEXT, COL_BG);
-    tft.drawString(timeStr, W/2, TOP_H + HEAD_H/2, 6);
-
-    // Status pill
-    int pillW = 90;
-    int pillH = 20;
-    int pillX = W - pillW - 10;
-    int pillY = TOP_H + HEAD_H - pillH - 8;
-
-    uint16_t pillBg = alert ? COL_ALERT : COL_OK;
-    tft.fillRoundRect(pillX, pillY, pillW, pillH, 10, pillBg);
+    tft.drawString(timeStr, W/2, 28, 6);
     
-    String statusText = alert ? "ALERT" : "OK";
-    drawCentered(pillX + pillW/2, pillY + pillH/2, statusText, 2, COL_TEXT, pillBg);
+    // Date removed - cleaner display
 
-    // Status dot
-    uint16_t dotColor = alert ? COL_ALERT : COL_OK;
-    tft.fillCircle(15, TOP_H + HEAD_H/2, 6, dotColor);
+    // Alert card - only show when alerting, one line expanded (lowered)
+    if (alert) {
+      int alertW = W - 20;
+      int alertH = 28;
+      int alertX = 10;
+      int alertY = TOP_H + HEAD_H - alertH + 2;  // Lowered by 6 pixels
+      
+      tft.fillRoundRect(alertX, alertY, alertW, alertH, 8, COL_ALERT);
+      tft.drawRoundRect(alertX, alertY, alertW, alertH, 8, COL_EDGE);
+      
+      drawCentered(alertX + alertW/2, alertY + alertH/2, "ALERT", 2, COL_TEXT, COL_ALERT);
+    }
   }
 
   lastTimeStr = timeStr;
@@ -1109,24 +1435,44 @@ void drawCards(int temp, int hum, int dust, int mq2) {
   int* lastVals[] = {&lastTemp, &lastHum, &lastDust, &lastMq2};
   bool alerts[] = {alertTemp, alertHum, alertDust, alertMq2};
 
-  for (int i = 0; i < 4; i++) {
-    if (values[i] == *lastVals[i]) continue;
+  for (int row = 0; row < 2; row++) {
+    for (int col = 0; col < 2; col++) {
+      int i = row * 2 + col;  // Index: 0=TEMP, 1=HUM, 2=DUST, 3=GAS
+      if (values[i] == *lastVals[i]) continue;
 
-    int x = MARGIN_X + i * (CARD_W + GAP_X);
-    
-    // Clear value area
-    tft.fillRect(x + 2, CARDS_Y + 16, CARD_W - 4, CARD_H - 34, COL_CARD);
+      int x = MARGIN_X + col * (CARD_W + GAP_X);
+      int y = CARDS_Y + row * (CARD_H + GAP_Y);
+      
+      // Clear only the number area (below icons) - icons are at y+16, so clear starts at y+32
+      // But don't clear the label area at bottom
+      tft.fillRect(x + 2, y + 32, CARD_W - 4, CARD_H - 50, COL_CARD);
 
-    // Draw value with color based on alert
-    uint16_t fg = alerts[i] ? COL_WARN : COL_TEXT;
-    
-    String valStr = String(values[i]);
-    int font = 4;
-    if (valStr.length() >= 4) font = 2;
+      // Redraw icon to ensure it's visible (icons might get partially cleared)
+      int iconX = x + CARD_W/2;
+      int iconY = y + 16;
+      drawSensorIcon(iconX, iconY, i);
 
-    drawCentered(x + CARD_W/2, CARDS_Y + CARD_H/2, valStr, font, fg, COL_CARD);
+      // Draw value with color based on alert - make numbers bigger
+      uint16_t fg = alerts[i] ? COL_WARN : COL_TEXT;
+      
+      String valStr = String(values[i]);
+      // Use larger font - font 7 for 1-2 digits, font 4 for 3 digits, font 2 for 4+
+      int font = 7;  // Default to largest
+      if (valStr.length() >= 3) font = 4;
+      if (valStr.length() >= 4) font = 2;
 
-    *lastVals[i] = values[i];
+      drawCentered(x + CARD_W/2, y + CARD_H/2 + 5, valStr, font, fg, COL_CARD);
+      
+      // Redraw label to ensure it's visible (overlay on card background)
+      const char* labels[] = {"TEMP", "HUM", "DUST", "GAS"};
+      drawCentered(x + CARD_W/2, y + CARD_H - 10, labels[i], 1, COL_MUTED, COL_CARD);
+      
+      // Redraw unit - no degree symbol for temperature
+      const char* units[]  = {"C", "%", "ug/m3", "ppm"};
+      drawRight(x + CARD_W - 4, y + 4, units[i], 1, COL_MUTED, COL_CARD);
+
+      *lastVals[i] = values[i];
+    }
   }
 }
 
@@ -1151,8 +1497,8 @@ void drawFooter() {
 
   if (footerStr == lastFooterStr && signalBars == lastSignalBars) return;
 
-  // Clear footer area (except mute icon)
-  tft.fillRect(0, H - FOOT_H + 1, W - 40, FOOT_H - 1, COL_BG);
+  // Clear footer area (except mute icon and ID)
+  tft.fillRect(0, H - FOOT_H + 1, W - 80, FOOT_H - 1, COL_BG);
   
   // Draw SSID
   drawLeft(8, H - FOOT_H + 4, footerStr, 2, COL_MUTED, COL_BG);
@@ -1171,61 +1517,108 @@ void drawFooter() {
     }
   }
   
+  // Draw Device ID before mute icon
+  drawRight(W - 32, H - FOOT_H + 4, "ID:" + String(DEVICE_ID), 2, COL_MUTED, COL_BG);
+  
   lastFooterStr = footerStr;
   lastSignalBars = signalBars;
 }
 
 void drawMuteIcon(bool muted) {
-  int ix = W - 28;
-  int iy = H - FOOT_H + 2;
-  int iw = 24;
-  int ih = FOOT_H - 4;
+  // Clear mute icon area (bottom-right corner, avoiding footer line)
+  int footerY = H - FOOT_H;  // Footer starts at y=300
+  int iconX = W - 12;  // Position in right corner, away from edge
+  tft.fillRect(iconX - 12, footerY + 1, 15, FOOT_H - 2, COL_BG);  // +1 and -2 to avoid footer line
 
-  // Clear entire area thoroughly
-  tft.fillRect(ix - 2, iy - 1, iw + 4, ih + 2, COL_BG);
-
-  // Only show icon when muted
+  // Only show icon when muted - smaller version, positioned in corner
   if (muted) {
-    // Draw simple muted speaker icon - clean and minimal
-    uint16_t speakerCol = COL_WARN;
-    uint16_t xCol = COL_ALERT;
+    // Smaller mute icon: speaker with X through it
+    // Footer is 20px tall, center icon vertically (avoiding top line)
+    int iconY = footerY + 10;  // Center of footer (y=310)
     
-    // Calculate center position
-    int centerY = iy + (ih / 2);
-    
-    // Speaker rectangle (small box)
-    int boxW = 4;
-    int boxH = 6;
-    int boxX = ix + 4;
-    int boxY = centerY - (boxH / 2);
-    tft.fillRect(boxX, boxY, boxW, boxH, speakerCol);
-    
-    // Speaker cone (triangle pointing right)
-    int coneLeft = boxX + boxW;
-    int coneRight = coneLeft + 6;
-    int coneTop = centerY - 4;
-    int coneBottom = centerY + 4;
-    tft.fillTriangle(
-      coneLeft, centerY,        // left point (connects to box)
-      coneRight, coneTop,        // top right point
-      coneRight, coneBottom,     // bottom right point
-      speakerCol
-    );
-    
-    // X mark - clean and bold, positioned to the right of speaker
-    int xCenterX = ix + 18;
-    int xSize = 6;
-    // Draw thick X
-    for (int offset = 0; offset < 2; offset++) {
-      // Diagonal \
-      tft.drawLine(xCenterX - xSize/2 + offset, centerY - xSize/2, 
-                   xCenterX + xSize/2 + offset, centerY + xSize/2, xCol);
-      // Diagonal /
-      tft.drawLine(xCenterX - xSize/2 + offset, centerY + xSize/2, 
-                   xCenterX + xSize/2 + offset, centerY - xSize/2, xCol);
-    }
+    // Speaker triangle (pointing right) - smaller
+    tft.fillTriangle(iconX - 4, iconY, iconX + 1, iconY - 6, iconX + 1, iconY + 6, COL_ALERT);
+    // Speaker body (rectangle) - smaller, more proportional
+    tft.fillRect(iconX - 4, iconY - 3, 3, 6, COL_ALERT);
+    // X mark through speaker - centered on speaker, moved more to the right
+    tft.drawLine(iconX - 5, iconY + 4, iconX + 4, iconY - 7, COL_ALERT);
   }
   // When unmuted, show nothing (clean footer)
+}
+
+// -------------------------------------------------------------
+// Sensor Icons
+// -------------------------------------------------------------
+void drawSensorIcon(int x, int y, int sensorIndex) {
+  // 0=TEMP, 1=HUM, 2=DUST, 3=GAS
+  // Use blue color like in the app (0x07FF is cyan-blue, 0x001F is dark blue, 0x07E0 is green-blue)
+  uint16_t iconColor = 0x07FF;  // Bright cyan-blue to match app icons
+  
+  switch (sensorIndex) {
+    case 0: // TEMP - Thermometer matching app screenshot
+      // Simple vertical stem
+      tft.drawFastVLine(x, y - 5, 9, iconColor);
+      // Bulb at bottom - clean circular bulb
+      tft.fillCircle(x, y + 6, 4, iconColor);
+      tft.drawCircle(x, y + 6, 4, iconColor);
+      break;
+      
+    case 1: // HUM - Two realistic water drops (inverted - pointy top, rounded bottom)
+      // First drop (left) - smaller realistic teardrop, inverted
+      // Pointy top - draw horizontal lines that expand
+      for (int i = 0; i <= 5; i++) {
+        int width = i + 1;
+        tft.fillRect(x - 4 - width/2, y - 5 + i, width, 1, iconColor);
+      }
+      // Bottom rounded part
+      tft.fillCircle(x - 4, y + 2, 3, iconColor);
+      
+      // Second drop (right) - larger realistic teardrop, inverted
+      // Pointy top - draw horizontal lines that expand
+      for (int i = 0; i <= 7; i++) {
+        int width = i + 1;
+        tft.fillRect(x + 4 - width/2, y - 6 + i, width, 1, iconColor);
+      }
+      // Bottom rounded part
+      tft.fillCircle(x + 4, y + 2, 4, iconColor);
+      break;
+      
+    case 2: // DUST - Three horizontal wavy lines (reverted to original)
+      // Three prominent horizontal wavy lines
+      for (int i = 0; i < 3; i++) {
+        int waveY = y - 2 + i * 5;
+        // Draw thicker wave pattern
+        for (int j = -8; j <= 8; j++) {
+          // Create sine wave pattern
+          int waveOffset = (int)(3.5 * sin((j + 8) * 3.14159 / 8.0));
+          // Draw thicker lines
+          tft.drawPixel(x + j, waveY + waveOffset, iconColor);
+          tft.drawPixel(x + j, waveY + waveOffset - 1, iconColor);
+          tft.drawPixel(x + j, waveY + waveOffset + 1, iconColor);
+        }
+      }
+      break;
+      
+    case 3: // GAS - Creative gas molecules/particles icon
+      // Draw three connected circles representing gas molecules
+      // Center molecule
+      tft.fillCircle(x, y, 3, iconColor);
+      tft.drawCircle(x, y, 3, iconColor);
+      // Top-left molecule
+      tft.fillCircle(x - 6, y - 5, 2, iconColor);
+      tft.drawCircle(x - 6, y - 5, 2, iconColor);
+      // Top-right molecule
+      tft.fillCircle(x + 6, y - 5, 2, iconColor);
+      tft.drawCircle(x + 6, y - 5, 2, iconColor);
+      // Bottom molecule
+      tft.fillCircle(x, y + 7, 2, iconColor);
+      tft.drawCircle(x, y + 7, 2, iconColor);
+      // Connect them with lines (molecular bonds)
+      tft.drawLine(x - 6, y - 5, x, y, iconColor);
+      tft.drawLine(x + 6, y - 5, x, y, iconColor);
+      tft.drawLine(x, y, x, y + 7, iconColor);
+      break;
+  }
 }
 
 // -------------------------------------------------------------
@@ -1235,4 +1628,246 @@ void setLED(const String& status) {
   digitalWrite(RED_LED_PIN,   status == "ALERT");
   digitalWrite(GREEN_LED_PIN, status == "OK");
   digitalWrite(BLUE_LED_PIN,  status == "DISCONNECTED");
+}
+
+// -------------------------------------------------------------
+// IR/RF Transmission
+// -------------------------------------------------------------
+void sendIRCommand(uint32_t code, int protocol) {
+  Serial.printf("[IR] Sending code: 0x%08X\n", code);
+  
+  // Send IR command using IRremoteESP8266 (NEC protocol)
+  static IRsend irSender(IR_PIN);
+  irSender.sendNEC(code, 32);
+  delay(100);
+  
+  // Repeat command for reliability
+  irSender.sendNEC(code, 32);
+}
+
+void sendRFCommand(uint32_t code, int bits) {
+  Serial.printf("[RF] Sending code: 0x%08X (%d bits)\n", code, bits);
+  
+  // Simple 433MHz RF transmission using OOK (On-Off Keying)
+  const int bitTime = 500; // microseconds per bit
+  
+  // Send sync pulse
+  digitalWrite(RF_PIN, HIGH);
+  delayMicroseconds(bitTime * 10);
+  digitalWrite(RF_PIN, LOW);
+  delayMicroseconds(bitTime * 5);
+  
+  // Send data bits (MSB first) - Manchester encoding
+  for (int i = bits - 1; i >= 0; i--) {
+    bool bit = (code >> i) & 1;
+    
+    // Manchester: 0 = LOW-HIGH, 1 = HIGH-LOW
+    if (bit) {
+      digitalWrite(RF_PIN, HIGH);
+      delayMicroseconds(bitTime);
+      digitalWrite(RF_PIN, LOW);
+      delayMicroseconds(bitTime);
+    } else {
+      digitalWrite(RF_PIN, LOW);
+      delayMicroseconds(bitTime);
+      digitalWrite(RF_PIN, HIGH);
+      delayMicroseconds(bitTime);
+    }
+  }
+  
+  digitalWrite(RF_PIN, LOW);
+  delayMicroseconds(bitTime * 2);
+  
+  // Repeat for reliability
+  digitalWrite(RF_PIN, HIGH);
+  delayMicroseconds(bitTime * 10);
+  digitalWrite(RF_PIN, LOW);
+  delayMicroseconds(bitTime * 5);
+  
+  for (int i = bits - 1; i >= 0; i--) {
+    bool bit = (code >> i) & 1;
+    if (bit) {
+      digitalWrite(RF_PIN, HIGH);
+      delayMicroseconds(bitTime);
+      digitalWrite(RF_PIN, LOW);
+      delayMicroseconds(bitTime);
+    } else {
+      digitalWrite(RF_PIN, LOW);
+      delayMicroseconds(bitTime);
+      digitalWrite(RF_PIN, HIGH);
+      delayMicroseconds(bitTime);
+    }
+  }
+  
+  digitalWrite(RF_PIN, LOW);
+}
+
+// -------------------------------------------------------------
+// IR/RF Learning Functions
+// -------------------------------------------------------------
+void learnIRCode(String device, String action) {
+  learningIR = true;
+  learningIRDevice = device;
+  learningIRAction = action;
+  irReceiver.enableIRIn();
+  Serial.printf("[IR LEARN] Learning %s/%s - Point remote and press button\n", device.c_str(), action.c_str());
+  
+  // Show on display
+  tft.fillRect(0, H - 60, W, 40, COL_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COL_WARN, COL_BG);
+  tft.drawString("LEARN IR: " + device + "/" + action, W/2, H - 40, 2);
+}
+
+void learnRFCode(String device, String action) {
+  learningRF = true;
+  learningRFDevice = device;
+  learningRFAction = action;
+  learnedRFCode = 0;
+  Serial.printf("[RF LEARN] Learning %s/%s - Press remote button\n", device.c_str(), action.c_str());
+  
+  // Show on display
+  tft.fillRect(0, H - 60, W, 40, COL_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(COL_WARN, COL_BG);
+  tft.drawString("LEARN RF: " + device + "/" + action, W/2, H - 40, 2);
+}
+
+uint32_t getLearnedCode(String device, String action, bool* isIR) {
+  String key = device + "_" + action;
+  String codeStr = prefs.getString(("code_" + key).c_str(), "");
+  
+  if (codeStr.length() == 0) {
+    *isIR = true;
+    return 0; // Not found
+  }
+  
+  // Parse code string: "IR:0x12345678" or "RF:0x12345678"
+  if (codeStr.startsWith("IR:")) {
+    *isIR = true;
+    return strtoul(codeStr.substring(3).c_str(), NULL, 16);
+  } else if (codeStr.startsWith("RF:")) {
+    *isIR = false;
+    return strtoul(codeStr.substring(3).c_str(), NULL, 16);
+  }
+  
+  *isIR = true;
+  return 0;
+}
+
+void saveLearnedCode(String device, String action, uint32_t code, int protocol, bool isIR) {
+  String key = device + "_" + action;
+  String codeStr = (isIR ? "IR:" : "RF:") + String(code, HEX);
+  prefs.putString(("code_" + key).c_str(), codeStr);
+  Serial.printf("[SAVE] Saved code %s/%s: %s\n", device.c_str(), action.c_str(), codeStr.c_str());
+  
+  // Clear learning display
+  tft.fillRect(0, H - 60, W, 40, COL_BG);
+}
+
+void loadLearnedCodes() {
+  // Codes are loaded on-demand via getLearnedCode()
+  Serial.println("[LOAD] Learned codes will be loaded on-demand");
+}
+
+void publishLearnedCodes() {
+  if (!mqtt.connected()) return;
+  
+  StaticJsonDocument<1024> doc;
+  doc["deviceId"] = DEVICE_ID;
+  
+  // Try to load all possible codes
+  JsonArray codes = doc.createNestedArray("codes");
+  
+  String devices[] = {"ac", "dehumidifier", "shutters"};
+  String acActions[] = {"power_on", "power_off", "power_on_COOL_16", "power_on_COOL_24", "power_on_HEAT_20"};
+  String dehumActions[] = {"power_on", "power_off", "power_on_level_1", "power_on_level_3", "power_on_level_5"};
+  String shutterActions[] = {"action_open", "action_close", "action_stop"};
+  
+  for (int i = 0; i < 3; i++) {
+    String device = devices[i];
+    String* actions = (i == 0) ? acActions : (i == 1) ? dehumActions : shutterActions;
+    int actionCount = (i == 0) ? 5 : (i == 1) ? 5 : 3;
+    
+    for (int j = 0; j < actionCount; j++) {
+      bool isIR = true;
+      uint32_t code = getLearnedCode(device, actions[j], &isIR);
+      if (code != 0) {
+        JsonObject codeObj = codes.createNestedObject();
+        codeObj["device"] = device;
+        codeObj["action"] = actions[j];
+        codeObj["code"] = String(code, HEX);
+        codeObj["type"] = isIR ? "IR" : "RF";
+      }
+    }
+  }
+  
+  char buf[1024];
+  serializeJson(doc, buf);
+  String topic = "vealive/smartmonitor/" + String(DEVICE_ID) + "/codes";
+  mqtt.publish(topic.c_str(), buf);
+  Serial.println("[PUBLISH] Published learned codes");
+}
+
+// -------------------------------------------------------------
+// Device Controls UI
+// -------------------------------------------------------------
+void drawDeviceControls() {
+  static bool firstDraw = true;
+  static DeviceState lastAC = acState;
+  static DeviceState lastDehum = dehumidifierState;
+  static DeviceState lastShutters = shuttersState;
+  
+  bool needsUpdate = firstDraw || 
+                     (acState.power != lastAC.power || acState.status != lastAC.status) ||
+                     (dehumidifierState.power != lastDehum.power || dehumidifierState.status != lastDehum.status) ||
+                     (shuttersState.status != lastShutters.status);
+  
+  if (!needsUpdate) return;
+  
+  // Device controls area: below sensor cards, above footer
+  int controlsY = CARDS_Y + 2 * (CARD_H + GAP_Y) + 8;
+  int controlsH = 52;
+  int cardH = 16;
+  int cardGap = 2;
+  
+  // Clear device controls area
+  tft.fillRect(0, controlsY, W, controlsH, COL_BG);
+  
+  // Draw 3 device cards in a row
+  int cardW = (W - 2 * MARGIN_X - 2 * cardGap) / 3;
+  
+  // AC card (left)
+  int acX = MARGIN_X;
+  drawDeviceCard(acX, controlsY, cardW, cardH, "AC", acState.power, acState.status.c_str());
+  
+  // Dehumidifier card (middle)
+  int dehumX = MARGIN_X + cardW + cardGap;
+  drawDeviceCard(dehumX, controlsY, cardW, cardH, "DEHUM", dehumidifierState.power, dehumidifierState.status.c_str());
+  
+  // Shutters card (right)
+  int shuttersX = MARGIN_X + 2 * (cardW + cardGap);
+  drawDeviceCard(shuttersX, controlsY, cardW, cardH, "SHUT", true, shuttersState.status.c_str());
+  
+  lastAC = acState;
+  lastDehum = dehumidifierState;
+  lastShutters = shuttersState;
+  firstDraw = false;
+}
+
+void drawDeviceCard(int x, int y, int w, int h, const char* name, bool power, const char* status) {
+  // Card background
+  uint16_t bgColor = power ? COL_CARD : COL_MUTED;
+  tft.fillRoundRect(x, y, w, h, 4, bgColor);
+  tft.drawRoundRect(x, y, w, h, 4, COL_EDGE);
+  
+  // Device name (left side)
+  drawLeft(x + 4, y + h/2 - 4, name, 1, COL_TEXT, bgColor);
+  
+  // Status (right side)
+  drawRight(x + w - 4, y + h/2 - 4, status, 1, power ? COL_OK : COL_MUTED, bgColor);
+  
+  // Power indicator dot
+  uint16_t dotColor = power ? COL_OK : COL_MUTED;
+  tft.fillCircle(x + w - 12, y + h/2, 3, dotColor);
 }

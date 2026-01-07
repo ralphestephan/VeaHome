@@ -82,7 +82,7 @@ export const createInvitation = async (req: Request, res: Response) => {
       console.log(`[Invitation] Notification sent to existing user ${email} (${existingUser.id}) for home ${homeId}`);
     } else {
       // New user - send email with invitation link
-      // TODO: Send email with invitation link
+    // TODO: Send email with invitation link
       console.log(`[Invitation] New user ${email} invited. Should send email with link: ${inviteLink}`);
     }
 
@@ -116,7 +116,7 @@ export const getPendingInvitations = async (req: Request, res: Response) => {
       // If user is not a member, check if they own the home (via homes table)
       const home = await getHomeById(homeId);
       if (!home || home.user_id !== userId) {
-        return res.status(403).json({ error: 'Not authorized' });
+      return res.status(403).json({ error: 'Not authorized' });
       }
     }
 
@@ -139,9 +139,11 @@ export const acceptInvitation = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Invalid or expired invitation' });
     }
 
-    // Check if user email matches invitation
+    // Check if user email matches invitation, unless it's a share link (placeholder email)
     const user = await usersRepository.findById(userId);
-    if (user?.email !== invitation.email) {
+    const isShareLink = invitation.email.startsWith('share-') && invitation.email.endsWith('@veahome.app');
+
+    if (!isShareLink && user?.email !== invitation.email) {
       return res.status(403).json({ error: 'This invitation is for a different email address' });
     }
 
@@ -150,6 +152,38 @@ export const acceptInvitation = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error accepting invitation:', error);
     return res.status(500).json({ error: 'Failed to accept invitation' });
+  }
+};
+
+// Decline invitation
+export const declineInvitation = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const userId = (req as any).userId;
+
+    const invitation = await homeMembersRepository.getInvitationByToken(token, true); // Include declined to check
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invalid or expired invitation' });
+    }
+
+    // Check if already declined
+    if (invitation.declinedAt) {
+      return res.status(400).json({ error: 'Invitation already declined' });
+    }
+
+    // Check if user email matches invitation, unless it's a share link
+    const user = await usersRepository.findById(userId);
+    const isShareLink = invitation.email.startsWith('share-') && invitation.email.endsWith('@veahome.app');
+
+    if (!isShareLink && user?.email !== invitation.email) {
+      return res.status(403).json({ error: 'This invitation is for a different email address' });
+    }
+
+    await homeMembersRepository.declineInvitation(token);
+    return res.json({ message: 'Invitation declined successfully' });
+  } catch (error) {
+    console.error('Error declining invitation:', error);
+    return res.status(500).json({ error: 'Failed to decline invitation' });
   }
 };
 

@@ -24,6 +24,7 @@ export interface HomeInvitation {
   token: string;
   expiresAt: Date;
   acceptedAt?: Date;
+  declinedAt?: Date;
   createdAt: Date;
 }
 
@@ -163,7 +164,7 @@ export const homeMembersRepository = {
   async getPendingInvitations(homeId: string): Promise<HomeInvitation[]> {
     const result = await pool.query(
       `SELECT * FROM home_invitations 
-       WHERE home_id = $1 AND accepted_at IS NULL AND expires_at > NOW()
+       WHERE home_id = $1 AND accepted_at IS NULL AND declined_at IS NULL AND expires_at > NOW()
        ORDER BY created_at DESC`,
       [homeId]
     );
@@ -176,6 +177,7 @@ export const homeMembersRepository = {
       token: row.token,
       expiresAt: row.expires_at,
       acceptedAt: row.accepted_at,
+      declinedAt: row.declined_at,
       createdAt: row.created_at
     }));
   },
@@ -184,7 +186,7 @@ export const homeMembersRepository = {
   async getPendingInvitationsForUser(email: string): Promise<HomeInvitation[]> {
     const result = await pool.query(
       `SELECT * FROM home_invitations 
-       WHERE email = $1 AND accepted_at IS NULL AND expires_at > NOW()
+       WHERE email = $1 AND accepted_at IS NULL AND declined_at IS NULL AND expires_at > NOW()
        ORDER BY created_at DESC`,
       [email]
     );
@@ -197,15 +199,21 @@ export const homeMembersRepository = {
       token: row.token,
       expiresAt: row.expires_at,
       acceptedAt: row.accepted_at,
+      declinedAt: row.declined_at,
       createdAt: row.created_at
     }));
   },
 
   // Get invitation by token
-  async getInvitationByToken(token: string): Promise<HomeInvitation | null> {
+  async getInvitationByToken(token: string, includeDeclined: boolean = false): Promise<HomeInvitation | null> {
+    const queryConditions = [`token = $1`, `expires_at > NOW()`];
+    if (!includeDeclined) {
+      queryConditions.push(`accepted_at IS NULL`);
+      queryConditions.push(`declined_at IS NULL`);
+    }
     const result = await pool.query(
       `SELECT * FROM home_invitations 
-       WHERE token = $1 AND accepted_at IS NULL AND expires_at > NOW()`,
+       WHERE ${queryConditions.join(' AND ')}`,
       [token]
     );
     
@@ -221,6 +229,7 @@ export const homeMembersRepository = {
       token: row.token,
       expiresAt: row.expires_at,
       acceptedAt: row.accepted_at,
+      declinedAt: row.declined_at,
       createdAt: row.created_at
     };
   },
@@ -266,7 +275,15 @@ export const homeMembersRepository = {
     }
   },
 
-  // Cancel invitation
+  // Decline invitation
+  async declineInvitation(token: string): Promise<void> {
+    await pool.query(
+      `UPDATE home_invitations SET declined_at = NOW() WHERE token = $1`,
+      [token]
+    );
+  },
+
+  // Cancel invitation (by inviter)
   async cancelInvitation(invitationId: string): Promise<void> {
     await pool.query('DELETE FROM home_invitations WHERE id = $1', [invitationId]);
   }

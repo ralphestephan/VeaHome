@@ -34,6 +34,11 @@ import MemberEditScreen from '../screens/MemberEditScreen';
 import DeviceGroupsScreen from '../screens/DeviceGroupsScreen';
 import AutomationsScreen from '../screens/AutomationsScreen';
 import DeviceHistoryScreen from '../screens/DeviceHistoryScreen';
+import TuyaIntegrationScreen from '../screens/TuyaIntegrationScreen';
+import IRRFDeviceOnboardingScreen from '../screens/IRRFDeviceOnboardingScreen';
+import ACControlScreen from '../screens/ACControlScreen';
+import ShuttersControlScreen from '../screens/ShuttersControlScreen';
+import DehumidifierControlScreen from '../screens/DehumidifierControlScreen';
 
 import type { RootStackParamList, BottomTabParamList } from '../types';
 
@@ -166,6 +171,11 @@ export default function AppNavigator() {
           <Stack.Screen name="DeviceGroups" component={DeviceGroupsScreen} />
           <Stack.Screen name="Automations" component={AutomationsScreen} />
           <Stack.Screen name="DeviceHistory" component={DeviceHistoryScreen} />
+          <Stack.Screen name="TuyaIntegration" component={TuyaIntegrationScreen} />
+          <Stack.Screen name="IRRFDeviceOnboarding" component={IRRFDeviceOnboardingScreen} />
+          <Stack.Screen name="ACControl" component={ACControlScreen} />
+          <Stack.Screen name="ShuttersControl" component={ShuttersControlScreen} />
+          <Stack.Screen name="DehumidifierControl" component={DehumidifierControlScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
         </Stack.Navigator>

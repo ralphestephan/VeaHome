@@ -19,8 +19,13 @@ export type RootStackParamList = {
   DeviceGroups: undefined;
   Automations: undefined;
   DeviceHistory: { deviceId: string };
+  IRRFDeviceOnboarding: { deviceType: 'ac' | 'dehumidifier' | 'shutters'; airguardDeviceId: string };
+  ACControl: { deviceId: string; airguardDeviceId: string };
+  ShuttersControl: { deviceId: string; airguardDeviceId: string };
+  DehumidifierControl: { deviceId: string; airguardDeviceId: string };
   Settings: undefined;
   Notifications: undefined;
+  TuyaIntegration: { homeId?: string };
 };
 
 export type BottomTabParamList = {

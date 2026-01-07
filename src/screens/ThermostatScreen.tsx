@@ -6,26 +6,27 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Snowflake, 
-  Flame, 
-  RotateCcw, 
-  Plus, 
-  Minus, 
-  Thermometer, 
-  Droplets, 
-  Fan, 
-  Power, 
-  Timer, 
-  Settings 
+import {
+  Snowflake,
+  Flame,
+  RotateCcw,
+  Plus,
+  Minus,
+  Thermometer,
+  Droplets,
+  Fan,
+  Power,
+  Calendar,
+  Settings,
+  ArrowLeft
 } from 'lucide-react-native';
 import { spacing, borderRadius, ThemeColors, gradients as defaultGradients, shadows as defaultShadows } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import Header from '../components/Header';
-import GlassCard from '../components/GlassCard';
+import CircularThermostat from '../components/CircularThermostat';
 import { useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types';
@@ -111,24 +112,8 @@ export default function ThermostatScreen({ route }: Props) {
     }
   };
 
-  const handlePowerToggle = async () => {
-    if (!thermostat) {
-      Alert.alert('No Device', 'Pair a thermostat to control its power state.');
-      return;
-    }
-    try {
-      await toggleDevice(thermostat.id, thermostat.isActive);
-      await loadThermostat(thermostat.id);
-    } catch (e) {
-      Alert.alert('Error', 'Unable to toggle thermostat power.');
-    }
-  };
-
   const handleFanCycle = async () => {
-    if (!thermostat) {
-      Alert.alert('No Device', 'Pair a thermostat to adjust its fan speed.');
-      return;
-    }
+    if (!thermostat) return;
     const fanOrder: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
     const currentIndex = fanOrder.indexOf(fanSpeed);
     const nextSpeed = fanOrder[(currentIndex + 1) % fanOrder.length];
@@ -136,321 +121,271 @@ export default function ThermostatScreen({ route }: Props) {
     try {
       await controlDevice(thermostat.id, { fanSpeed: nextSpeed });
     } catch (e) {
-      Alert.alert('Error', 'Failed to update fan speed.');
+      // ignore
     }
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Header title="Thermostat Control" showBack />
-        <View style={styles.loadingContainer}>
+      <LinearGradient
+        colors={gradients.deepPurple || gradients.background}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading thermostat...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!thermostatId) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Header title="Thermostat Control" showBack />
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Select a thermostat from a room to manage it here.</Text>
-        </View>
-      </SafeAreaView>
-    );
+        </SafeAreaView>
+      </LinearGradient>
+    )
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header title="Thermostat Control" showBack />
-      
-      <View style={styles.content}>
-        {/* Mode Selector */}
-        <View style={styles.modeSelector}>
-          {[
-            { key: 'cool' as const, label: 'Cool', Icon: Snowflake },
-            { key: 'heat' as const, label: 'Heat', Icon: Flame },
-            { key: 'auto' as const, label: 'Auto', Icon: RotateCcw },
-          ].map(({ key, label, Icon }) => {
-            const isActive = mode === key;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={styles.modeButtonWrapper}
-                onPress={() => handleModeChange(key)}
-                activeOpacity={0.85}
-              >
-                {isActive ? (
-                  <LinearGradient
-                    colors={gradients.accent}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.modeButton}
-                  >
-                    <Icon size={20} color="white" />
-                    <Text style={[styles.modeText, styles.activeModeText]}>{label}</Text>
-                  </LinearGradient>
-                ) : (
-                  <View style={[styles.modeButton, styles.modeButtonInactive]}>
-                    <Icon size={20} color={colors.primary} />
-                    <Text style={styles.modeText}>{label}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Temperature Display */}
-        <View style={styles.temperatureDisplay}>
-          <View style={styles.dialContainer}>
-            <LinearGradient
-              colors={gradients.accent}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.dial}
-            >
-              <Text style={styles.tempValue}>{temperature}</Text>
-              <Text style={styles.tempUnit}>°C</Text>
-            </LinearGradient>
+    <LinearGradient
+      colors={gradients.deepPurple || gradients.background}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <ArrowLeft size={24} color="white" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Thermostat</Text>
+            <Text style={styles.headerSubtitle}>Living Room</Text>
           </View>
-
-          <View style={styles.controls}>
-            <TouchableOpacity onPress={() => adjustTemperature(1)} activeOpacity={0.85}>
-              <LinearGradient
-                colors={gradients.card}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.controlButton}
-              >
-                <Plus size={32} color={colors.foreground} />
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity onPress={() => adjustTemperature(-1)} activeOpacity={0.85}>
-              <LinearGradient
-                colors={gradients.card}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.controlButton}
-              >
-                <Minus size={32} color={colors.foreground} />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Current Status */}
-        <GlassCard style={styles.statusCard}>
-          <View style={styles.statusItem}>
-            <Thermometer
-              size={20}
-              color={colors.primary}
-            />
-            <View>
-              <Text style={styles.statusLabel}>Current Temperature</Text>
-              <Text style={styles.statusValue}>{temperature}°C</Text>
+          <View style={styles.weatherInfo}>
+            <View style={styles.weatherRow}>
+              <Thermometer size={14} color={colors.mutedForeground} />
+              <Text style={styles.weatherText}>21°C</Text>
             </View>
-          </View>
-          
-          <View style={styles.statusItem}>
-            <Droplets
-              size={20}
-              color={colors.primary}
-            />
-            <View>
-              <Text style={styles.statusLabel}>Humidity</Text>
-              <Text style={styles.statusValue}>
+            <View style={styles.weatherRow}>
+              <Droplets size={14} color={colors.mutedForeground} />
+              <Text style={styles.weatherText}>
                 {typeof thermostat?.humidity === 'number' ? `${thermostat.humidity}%` : '58%'}
               </Text>
             </View>
           </View>
-          
-          <View style={styles.statusItem}>
-            <Fan
-              size={20}
-              color={colors.primary}
+        </View>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* Thermostat Dial */}
+          <View style={styles.dialWrapper}>
+            <CircularThermostat
+              temperature={temperature}
+              mode={mode}
+              minTemp={16}
+              maxTemp={30}
+              radius={140}
             />
-            <View>
-              <Text style={styles.statusLabel}>Fan Speed</Text>
-              <Text style={styles.statusValue}>{fanSpeed.charAt(0).toUpperCase() + fanSpeed.slice(1)}</Text>
+
+            {/* Plus/Minus Overlay Controls */}
+            <View style={styles.tempControls}>
+              <TouchableOpacity onPress={() => adjustTemperature(-1)} style={styles.tempButton}>
+                <Minus size={24} color="white" />
+              </TouchableOpacity>
+              <View style={{ width: 100 }} />
+              <TouchableOpacity onPress={() => adjustTemperature(1)} style={styles.tempButton}>
+                <Plus size={24} color="white" />
+              </TouchableOpacity>
             </View>
           </View>
-        </GlassCard>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <GlassCard onPress={handlePowerToggle} containerStyle={styles.actionButton} style={styles.actionButtonSurface}>
-            <Power size={24} color={colors.primary} />
-            <Text style={styles.actionText}>Power</Text>
-          </GlassCard>
-          
-          <GlassCard onPress={handleFanCycle} containerStyle={styles.actionButton} style={styles.actionButtonSurface}>
-            <Fan size={24} color={colors.primary} />
-            <Text style={styles.actionText}>Fan</Text>
-          </GlassCard>
-          
-          <GlassCard
-            onPress={() => navigation.navigate('Schedules')}
-            containerStyle={styles.actionButton}
-            style={styles.actionButtonSurface}
-          >
-            <Timer size={24} color={colors.primary} />
-            <Text style={styles.actionText}>Timer</Text>
-          </GlassCard>
-          
-          <GlassCard
-            onPress={() => {
-              if (thermostat?.id) {
-                navigation.navigate('DeviceHistory', { deviceId: thermostat.id });
-              } else {
-                Alert.alert('No Device', 'Pair a thermostat to view its history.');
-              }
-            }}
-            containerStyle={styles.actionButton}
-            style={styles.actionButtonSurface}
-          >
-            <Settings size={24} color={colors.primary} />
-            <Text style={styles.actionText}>Settings</Text>
-          </GlassCard>
-        </View>
-      </View>
-    </SafeAreaView>
+          {/* Mode Tabs */}
+          <View style={styles.modeTabs}>
+            {['Off', 'Manual', 'Auto'].map((m) => (
+              <TouchableOpacity
+                key={m}
+                onPress={() => {
+                  if (m === 'Off') {
+                    // handle off
+                  } else if (m === 'Auto') {
+                    handleModeChange('auto');
+                  } else {
+                    handleModeChange(mode === 'auto' ? 'cool' : mode);
+                  }
+                }}
+              >
+                <Text style={[
+                  styles.modeTabText,
+                  (m === 'Manual' && mode !== 'auto') || (m === 'Auto' && mode === 'auto') ? styles.modeTabActive : {}
+                ]}>{m}</Text>
+                {((m === 'Manual' && mode !== 'auto') || (m === 'Auto' && mode === 'auto')) && <View style={styles.activeDot} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Bottom Actions */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity
+              style={[styles.actionButton, mode === 'cool' && styles.actionButtonActive]}
+              onPress={() => handleModeChange('cool')}
+            >
+              <View style={styles.actionIconBubble}>
+                <Snowflake size={24} color={mode === 'cool' ? '#00C2FF' : colors.mutedForeground} />
+              </View>
+              <Text style={styles.actionLabel}>Cooling</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleFanCycle}
+            >
+              <View style={styles.actionIconBubble}>
+                <Fan size={24} color={colors.mutedForeground} />
+                {/* Fan Speed Indicator */}
+                <View style={styles.fanIndicator}>
+                  <Text style={{ color: colors.primary, fontSize: 8, fontWeight: 'bold' }}>
+                    {fanSpeed.toUpperCase().charAt(0)}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.actionLabel}>Fan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('Schedules')}
+            >
+              <View style={styles.actionIconBubble}>
+                <Calendar size={24} color={colors.mutedForeground} />
+              </View>
+              <Text style={styles.actionLabel}>Schedule</Text>
+            </TouchableOpacity>
+          </View>
+
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
-const createStyles = (colors: ThemeColors, gradients: typeof defaultGradients, shadows: typeof defaultShadows) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, gradients: any, shadows: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: spacing.xs,
+    marginRight: spacing.md,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: 'white',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  weatherInfo: {
+    alignItems: 'flex-end',
+  },
+  weatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  weatherText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '500',
   },
   content: {
     flex: 1,
-    padding: spacing.lg,
+    justifyContent: 'space-around',
+    paddingBottom: spacing.xl,
   },
-  modeSelector: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: borderRadius.lg,
-    padding: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    marginBottom: spacing.xl,
-  },
-  modeButtonWrapper: {
-    flex: 1,
-  },
-  modeButton: {
-    flexDirection: 'row',
+  dialWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  modeButtonInactive: {
-    backgroundColor: 'transparent',
-  },
-  modeText: {
-    fontSize: 12,
-    color: colors.mutedForeground,
-  },
-  activeModeText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  temperatureDisplay: {
-    alignItems: 'center',
-    marginVertical: spacing.xl,
-  },
-  dialContainer: {
+    marginTop: spacing.xl * 2,
     marginBottom: spacing.xl,
+    position: 'relative',
   },
-  dial: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+  tempControls: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: '50%',
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 30,
-    elevation: 10,
+    marginTop: -24, // adjust for button height
   },
-  tempValue: {
-    fontSize: 72,
-    fontWeight: '700',
-    color: 'white',
+  tempButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  tempUnit: {
-    fontSize: 24,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: -8,
-  },
-  controls: {
+  modeTabs: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: spacing.xl,
+    paddingVertical: spacing.lg,
   },
-  controlButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+  modeTabText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 16,
+    fontWeight: '500',
   },
-  statusCard: {
-    padding: spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  statusLabel: {
-    fontSize: 11,
-    color: colors.mutedForeground,
-    marginBottom: 2,
-  },
-  statusValue: {
-    fontSize: 14,
+  modeTabActive: {
+    color: 'white',
     fontWeight: '600',
-    color: colors.foreground,
   },
-  actions: {
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neonBlue,
+    alignSelf: 'center',
+    marginTop: 4,
+  },
+  bottomActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    justifyContent: 'center',
+    gap: spacing.xl,
+    paddingBottom: spacing.xl,
   },
   actionButton: {
-    flex: 1,
-  },
-  actionButtonSurface: {
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
   },
-  actionText: {
-    fontSize: 11,
-    color: colors.foreground,
+  actionButtonActive: {
+    // scale or glow
   },
-  loadingContainer: {
-    flex: 1,
+  actionIconBubble: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
-    gap: spacing.md,
+    position: 'relative',
   },
-  loadingText: {
+  actionLabel: {
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 12,
-    color: colors.mutedForeground,
-    textAlign: 'center',
   },
+  fanIndicator: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });

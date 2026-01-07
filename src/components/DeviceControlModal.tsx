@@ -48,6 +48,7 @@ import {
   Home,
   Sparkles,
   RefreshCw,
+  Plus,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius, fontSize } from '../constants/theme';
@@ -104,12 +105,12 @@ export default function DeviceControlModal({
 }: DeviceControlModalProps) {
   const { colors, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
-  
+
   const [localValue, setLocalValue] = useState(device?.value ?? 0);
   const [localMode, setLocalMode] = useState<string>('manual');
   // Don't show as active if device is offline
   const [isActive, setIsActive] = useState((device?.isOnline !== false) && (device?.isActive ?? false));
-  
+
   // Live airguard data state
   const [liveAirguardData, setLiveAirguardData] = useState<{
     temperature?: number;
@@ -121,7 +122,7 @@ export default function DeviceControlModal({
     alertFlags?: number;
     rssi?: number;
   } | null>(null);
-  
+
   // Threshold state for Airguard (min/max for temp & humidity)
   const [thresholds, setThresholds] = useState({
     tempHigh: 35,
@@ -143,39 +144,42 @@ export default function DeviceControlModal({
   const [savingThresholds, setSavingThresholds] = useState(false);
   const [togglingMute, setTogglingMute] = useState(false);
   const [loadingAirguardData, setLoadingAirguardData] = useState(false);
-  
+
   // Edit name state
   const [showEditName, setShowEditName] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [savingName, setSavingName] = useState(false);
-  
+
   // Room assignment state
   const [showRoomPicker, setShowRoomPicker] = useState(false);
-  
+
   // Reprovision state
   const [showReprovisionModal, setShowReprovisionModal] = useState(false);
-  const [reprovisionSSID, setReprovisionSSID] = useState(device.wifiSsid || '');
+  const [reprovisionSSID, setReprovisionSSID] = useState((device as any)?.wifiSsid || '');
   const [reprovisionPassword, setReprovisionPassword] = useState('');
   const [reprovisioning, setReprovisioning] = useState(false);
-  
+
+  // Attach Device modal state
+  const [showAttachModal, setShowAttachModal] = useState(false);
+
   // Local state to track current display values (updates immediately after save)
-  const [displayName, setDisplayName] = useState(device.name);
-  const [displayRoomId, setDisplayRoomId] = useState(device.roomId);
-  
+  const [displayName, setDisplayName] = useState(device?.name || '');
+  const [displayRoomId, setDisplayRoomId] = useState(device?.roomId);
+
   // Update display values when device prop changes
   useEffect(() => {
     console.log('[DeviceControlModal] Device prop changed:', { deviceId: device?.id, deviceName: device?.name, deviceRoomId: device?.roomId, currentDisplayRoomId: displayRoomId });
-    setDisplayName(device.name);
-    const newRoomId = device.roomId || null;
+    setDisplayName(device?.name || '');
+    const newRoomId = device?.roomId || null;
     if (String(newRoomId) !== String(displayRoomId)) {
       console.log('[DeviceControlModal] Updating displayRoomId from', displayRoomId, 'to', newRoomId);
       setDisplayRoomId(newRoomId);
     }
     // Update reprovision SSID if device has wifiSsid
-    if (device.wifiSsid) {
-      setReprovisionSSID(device.wifiSsid);
+    if ((device as any)?.wifiSsid) {
+      setReprovisionSSID((device as any).wifiSsid);
     }
-  }, [device?.id, device?.name, device?.roomId, device?.wifiSsid]);
+  }, [device?.id, device?.name, device?.roomId, (device as any)?.wifiSsid]);
 
   // Cleanup BLE on unmount
   useEffect(() => {
@@ -183,7 +187,7 @@ export default function DeviceControlModal({
       cleanupBLE();
     };
   }, []);
-  
+
   // Confirmation popup state (Vealive styled, replaces Alert.alert)
   const [confirmPopup, setConfirmPopup] = useState<{
     visible: boolean;
@@ -191,65 +195,65 @@ export default function DeviceControlModal({
     title: string;
     message: string;
   }>({ visible: false, type: 'success', title: '', message: '' });
-  
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
-  
+
   // Memoize API client
   const airguardApi = useMemo(() => PublicAirguardApi(getApiClient()), []);
 
   // Helper to get smartMonitorId from device (can be in signalMappings or metadata)
   const getSmartMonitorId = useCallback((): string | number | null => {
     if (!device) return null;
-    
+
     // For hubs, check metadata first (hubs have metadata directly)
     if (device.metadata?.smartMonitorId) {
       return device.metadata.smartMonitorId;
     }
-    
+
     // Check signalMappings (for regular devices)
-    const fromSignalMappings = (device.signalMappings as any)?.smartMonitorId ?? 
-                               (device.signalMappings as any)?.smartmonitorId;
+    const fromSignalMappings = (device.signalMappings as any)?.smartMonitorId ??
+      (device.signalMappings as any)?.smartmonitorId;
     if (fromSignalMappings) return fromSignalMappings;
-    
+
     // Try to extract from serialNumber for hubs (e.g., "SM_1" -> 1)
     if (device.serialNumber && typeof device.serialNumber === 'string') {
       const match = device.serialNumber.match(/SM_(\d+)/i);
       if (match) return parseInt(match[1], 10);
     }
-    
+
     return null;
   }, [device]);
 
   // Fetch latest airguard data
   const fetchAirguardData = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
-    
+
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) {
       console.warn('[Airguard] No smartMonitorId found on device:', device.id);
       return;
     }
-    
+
     setLoadingAirguardData(true);
     try {
       const [latestRes, statusRes] = await Promise.all([
         airguardApi.getLatest(smartMonitorId),
         airguardApi.getStatus(smartMonitorId),
       ]);
-      
+
       const latestWrapper = latestRes.data?.data;
       const statusWrapper = statusRes.data?.data;
-      
+
       // Extract actual data from the wrapper
       const latest = latestWrapper?.data || latestWrapper;
       const status = statusWrapper?.data || statusWrapper;
-      
+
       if (!latest) {
         setLiveAirguardData(null);
         return;
       }
-      
+
       const newData = {
         temperature: latest.temperature,
         humidity: latest.humidity,
@@ -260,7 +264,7 @@ export default function DeviceControlModal({
         alertFlags: latest.alertFlags || 0,
         rssi: latest.rssi,
       };
-      
+
       setLiveAirguardData(newData);
     } catch (error) {
       console.error('[Airguard] Failed to fetch data:', error);
@@ -273,15 +277,15 @@ export default function DeviceControlModal({
   // Fetch thresholds when modal opens
   const fetchThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
-    
+
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) return;
-    
+
     try {
       const res = await airguardApi.getThresholds(smartMonitorId);
-      
+
       const data = res.data?.data?.data || res.data?.data;
-      
+
       if (data && typeof data === 'object') {
         const newThresholds = {
           tempHigh: data.tempMax ?? 35,
@@ -311,20 +315,20 @@ export default function DeviceControlModal({
   // Toggle mute/unmute buzzer - simple MQTT command
   const handleMuteToggle = useCallback(async (wantMuted: boolean) => {
     if (!device || device.type !== 'airguard') return;
-    
+
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) return;
-    
+
     setTogglingMute(true);
     try {
       // wantMuted=true means turn buzzer OFF, wantMuted=false means turn buzzer ON
       const targetState = wantMuted ? 'OFF' : 'ON';
       console.log(`[Airguard] Sending buzzer command: ${targetState}`);
       await airguardApi.setBuzzer(smartMonitorId, targetState);
-      
+
       // Update local state optimistically
       setLiveAirguardData(prev => prev ? { ...prev, buzzer: !wantMuted } : null);
-      
+
       // Force immediate sync from backend after 500ms to get actual state
       setTimeout(() => {
         fetchAirguardData();
@@ -339,7 +343,7 @@ export default function DeviceControlModal({
   // Save thresholds to device via MQTT (with min/max support)
   const saveThresholds = useCallback(async () => {
     if (!device || device.type !== 'airguard') return;
-    
+
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) {
       setConfirmPopup({
@@ -350,7 +354,7 @@ export default function DeviceControlModal({
       });
       return;
     }
-    
+
     // Validate inputs
     const tempHigh = parseFloat(editingThresholds.tempHigh);
     const tempLow = parseFloat(editingThresholds.tempLow);
@@ -358,7 +362,7 @@ export default function DeviceControlModal({
     const humidityLow = parseFloat(editingThresholds.humidityLow);
     const dustHigh = parseFloat(editingThresholds.dustHigh);
     const mq2High = parseFloat(editingThresholds.mq2High);
-    
+
     // Validation
     if (isNaN(tempHigh) || isNaN(tempLow) || isNaN(humidityHigh) || isNaN(humidityLow) || isNaN(dustHigh) || isNaN(mq2High)) {
       setConfirmPopup({
@@ -369,7 +373,7 @@ export default function DeviceControlModal({
       });
       return;
     }
-    
+
     if (tempLow >= tempHigh) {
       setConfirmPopup({
         visible: true,
@@ -379,7 +383,7 @@ export default function DeviceControlModal({
       });
       return;
     }
-    
+
     if (humidityLow >= humidityHigh) {
       setConfirmPopup({
         visible: true,
@@ -389,7 +393,7 @@ export default function DeviceControlModal({
       });
       return;
     }
-    
+
     // Local state values
     const newThresholds = {
       tempHigh,
@@ -399,7 +403,7 @@ export default function DeviceControlModal({
       dustHigh,
       mq2High,
     };
-    
+
     // Map to API field names
     const apiPayload = {
       tempMax: newThresholds.tempHigh,
@@ -409,19 +413,19 @@ export default function DeviceControlModal({
       dustHigh: newThresholds.dustHigh,
       mq2High: newThresholds.mq2High,
     };
-    
+
     setSavingThresholds(true);
     try {
       console.log('[Airguard] Saving thresholds:', apiPayload);
       const response = await airguardApi.setThresholds(smartMonitorId, apiPayload);
       console.log('[Airguard] Save response:', response.data);
-      
+
       const responseData = response.data?.data ?? response.data;
       const mqttConnected = responseData?.mqttConnected !== false;
-      
+
       setThresholds(newThresholds);
       setShowThresholdSettings(false);
-      
+
       if (!mqttConnected) {
         setConfirmPopup({
           visible: true,
@@ -460,19 +464,19 @@ export default function DeviceControlModal({
       setTogglingMute(false);
       return;
     }
-    
+
     const smartMonitorId = getSmartMonitorId();
     if (!smartMonitorId) return;
-    
+
     // Initial fetch
     fetchAirguardData();
     fetchThresholds();
-    
+
     // Poll every 2 seconds for live updates - ALWAYS sync, no pauses
     const interval = setInterval(() => {
       fetchAirguardData();
     }, 2000);
-    
+
     return () => {
       clearInterval(interval);
       setTogglingMute(false);
@@ -547,7 +551,7 @@ export default function DeviceControlModal({
   // Calculate signal strength from RSSI
   const getSignalStrength = (rssi: number | undefined): { strength: string; bars: number; color: string } => {
     if (!rssi || rssi === 0) return { strength: 'N/A', bars: 0, color: colors.mutedForeground };
-    
+
     // RSSI ranges: Excellent > -50, Good > -60, Fair > -70, Poor <= -70
     if (rssi > -50) {
       return { strength: 'Excellent', bars: 4, color: '#4CAF50' };
@@ -593,7 +597,7 @@ export default function DeviceControlModal({
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={styles.deviceName}>{displayName}</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => {
                         setEditingName(displayName);
                         setShowEditName(true);
@@ -604,7 +608,7 @@ export default function DeviceControlModal({
                     </TouchableOpacity>
                   </View>
                   {displayRoomId ? (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setShowRoomPicker(true)}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
@@ -614,7 +618,7 @@ export default function DeviceControlModal({
                       </Text>
                     </TouchableOpacity>
                   ) : (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => setShowRoomPicker(true)}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     >
@@ -627,8 +631,8 @@ export default function DeviceControlModal({
               <View style={styles.headerRight}>
                 {/* Reprovision button - only show for devices that support BLE */}
                 {device.type === 'airguard' || device.hubType === 'airguard' ? (
-                  <TouchableOpacity 
-                    onPress={() => setShowReprovisionModal(true)} 
+                  <TouchableOpacity
+                    onPress={() => setShowReprovisionModal(true)}
                     style={styles.reprovisionButton}
                     disabled={reprovisioning}
                   >
@@ -648,7 +652,12 @@ export default function DeviceControlModal({
 
             {/* Main Control Area */}
             {isAirguard ? (
-              <View style={styles.airguardControl}>
+              <>
+                <ScrollView
+                  style={styles.airguardControl}
+                  contentContainerStyle={styles.airguardControlContent}
+                  showsVerticalScrollIndicator={true}
+                >
                   {/* Online/Offline Status Badge */}
                   <View style={styles.statusBadgeContainer}>
                     <View style={[
@@ -670,168 +679,206 @@ export default function DeviceControlModal({
 
                   {/* Signal Strength Indicator - Only show when online with signal */}
                   {liveAirguardData?.rssi && liveAirguardData?.isOnline !== false && (
-                  <View style={styles.statusRow}>
-                    <View style={styles.signalStrengthContainer}>
-                      {(() => {
-                        const signal = getSignalStrength(liveAirguardData.rssi);
-                        return (
-                          <>
-                            <View style={styles.signalBars}>
-                              {[1, 2, 3, 4].map((bar) => (
-                                <View
-                                  key={bar}
-                                  style={[
-                                    styles.signalBar,
-                                    { height: bar * 4 },
-                                    bar <= signal.bars && { backgroundColor: signal.color },
-                                  ]}
-                                />
-                              ))}
-                            </View>
-                            <Text style={[styles.signalText, { color: signal.color }]}>
-                              {signal.strength}
-                            </Text>
-                          </>
-                        );
-                      })()}
-                    </View>
-                  </View>
-                )}
-
-                {/* Alert banner using new component - ONLY use live data when available */}
-                <AirguardAlertBanner
-                  alertFlags={(() => {
-                    const flags = liveAirguardData?.alertFlags ?? 0;
-                    console.log('[AlertBanner] AlertFlags:', flags, 'Sensor data:', {
-                      temp: liveAirguardData?.temperature,
-                      hum: liveAirguardData?.humidity,
-                      dust: liveAirguardData?.dust,
-                      mq2: liveAirguardData?.mq2
-                    }, 'Thresholds:', thresholds);
-                    return flags;
-                  })()}
-                  sensorData={{
-                    temperature: liveAirguardData?.temperature,
-                    humidity: liveAirguardData?.humidity,
-                    dust: liveAirguardData?.dust,
-                    mq2: liveAirguardData?.mq2,
-                  }}
-                  thresholds={{
-                    tempHigh: thresholds.tempHigh,
-                    tempLow: thresholds.tempLow,
-                    humidityHigh: thresholds.humidityHigh,
-                    humidityLow: thresholds.humidityLow,
-                    dustHigh: thresholds.dustHigh,
-                    mq2High: thresholds.mq2High,
-                  }}
-                  variant="full"
-                  showOkStatus={true}
-                />
-
-                {/* Use live data only - show loading if not available */}
-                {(() => {
-                  // Only use fresh live data, no fallbacks to stale device properties
-                  const temp = liveAirguardData?.temperature;
-                  const hum = liveAirguardData?.humidity;
-                  const dust = liveAirguardData?.dust;
-                  const mq2 = liveAirguardData?.mq2;
-                  // buzzer: true = unmuted (alarm on), false = muted (alarm off)
-                  const isMuted = liveAirguardData?.buzzer === false;
-                  
-                  // Calculate alerts based on current values and thresholds
-                  const tempAlert = temp != null && (temp > thresholds.tempHigh || temp < thresholds.tempLow);
-                  const humAlert = hum != null && (hum > thresholds.humidityHigh || hum < thresholds.humidityLow);
-                  const dustAlert = dust != null && dust > thresholds.dustHigh;
-                  const mq2Alert = mq2 != null && mq2 > thresholds.mq2High;
-                  
-                  return (
-                    <>
-                      {loadingAirguardData && !liveAirguardData && (
-                        <View style={{ padding: 20, alignItems: 'center' }}>
-                          <ActivityIndicator size="large" color={colors.primary} />
-                          <Text style={{ color: colors.mutedForeground, marginTop: 10 }}>
-                            Loading sensor data...
-                          </Text>
-                        </View>
-                      )}
-                      
-                      <View style={styles.airguardMetrics}>
-                        <View style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}>
-                          <Thermometer size={24} color={tempAlert ? '#FF6B6B' : colors.primary} />
-                          <Text style={[styles.airguardMetricValue, tempAlert && { color: '#FF6B6B' }]}>
-                            {temp != null ? `${Number(temp).toFixed(1)}°C` : '--'}
-                          </Text>
-                          <Text style={styles.airguardMetricLabel}>Temp</Text>
-                        </View>
-
-                        <View style={[styles.airguardMetricCard, humAlert && styles.alertMetricCard]}>
-                          <Droplets size={24} color={humAlert ? '#FF6B6B' : colors.primary} />
-                          <Text style={[styles.airguardMetricValue, humAlert && { color: '#FF6B6B' }]}>
-                            {hum != null ? `${Math.round(hum)}%` : '--'}
-                          </Text>
-                          <Text style={styles.airguardMetricLabel}>Humidity</Text>
-                        </View>
-
-                        <View style={[styles.airguardMetricCard, dustAlert && styles.alertMetricCard]}>
-                          <Wind size={24} color={dustAlert ? '#FF6B6B' : colors.primary} />
-                          <Text style={[styles.airguardMetricValue, dustAlert && { color: '#FF6B6B' }]}>
-                            {dust != null ? `${dust}` : '--'}
-                          </Text>
-                          <Text style={styles.airguardMetricLabel}>Dust</Text>
-                        </View>
-
-                        <View style={[styles.airguardMetricCard, mq2Alert && styles.alertMetricCard]}>
-                          <Fan size={24} color={mq2Alert ? '#FF6B6B' : colors.primary} />
-                          <Text style={[styles.airguardMetricValue, mq2Alert && { color: '#FF6B6B' }]}>
-                            {mq2 != null ? `${mq2}` : '--'}
-                          </Text>
-                          <Text style={styles.airguardMetricLabel}>Gas/Smoke</Text>
-                        </View>
+                    <View style={styles.statusRow}>
+                      <View style={styles.signalStrengthContainer}>
+                        {(() => {
+                          const signal = getSignalStrength(liveAirguardData.rssi);
+                          return (
+                            <>
+                              <View style={styles.signalBars}>
+                                {[1, 2, 3, 4].map((bar) => (
+                                  <View
+                                    key={bar}
+                                    style={[
+                                      styles.signalBar,
+                                      { height: bar * 4 },
+                                      bar <= signal.bars && { backgroundColor: signal.color },
+                                    ]}
+                                  />
+                                ))}
+                              </View>
+                              <Text style={[styles.signalText, { color: signal.color }]}>
+                                {signal.strength}
+                              </Text>
+                            </>
+                          );
+                        })()}
                       </View>
+                    </View>
+                  )}
 
-                      <TouchableOpacity
-                        style={[styles.muteButton, isMuted && styles.muteButtonActive]}
-                        onPress={() => {
-                          handleMuteToggle(!isMuted);
-                        }}
-                        disabled={togglingMute || !liveAirguardData?.isOnline}
-                        activeOpacity={0.85}
-                      >
-                        <LinearGradient
-                          colors={isMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
-                          style={styles.muteButtonGradient}
+                  {/* Alert banner using new component - ONLY use live data when available */}
+                  <AirguardAlertBanner
+                    alertFlags={(() => {
+                      const flags = liveAirguardData?.alertFlags ?? 0;
+                      console.log('[AlertBanner] AlertFlags:', flags, 'Sensor data:', {
+                        temp: liveAirguardData?.temperature,
+                        hum: liveAirguardData?.humidity,
+                        dust: liveAirguardData?.dust,
+                        mq2: liveAirguardData?.mq2
+                      }, 'Thresholds:', thresholds);
+                      return flags;
+                    })()}
+                    sensorData={{
+                      temperature: liveAirguardData?.temperature,
+                      humidity: liveAirguardData?.humidity,
+                      dust: liveAirguardData?.dust,
+                      mq2: liveAirguardData?.mq2,
+                    }}
+                    thresholds={{
+                      tempHigh: thresholds.tempHigh,
+                      tempLow: thresholds.tempLow,
+                      humidityHigh: thresholds.humidityHigh,
+                      humidityLow: thresholds.humidityLow,
+                      dustHigh: thresholds.dustHigh,
+                      mq2High: thresholds.mq2High,
+                    }}
+                    variant="full"
+                    showOkStatus={true}
+                  />
+
+                  {/* Use live data only - show loading if not available */}
+                  {(() => {
+                    // Only use fresh live data, no fallbacks to stale device properties
+                    const temp = liveAirguardData?.temperature;
+                    const hum = liveAirguardData?.humidity;
+                    const dust = liveAirguardData?.dust;
+                    const mq2 = liveAirguardData?.mq2;
+                    // buzzer: true = unmuted (alarm on), false = muted (alarm off)
+                    const isMuted = liveAirguardData?.buzzer === false;
+
+                    // Calculate alerts based on current values and thresholds
+                    const tempAlert = temp != null && (temp > thresholds.tempHigh || temp < thresholds.tempLow);
+                    const humAlert = hum != null && (hum > thresholds.humidityHigh || hum < thresholds.humidityLow);
+                    const dustAlert = dust != null && dust > thresholds.dustHigh;
+                    const mq2Alert = mq2 != null && mq2 > thresholds.mq2High;
+
+                    return (
+                      <>
+                        {loadingAirguardData && !liveAirguardData && (
+                          <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={{ color: colors.mutedForeground, marginTop: 10 }}>
+                              Loading sensor data...
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.airguardMetrics}>
+                          <View style={[styles.airguardMetricCard, tempAlert && styles.alertMetricCard]}>
+                            <Thermometer size={24} color={tempAlert ? '#FF6B6B' : colors.primary} />
+                            <Text style={[styles.airguardMetricValue, tempAlert && { color: '#FF6B6B' }]}>
+                              {liveAirguardData?.isOnline === false ? '-' : (temp != null ? `${Number(temp).toFixed(1)}°C` : '--')}
+                            </Text>
+                            <Text style={styles.airguardMetricLabel}>Temp</Text>
+                          </View>
+
+                          <View style={[styles.airguardMetricCard, humAlert && styles.alertMetricCard]}>
+                            <Droplets size={24} color={humAlert ? '#FF6B6B' : colors.primary} />
+                            <Text style={[styles.airguardMetricValue, humAlert && { color: '#FF6B6B' }]}>
+                              {liveAirguardData?.isOnline === false ? '-' : (hum != null ? `${Math.round(hum)}%` : '--')}
+                            </Text>
+                            <Text style={styles.airguardMetricLabel}>Humidity</Text>
+                          </View>
+
+                          <View style={[styles.airguardMetricCard, dustAlert && styles.alertMetricCard]}>
+                            <Wind size={24} color={dustAlert ? '#FF6B6B' : colors.primary} />
+                            <Text style={[styles.airguardMetricValue, dustAlert && { color: '#FF6B6B' }]}>
+                              {liveAirguardData?.isOnline === false ? '-' : (dust != null ? `${dust}` : '--')}
+                            </Text>
+                            <Text style={styles.airguardMetricLabel}>Dust</Text>
+                          </View>
+
+                          <View style={[styles.airguardMetricCard, mq2Alert && styles.alertMetricCard]}>
+                            <Fan size={24} color={mq2Alert ? '#FF6B6B' : colors.primary} />
+                            <Text style={[styles.airguardMetricValue, mq2Alert && { color: '#FF6B6B' }]}>
+                              {liveAirguardData?.isOnline === false ? '-' : (mq2 != null ? `${mq2}` : '--')}
+                            </Text>
+                            <Text style={styles.airguardMetricLabel}>Gas/Smoke</Text>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.muteButton, isMuted && styles.muteButtonActive]}
+                          onPress={() => {
+                            handleMuteToggle(!isMuted);
+                          }}
+                          disabled={togglingMute || !liveAirguardData?.isOnline}
+                          activeOpacity={0.85}
                         >
-                          {togglingMute ? (
-                            <ActivityIndicator size="small" color={isMuted ? '#fff' : colors.mutedForeground} />
-                          ) : isMuted ? (
-                            <VolumeX size={22} color="#fff" />
-                          ) : (
-                            <Volume2 size={22} color={colors.mutedForeground} />
-                          )}
-                          <Text style={[styles.muteLabel, isMuted && styles.muteLabelActive]}>
-                            {togglingMute ? 'Updating...' : isMuted ? 'Alarm Muted' : 'Mute Alarm'}
-                          </Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
+                          <LinearGradient
+                            colors={isMuted ? ['#FF6B6B', '#FF8E53'] : [colors.muted, colors.muted]}
+                            style={styles.muteButtonGradient}
+                          >
+                            {togglingMute ? (
+                              <ActivityIndicator size="small" color={isMuted ? '#fff' : colors.mutedForeground} />
+                            ) : isMuted ? (
+                              <VolumeX size={22} color="#fff" />
+                            ) : (
+                              <Volume2 size={22} color={colors.mutedForeground} />
+                            )}
+                            <Text style={[styles.muteLabel, isMuted && styles.muteLabelActive]}>
+                              {togglingMute ? 'Updating...' : isMuted ? 'Alarm Muted' : 'Mute Alarm'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
 
-                      {/* Threshold Settings Button */}
-                      <TouchableOpacity
-                        style={[styles.thresholdToggle, !liveAirguardData?.isOnline && { opacity: 0.5 }]}
-                        onPress={() => {
-                          fetchThresholds(); // Fetch current thresholds before opening
-                          setShowThresholdSettings(true);
-                        }}
-                        disabled={!liveAirguardData?.isOnline}
-                        activeOpacity={0.8}
-                      >
-                        <Settings size={18} color={colors.mutedForeground} />
-                        <Text style={styles.thresholdToggleText}>
-                          Threshold Settings
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  );
-                })()}
+                        {/* Threshold Settings Button */}
+                        <TouchableOpacity
+                          style={[styles.thresholdToggle, !liveAirguardData?.isOnline && { opacity: 0.5 }]}
+                          onPress={() => {
+                            fetchThresholds(); // Fetch current thresholds before opening
+                            setShowThresholdSettings(true);
+                          }}
+                          disabled={!liveAirguardData?.isOnline}
+                          activeOpacity={0.8}
+                        >
+                          <Settings size={18} color={colors.mutedForeground} />
+                          <Text style={styles.thresholdToggleText}>
+                            Threshold Settings
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* Attach Device Button for AirGuard */}
+                        <TouchableOpacity
+                          style={{
+                            marginTop: spacing.md,
+                            borderRadius: borderRadius.lg,
+                            overflow: 'hidden',
+                            ...shadows.md,
+                          }}
+                          onPress={() => {
+                            setShowAttachModal(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <LinearGradient
+                            colors={[colors.primary, colors.neonCyan]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: spacing.sm,
+                              paddingVertical: spacing.md,
+                              paddingHorizontal: spacing.lg,
+                            }}
+                          >
+                            <Plus size={20} color="#fff" />
+                            <Text style={{
+                              color: '#fff',
+                              fontSize: 15,
+                              fontWeight: '600',
+                            }}>
+                              Attach Device
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </>
+                    );
+                  })()}
+                </ScrollView>
 
                 {/* Threshold Settings Popup Modal */}
                 <Modal
@@ -841,163 +888,163 @@ export default function DeviceControlModal({
                   onRequestClose={() => setShowThresholdSettings(false)}
                 >
                   <View style={styles.thresholdModalOverlay}>
-                    <TouchableOpacity 
-                      style={StyleSheet.absoluteFill} 
-                      onPress={() => setShowThresholdSettings(false)} 
+                    <TouchableOpacity
+                      style={StyleSheet.absoluteFill}
+                      onPress={() => setShowThresholdSettings(false)}
                       activeOpacity={1}
                     >
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
                     </TouchableOpacity>
-                    
+
                     <View style={styles.thresholdModalContent}>
                       <LinearGradient
                         colors={[colors.card, colors.cardAlt]}
                         style={styles.thresholdModalInner}
                       >
-                              {/* Header */}
-                              <View style={styles.thresholdModalHeader}>
-                                <Text style={styles.thresholdModalTitle}>Alert Thresholds</Text>
-                                <TouchableOpacity onPress={() => setShowThresholdSettings(false)} style={styles.thresholdModalClose}>
-                                  <X size={20} color={colors.mutedForeground} />
-                                </TouchableOpacity>
-                              </View>
-                              
-                              <Text style={styles.thresholdModalSubtitle}>
-                                Set the min/max values at which alerts will trigger
-                              </Text>
-                              
-                              <ScrollView style={styles.thresholdScrollView} showsVerticalScrollIndicator={false}>
-                                {/* Temperature Section */}
-                                <View style={styles.thresholdSection}>
-                                  <View style={styles.thresholdSectionHeader}>
-                                    <Thermometer size={20} color={colors.primary} />
-                                    <Text style={styles.thresholdSectionTitle}>Temperature (°C)</Text>
-                                  </View>
-                                  <View style={styles.thresholdMinMaxRow}>
-                                    <View style={styles.thresholdMinMaxGroup}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Min</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.tempLow}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempLow: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="10"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                    <View style={styles.thresholdMinMaxGroup}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Max</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.tempHigh}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempHigh: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="35"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                  </View>
-                                </View>
-                                
-                                {/* Humidity Section */}
-                                <View style={styles.thresholdSection}>
-                                  <View style={styles.thresholdSectionHeader}>
-                                    <Droplets size={20} color={colors.primary} />
-                                    <Text style={styles.thresholdSectionTitle}>Humidity (%)</Text>
-                                  </View>
-                                  <View style={styles.thresholdMinMaxRow}>
-                                    <View style={styles.thresholdMinMaxGroup}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Min</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.humidityLow}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityLow: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="20"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                    <View style={styles.thresholdMinMaxGroup}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Max</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.humidityHigh}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityHigh: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="80"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                  </View>
-                                </View>
-                                
-                                {/* Dust Section */}
-                                <View style={styles.thresholdSection}>
-                                  <View style={styles.thresholdSectionHeader}>
-                                    <Wind size={20} color={colors.primary} />
-                                    <Text style={styles.thresholdSectionTitle}>Dust (µg/m³)</Text>
-                                  </View>
-                                  <View style={styles.thresholdMinMaxRow}>
-                                    <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.dustHigh}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, dustHigh: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="400"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                  </View>
-                                </View>
-                                
-                                {/* Gas/Smoke Section */}
-                                <View style={styles.thresholdSection}>
-                                  <View style={styles.thresholdSectionHeader}>
-                                    <Fan size={20} color={colors.primary} />
-                                    <Text style={styles.thresholdSectionTitle}>Gas/Smoke</Text>
-                                  </View>
-                                  <View style={styles.thresholdMinMaxRow}>
-                                    <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
-                                      <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
-                                      <TextInput
-                                        style={styles.thresholdInput}
-                                        value={editingThresholds.mq2High}
-                                        onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, mq2High: text }))}
-                                        keyboardType="numeric"
-                                        placeholder="60"
-                                        placeholderTextColor={colors.mutedForeground}
-                                      />
-                                    </View>
-                                  </View>
-                                </View>
-                              </ScrollView>
-                              
-                              {/* Save Button */}
-                              <TouchableOpacity
-                                style={[styles.saveThresholdsButton, savingThresholds && styles.saveThresholdsButtonDisabled]}
-                                onPress={saveThresholds}
-                                disabled={savingThresholds}
-                                activeOpacity={0.85}
-                              >
-                                <LinearGradient
-                                  colors={[colors.primary, colors.neonCyan]}
-                                  style={styles.saveThresholdsGradient}
-                                  start={{ x: 0, y: 0 }}
-                                  end={{ x: 1, y: 0 }}
-                                >
-                                  <Check size={18} color="#fff" />
-                                  <Text style={styles.saveThresholdsText}>
-                                    {savingThresholds ? 'Sending...' : 'Save & Sync to Device'}
-                                  </Text>
-                                </LinearGradient>
-                              </TouchableOpacity>
-                            </LinearGradient>
-                          </View>
+                        {/* Header */}
+                        <View style={styles.thresholdModalHeader}>
+                          <Text style={styles.thresholdModalTitle}>Alert Thresholds</Text>
+                          <TouchableOpacity onPress={() => setShowThresholdSettings(false)} style={styles.thresholdModalClose}>
+                            <X size={20} color={colors.mutedForeground} />
+                          </TouchableOpacity>
                         </View>
-                      </Modal>
-                </View>
+
+                        <Text style={styles.thresholdModalSubtitle}>
+                          Set the min/max values at which alerts will trigger
+                        </Text>
+
+                        <ScrollView style={styles.thresholdScrollView} showsVerticalScrollIndicator={false}>
+                          {/* Temperature Section */}
+                          <View style={styles.thresholdSection}>
+                            <View style={styles.thresholdSectionHeader}>
+                              <Thermometer size={20} color={colors.primary} />
+                              <Text style={styles.thresholdSectionTitle}>Temperature (°C)</Text>
+                            </View>
+                            <View style={styles.thresholdMinMaxRow}>
+                              <View style={styles.thresholdMinMaxGroup}>
+                                <Text style={styles.thresholdMinMaxLabel}>Min</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.tempLow}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempLow: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="10"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                              <View style={styles.thresholdMinMaxGroup}>
+                                <Text style={styles.thresholdMinMaxLabel}>Max</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.tempHigh}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, tempHigh: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="35"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Humidity Section */}
+                          <View style={styles.thresholdSection}>
+                            <View style={styles.thresholdSectionHeader}>
+                              <Droplets size={20} color={colors.primary} />
+                              <Text style={styles.thresholdSectionTitle}>Humidity (%)</Text>
+                            </View>
+                            <View style={styles.thresholdMinMaxRow}>
+                              <View style={styles.thresholdMinMaxGroup}>
+                                <Text style={styles.thresholdMinMaxLabel}>Min</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.humidityLow}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityLow: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="20"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                              <View style={styles.thresholdMinMaxGroup}>
+                                <Text style={styles.thresholdMinMaxLabel}>Max</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.humidityHigh}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, humidityHigh: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="80"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Dust Section */}
+                          <View style={styles.thresholdSection}>
+                            <View style={styles.thresholdSectionHeader}>
+                              <Wind size={20} color={colors.primary} />
+                              <Text style={styles.thresholdSectionTitle}>Dust (µg/m³)</Text>
+                            </View>
+                            <View style={styles.thresholdMinMaxRow}>
+                              <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
+                                <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.dustHigh}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, dustHigh: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="400"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Gas/Smoke Section */}
+                          <View style={styles.thresholdSection}>
+                            <View style={styles.thresholdSectionHeader}>
+                              <Fan size={20} color={colors.primary} />
+                              <Text style={styles.thresholdSectionTitle}>Gas/Smoke</Text>
+                            </View>
+                            <View style={styles.thresholdMinMaxRow}>
+                              <View style={[styles.thresholdMinMaxGroup, { flex: 1 }]}>
+                                <Text style={styles.thresholdMinMaxLabel}>Max Threshold</Text>
+                                <TextInput
+                                  style={styles.thresholdInput}
+                                  value={editingThresholds.mq2High}
+                                  onChangeText={(text) => setEditingThresholds(prev => ({ ...prev, mq2High: text }))}
+                                  keyboardType="numeric"
+                                  placeholder="60"
+                                  placeholderTextColor={colors.mutedForeground}
+                                />
+                              </View>
+                            </View>
+                          </View>
+                        </ScrollView>
+
+                        {/* Save Button */}
+                        <TouchableOpacity
+                          style={[styles.saveThresholdsButton, savingThresholds && styles.saveThresholdsButtonDisabled]}
+                          onPress={saveThresholds}
+                          disabled={savingThresholds}
+                          activeOpacity={0.85}
+                        >
+                          <LinearGradient
+                            colors={[colors.primary, colors.neonCyan]}
+                            style={styles.saveThresholdsGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                          >
+                            <Check size={18} color="#fff" />
+                            <Text style={styles.saveThresholdsText}>
+                              {savingThresholds ? 'Sending...' : 'Save & Sync to Device'}
+                            </Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+                      </LinearGradient>
+                    </View>
+                  </View>
+                </Modal>
+              </>
             ) : isClimateDevice ? (
               <View style={styles.climateControl}>
                 {/* Circular Dial */}
@@ -1014,10 +1061,10 @@ export default function DeviceControlModal({
                       <Text style={styles.dialUnit}>°C</Text>
                     </View>
                   </View>
-                  
+
                   {/* Temperature controls */}
                   <View style={styles.tempControls}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.tempButton}
                       onPress={() => {
                         const newVal = Math.max(min, localValue - 1);
@@ -1027,7 +1074,7 @@ export default function DeviceControlModal({
                     >
                       <Text style={styles.tempButtonText}>−</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.tempButton}
                       onPress={() => {
                         const newVal = Math.min(max, localValue + 1);
@@ -1055,9 +1102,9 @@ export default function DeviceControlModal({
                       ]}
                       onPress={() => handleModeChange(modeItem.key)}
                     >
-                      <modeItem.icon 
-                        size={18} 
-                        color={localMode === modeItem.key ? colors.primary : colors.mutedForeground} 
+                      <modeItem.icon
+                        size={18}
+                        color={localMode === modeItem.key ? colors.primary : colors.mutedForeground}
                       />
                       <Text style={[
                         styles.modeLabel,
@@ -1116,7 +1163,7 @@ export default function DeviceControlModal({
                         ]}
                       />
                     </View>
-                    <View 
+                    <View
                       style={[
                         styles.sliderThumb,
                         { left: `${((localValue - min) / (max - min)) * 100}%` },
@@ -1128,10 +1175,10 @@ export default function DeviceControlModal({
                       />
                     </View>
                   </TouchableOpacity>
-                  
+
                   {/* Value adjustment buttons */}
                   <View style={styles.sliderButtons}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.sliderBtn}
                       onPress={() => {
                         const newVal = Math.max(min, localValue - 10);
@@ -1141,7 +1188,7 @@ export default function DeviceControlModal({
                     >
                       <Text style={styles.sliderBtnText}>−10</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.sliderBtn}
                       onPress={() => {
                         const newVal = Math.min(max, localValue + 10);
@@ -1175,9 +1222,9 @@ export default function DeviceControlModal({
                           onSetValue(device.id, preset.value);
                         }}
                       >
-                        <preset.icon 
-                          size={16} 
-                          color={Math.round(localValue) === preset.value ? colors.primary : colors.mutedForeground} 
+                        <preset.icon
+                          size={16}
+                          color={Math.round(localValue) === preset.value ? colors.primary : colors.mutedForeground}
                         />
                         <Text style={[
                           styles.presetLabel,
@@ -1194,21 +1241,21 @@ export default function DeviceControlModal({
 
             {/* Power Button - Not for airguard devices */}
             {!isAirguard && (
-            <TouchableOpacity
-              style={[styles.powerButton, isActive && styles.powerButtonActive]}
-              onPress={handleToggle}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={isActive ? [colors.primary, colors.neonPurple] : [colors.muted, colors.muted]}
-                style={styles.powerButtonGradient}
+              <TouchableOpacity
+                style={[styles.powerButton, isActive && styles.powerButtonActive]}
+                onPress={handleToggle}
+                activeOpacity={0.8}
               >
-                <Power size={24} color={isActive ? '#fff' : colors.mutedForeground} />
-                <Text style={[styles.powerLabel, isActive && styles.powerLabelActive]}>
-                  {isActive ? 'Turn Off' : 'Turn On'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <LinearGradient
+                  colors={isActive ? [colors.primary, colors.neonPurple] : [colors.muted, colors.muted]}
+                  style={styles.powerButtonGradient}
+                >
+                  <Power size={24} color={isActive ? '#fff' : colors.mutedForeground} />
+                  <Text style={[styles.powerLabel, isActive && styles.powerLabelActive]}>
+                    {isActive ? 'Turn Off' : 'Turn On'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
             )}
           </LinearGradient>
         </Animated.View>
@@ -1222,14 +1269,14 @@ export default function DeviceControlModal({
         onRequestClose={() => setConfirmPopup(prev => ({ ...prev, visible: false }))}
       >
         <View style={styles.confirmOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => setConfirmPopup(prev => ({ ...prev, visible: false }))} 
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setConfirmPopup(prev => ({ ...prev, visible: false }))}
             activeOpacity={1}
           >
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
           </TouchableOpacity>
-          
+
           <View style={styles.confirmContent}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
@@ -1246,13 +1293,13 @@ export default function DeviceControlModal({
                 {confirmPopup.type === 'warning' && <AlertTriangle size={32} color="#fff" />}
                 {confirmPopup.type === 'error' && <X size={32} color="#fff" />}
               </View>
-              
+
               {/* Title */}
               <Text style={styles.confirmTitle}>{confirmPopup.title}</Text>
-              
+
               {/* Message */}
               <Text style={styles.confirmMessage}>{confirmPopup.message}</Text>
-              
+
               {/* OK Button */}
               <TouchableOpacity
                 style={styles.confirmButton}
@@ -1262,8 +1309,8 @@ export default function DeviceControlModal({
                 <LinearGradient
                   colors={
                     confirmPopup.type === 'success' ? ['#4CAF50', '#2E7D32'] :
-                    confirmPopup.type === 'warning' ? ['#FFB300', '#FF8F00'] :
-                    ['#FF6B6B', '#FF5252']
+                      confirmPopup.type === 'warning' ? ['#FFB300', '#FF8F00'] :
+                        ['#FF6B6B', '#FF5252']
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -1285,14 +1332,14 @@ export default function DeviceControlModal({
         onRequestClose={() => setShowEditName(false)}
       >
         <View style={styles.confirmOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => setShowEditName(false)} 
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowEditName(false)}
             activeOpacity={1}
           >
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
           </TouchableOpacity>
-          
+
           <View style={styles.editNameCard}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
@@ -1314,7 +1361,7 @@ export default function DeviceControlModal({
                     <Text style={styles.editNameSubtitle}>Choose a unique name</Text>
                   </View>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowEditName(false)}
                   style={styles.editNameClose}
                 >
@@ -1368,8 +1415,8 @@ export default function DeviceControlModal({
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={savingName || !editingName.trim() 
-                      ? [colors.muted, colors.muted] 
+                    colors={savingName || !editingName.trim()
+                      ? [colors.muted, colors.muted]
                       : [colors.primary, colors.neonCyan]}
                     style={styles.editNameButtonGradient}
                   >
@@ -1397,12 +1444,12 @@ export default function DeviceControlModal({
         onRequestClose={() => setShowRoomPicker(false)}
       >
         <View style={styles.roomPickerOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => setShowRoomPicker(false)} 
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowRoomPicker(false)}
             activeOpacity={1}
           />
-          
+
           <View style={styles.roomPickerContainer}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
@@ -1427,7 +1474,7 @@ export default function DeviceControlModal({
                     {device?.name || 'Device'} • {rooms.length} {rooms.length === 1 ? 'room' : 'rooms'} available
                   </Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowRoomPicker(false)}
                   style={styles.roomPickerCloseNew}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1437,7 +1484,7 @@ export default function DeviceControlModal({
               </View>
 
               {/* Room Grid */}
-              <ScrollView 
+              <ScrollView
                 style={styles.roomPickerScrollNew}
                 contentContainerStyle={styles.roomPickerContentNew}
                 showsVerticalScrollIndicator={false}
@@ -1529,8 +1576,8 @@ export default function DeviceControlModal({
                           styles.roomCardIconContainer,
                           isActive && styles.roomCardIconContainerActive
                         ]}>
-                          <Home 
-                            size={28} 
+                          <Home
+                            size={28}
                             color={isActive ? '#fff' : colors.primary}
                             strokeWidth={2}
                           />
@@ -1565,14 +1612,14 @@ export default function DeviceControlModal({
         onRequestClose={() => !reprovisioning && setShowReprovisionModal(false)}
       >
         <View style={styles.confirmOverlay}>
-          <TouchableOpacity 
-            style={StyleSheet.absoluteFill} 
-            onPress={() => !reprovisioning && setShowReprovisionModal(false)} 
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => !reprovisioning && setShowReprovisionModal(false)}
             activeOpacity={1}
           >
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
           </TouchableOpacity>
-          
+
           <View style={styles.reprovisionModalContent}>
             <LinearGradient
               colors={[colors.card, colors.cardAlt]}
@@ -1594,7 +1641,7 @@ export default function DeviceControlModal({
                     Resend WiFi credentials via Bluetooth
                   </Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => !reprovisioning && setShowReprovisionModal(false)}
                   style={styles.reprovisionModalClose}
                   disabled={reprovisioning}
@@ -1733,7 +1780,99 @@ export default function DeviceControlModal({
           </View>
         </View>
       </Modal>
-    </Modal>
+
+      {/* Attach Device Modal */}
+      <Modal
+        visible={showAttachModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAttachModal(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowAttachModal(false)}
+            activeOpacity={1}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.7)' }]} />
+          </TouchableOpacity>
+
+          <View style={styles.confirmContent}>
+            <LinearGradient
+              colors={[colors.card, colors.cardAlt]}
+              style={styles.confirmCard}
+            >
+              {/* Icon */}
+              <View style={[styles.confirmIconContainer, { backgroundColor: colors.primary }]}>
+                <Plus size={32} color="#fff" />
+              </View>
+
+              {/* Title */}
+              <Text style={styles.confirmTitle}>Attach Device</Text>
+
+              {/* Message */}
+              <Text style={styles.confirmMessage}>
+                Select the type of device you want to attach to this AirGuard hub.
+              </Text>
+
+              {/* Device Type Buttons */}
+              <View style={{ gap: spacing.sm, marginTop: spacing.md, width: '100%' }}>
+                <TouchableOpacity
+                  style={{ borderRadius: borderRadius.lg, overflow: 'hidden' }}
+                  onPress={() => {
+                    setShowAttachModal(false);
+                    // TODO: Navigate to IR device attach flow
+                    console.log('Attach IR device to:', device?.id);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.neonCyan]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.confirmButtonGradient}
+                  >
+                    <Text style={styles.confirmButtonText}>IR Device</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ borderRadius: borderRadius.lg, overflow: 'hidden' }}
+                  onPress={() => {
+                    setShowAttachModal(false);
+                    // TODO: Navigate to RF device attach flow
+                    console.log('Attach RF device to:', device?.id);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.primary, colors.neonCyan]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.confirmButtonGradient}
+                  >
+                    <Text style={styles.confirmButtonText}>RF Device</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{ borderRadius: borderRadius.lg, overflow: 'hidden', marginTop: spacing.xs }}
+                  onPress={() => setShowAttachModal(false)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[colors.muted, colors.muted]}
+                    style={[styles.confirmButtonGradient, { paddingVertical: spacing.md }]}
+                  >
+                    <Text style={[styles.confirmButtonText, { color: colors.mutedForeground }]}>Cancel</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
+    </Modal >
   );
 }
 
@@ -1747,7 +1886,7 @@ const createStyles = (colors: any, shadows: any) =>
       ...StyleSheet.absoluteFillObject,
     },
     modalContainer: {
-      maxHeight: SCREEN_HEIGHT * 0.85,
+      maxHeight: SCREEN_HEIGHT * 0.95,  // Increased from 0.85 for fuller screen
     },
     modal: {
       borderTopLeftRadius: borderRadius.xxl,
@@ -2101,7 +2240,12 @@ const createStyles = (colors: any, shadows: any) =>
     },
 
     airguardControl: {
+      flex: 1,
+      maxHeight: '95%',  // Increased from 80% for fuller screen
+    },
+    airguardControlContent: {
       gap: spacing.sm,
+      paddingBottom: spacing.xl,
     },
     statusRow: {
       flexDirection: 'row',

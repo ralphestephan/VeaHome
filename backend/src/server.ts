@@ -8,6 +8,7 @@ import { initializeWebSocket } from './services/websocket.service';
 import { initializeIoT } from './services/iot.service';
 import { initializeScheduler } from './services/scheduler.service';
 import { initMqttClient } from './services/mqttService';
+import { initializeTuyaPolling } from './services/tuyaPolling.service';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -20,8 +21,10 @@ import deviceGroupRoutes from './routes/deviceGroup.routes';
 import automationRoutes from './routes/automation.routes';
 import publicAirguardRoutes from './routes/publicAirguard.routes';
 import homeMembersRoutes from './routes/homeMembers.routes';
+import tuyaRoutes from './routes/tuya.routes';
 import { listHubs, createHubDirect, updateHub, deleteHub } from './controllers/hub.controller';
 import { authenticateToken } from './middleware/auth';
+import { initializeTuyaService } from './services/tuyaService';
 
 // Load environment variables
 dotenv.config();
@@ -59,6 +62,7 @@ app.use('/homes', sceneRoutes);
 app.use('/homes', scheduleRoutes);
 app.use('/homes', deviceGroupRoutes);
 app.use('/homes', automationRoutes);
+app.use('/tuya', tuyaRoutes);
 // Create a separate router for home-specific hub routes only
 // This prevents :hubId routes (like /:hubId/rooms) from conflicting with :homeId routes
 // Only mount home-specific routes (/:homeId/hubs) at /homes, NOT hub-specific routes (/:hubId/*)
@@ -99,6 +103,8 @@ initializeWebSocket(server);
 initMqttClient();
 initializeIoT();
 initializeScheduler();
+initializeTuyaService();
+initializeTuyaPolling();
 
 // Start server
 server.listen(PORT, () => {

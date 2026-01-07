@@ -688,6 +688,36 @@ export default function RoomDetailScreen({ route, navigation }: Props) {
         setModalVisible(true);
         return;
       }
+      
+      // Check if this is an AirGuard-controlled device (AC, Shutters, Dehumidifier)
+      const metadata = device.metadata || {};
+      const airguardDeviceId = metadata.airguardDeviceId || device.hubId;
+      const deviceType = metadata.deviceType || device.type;
+      
+      // If device is linked to AirGuard and has the right type, navigate to control screen
+      if (airguardDeviceId && (deviceType === 'ac' || deviceType === 'shutter' || deviceType === 'dehumidifier')) {
+        if (deviceType === 'ac') {
+          navigation.navigate('ACControl', { 
+            deviceId: device.id, 
+            airguardDeviceId: String(airguardDeviceId) 
+          });
+        } else if (deviceType === 'shutter' || device.type === 'shutter') {
+          navigation.navigate('ShuttersControl', { 
+            deviceId: device.id, 
+            airguardDeviceId: String(airguardDeviceId) 
+          });
+        } else if (deviceType === 'dehumidifier' || device.type === 'fan') {
+          // Check if it's actually a dehumidifier by checking metadata
+          if (metadata.deviceType === 'dehumidifier' || device.name.toLowerCase().includes('dehumid')) {
+            navigation.navigate('DehumidifierControl', { 
+              deviceId: device.id, 
+              airguardDeviceId: String(airguardDeviceId) 
+            });
+            return;
+          }
+        }
+      }
+      
       if (isDemoMode) {
         // Use demo context for device control
         demo.toggleDevice(device.id);

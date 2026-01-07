@@ -1,15 +1,15 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Lightbulb, 
-  Thermometer, 
-  Fan, 
-  Tv, 
-  Speaker, 
-  Wifi, 
-  Camera, 
-  Lock, 
+import {
+  Lightbulb,
+  Thermometer,
+  Fan,
+  Tv,
+  Speaker,
+  Wifi,
+  Camera,
+  Lock,
   Power,
   Blinds,
   Snowflake,
@@ -99,9 +99,9 @@ export default function DeviceTile({
 }: DeviceTileProps) {
   const { colors, gradients, shadows } = useTheme();
   const styles = useMemo(() => createStyles(colors, gradients, shadows, compact), [colors, gradients, shadows, compact]);
-  
+
   const IconComponent = iconMap[icon] || iconMap[type || ''] || Lightbulb;
-  
+
   // Determine if this device shows a value
   const showValue = value !== undefined && value !== null;
   const isClimate = type === 'thermostat' || type === 'ac' || icon === 'thermometer' || icon === 'ac';
@@ -146,12 +146,12 @@ export default function DeviceTile({
               styles.iconContainer,
               isActive && styles.activeIconContainer,
             ]}>
-              <IconComponent 
-                size={compact ? 20 : 24} 
-                color={isActive ? '#FFFFFF' : colors.primary} 
+              <IconComponent
+                size={compact ? 20 : 24}
+                color={isActive ? '#FFFFFF' : colors.primary}
               />
             </View>
-            
+
             {/* Value badge for dimmable/climate devices */}
             {showValue && isActive && (
               <View style={styles.valueBadge}>
@@ -164,14 +164,14 @@ export default function DeviceTile({
           </View>
 
           {/* Device name */}
-          <Text 
-            style={[styles.name, isActive && styles.activeText]} 
+          <Text
+            style={[styles.name, isActive && styles.activeText]}
             numberOfLines={2}
             ellipsizeMode="tail"
           >
             {name}
           </Text>
-          
+
           {/* Status text */}
           <Text style={[styles.status, isActive && styles.activeStatus]}>
             {!isOnline ? 'Offline' : isActive ? (showValue ? `${value}${unit || ''}` : 'On') : 'Off'}
@@ -206,38 +206,36 @@ const createStyles = (
   container: {
     borderRadius: borderRadius.xl,
     padding: spacing.md,
-    backgroundColor: colors.card,
+    backgroundColor: colors.glassLight, // Frosted glass for inactive
     borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: compact ? 110 : 120,
+    borderColor: 'rgba(255, 255, 255, 0.1)', // Subtle border for glassmorphism
+    minHeight: compact ? 120 : 130, // Increased for better visual balance
     position: 'relative',
     overflow: 'hidden',
   },
   activeContainer: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    ...shadows.neonPrimary,
+    backgroundColor: '#4D7BFE', // Solid neon blue matching reference
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    ...shadows.neonBlue, // Strong glow effect
   },
   offlineContainer: {
-    opacity: 0.6,
+    opacity: 0.5,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   powerButton: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: spacing.md,
+    right: spacing.md,
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.muted,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
     zIndex: 10,
   },
   powerButtonActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   content: {
     flex: 1,
@@ -250,26 +248,28 @@ const createStyles = (
     justifyContent: 'space-between',
   },
   iconContainer: {
-    width: compact ? 40 : 44,
+    width: compact ? 40 : 44, // Slightly larger for better prominence
     height: compact ? 40 : 44,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.muted,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   activeIconContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)', // Subtle background in active state
   },
   valueBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
     borderRadius: borderRadius.md,
   },
   valueBadgeText: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
     color: '#FFFFFF',
+    fontFamily: 'System',
   },
   valueBadgeUnit: {
     fontSize: fontSize.xs,
@@ -278,35 +278,31 @@ const createStyles = (
   name: {
     fontSize: compact ? fontSize.sm : fontSize.md,
     fontWeight: fontWeight.semibold,
-    color: colors.foreground,
+    color: 'rgba(255, 255, 255, 0.75)',
     marginTop: spacing.sm,
-    lineHeight: (compact ? fontSize.sm : fontSize.md) * 1.3,
+    lineHeight: (compact ? fontSize.sm : fontSize.md) * 1.4,
   },
   activeText: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   status: {
     fontSize: fontSize.xs,
-    color: colors.mutedForeground,
-    marginTop: spacing.xs,
+    color: 'rgba(255, 255, 255, 0.45)',
+    marginTop: 4,
+    fontWeight: fontWeight.medium,
   },
   activeStatus: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   activeBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    display: 'none', // Removed - not in reference design
   },
   offlineOverlay: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
     padding: spacing.xs,
-    borderRadius: borderRadius.sm,
-    backgroundColor: colors.background + 'CC',
+    backgroundColor: 'transparent',
   },
 });
