@@ -25,7 +25,7 @@ const logo = require('../assets/b2d7496ca08e3ec5a9cc24f37c8eb955ed80400e.png');
 export default function HomeScreen({ navigation }: Props) {
   const { colors, gradients } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  
+
   const handleGetStarted = () => {
     navigation.replace('Dashboard');
   };
@@ -54,14 +54,20 @@ export default function HomeScreen({ navigation }: Props) {
               </TouchableOpacity>
             </View>
             <View style={styles.metricsRow}>
-              <View style={styles.metricChip}>
+              <LinearGradient
+                colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                style={styles.metricChip}
+              >
                 <Text style={styles.metricValue}>24</Text>
-                <Text style={styles.metricLabel}>Connected zones</Text>
-              </View>
-              <View style={styles.metricChip}>
+                <Text style={styles.metricLabel}>CONNECTED ZONES</Text>
+              </LinearGradient>
+              <LinearGradient
+                colors={['rgba(30, 41, 59, 0.6)', 'rgba(15, 23, 42, 0.8)']}
+                style={styles.metricChip}
+              >
                 <Text style={styles.metricValue}>0.82 kWh</Text>
-                <Text style={styles.metricLabel}>Live energy</Text>
-              </View>
+                <Text style={styles.metricLabel}>LIVE ENERGY</Text>
+              </LinearGradient>
             </View>
           </View>
           <View style={styles.heroMedia}>
@@ -169,9 +175,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   metricChip: {
     flex: 1,
-    backgroundColor: colors.muted,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   metricValue: {
     fontSize: fontSize.xl,
@@ -179,8 +186,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '700',
   },
   metricLabel: {
-    fontSize: fontSize.sm,
+    fontSize: 10,
     color: colors.mutedForeground,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '600',
   },
   heroMedia: {
     flex: 1,
