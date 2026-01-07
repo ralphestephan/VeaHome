@@ -102,8 +102,8 @@ export default function DeviceTile({ device, onPress }: DeviceTileProps) {
               isActive && styles.activeText
             ]}
           >
-            {typeof device.value === 'number' ? `${device.value}°` :
-              device.value === 1 || device.value === 'on' || device.value === true ? 'ON' : 'OFF'}
+            {typeof device.value === 'number' && device.type !== 'light' ? `${device.value}°` :
+              String(device.value) === '1' || String(device.value) === 'on' || device.value === true ? 'ON' : 'OFF'}
           </Text>
         )}
 
@@ -122,62 +122,65 @@ const styles = StyleSheet.create({
   container: {
     width: '48%',
     marginBottom: spacing.md,
+    borderRadius: borderRadius.lg, // Ensure efficient clipping
+    ...shadows.md,
   },
   card: {
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    minHeight: 140,
+    padding: spacing.md, // Reduced padding for better use of space
+    minHeight: 120, // Slightly reduced to look more compact/premium
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
-    ...shadows.md,
   },
   glow: {
     borderRadius: borderRadius.lg,
     shadowColor: '#4D7BFE',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.5,
+    shadowRadius: 15, // Softer glow
+    elevation: 5,
   },
   offline: {
-    opacity: 0.5,
+    opacity: 0.6, // Less transparent to keep readability
   },
   iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(77, 123, 254, 0.15)',
+    width: 44, // Smaller, more refined icon container
+    height: 44,
+    borderRadius: borderRadius.full, // Circle looks more modern
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Subtle background
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   iconActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   deviceName: {
     fontSize: fontSize.md,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 4,
+    color: 'rgba(255, 255, 255, 0.95)',
+    marginBottom: 2,
   },
   deviceValue: {
     fontSize: fontSize.sm,
     fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   activeText: {
     color: '#FFFFFF',
+    fontWeight: '600',
   },
   offlineIndicator: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 10,
+    right: 10,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
   },
   offlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
+    // Removed nested dot, using offlineIndicator directly
   },
 });

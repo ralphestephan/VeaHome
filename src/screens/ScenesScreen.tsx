@@ -119,11 +119,14 @@ interface Scene {
   icon: string;
   devices: number;
   isActive: boolean;
+  is_active?: boolean;
   time?: string;
   description?: string;
   deviceCount?: number;
   device_states?: any;
   deviceStates?: any;
+  deviceTypeRules?: any[];
+  device_type_rules?: any[];
   schedule?: string;
 }
 
@@ -1108,6 +1111,11 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       borderRadius: borderRadius.md,
       padding: spacing.sm,
     },
+    activeSceneActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
     activeSceneControls: {
       flexDirection: 'row',
       gap: spacing.sm,
@@ -1118,7 +1126,10 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       borderRadius: borderRadius.md,
       padding: spacing.md,
       alignItems: 'center',
-      gap: 4,
+      justifyContent: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)', // Subtle border for controls
     },
     controlText: {
       fontSize: fontSize.sm,
@@ -1134,7 +1145,8 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       alignItems: 'center',
-      gap: spacing.sm,
+      justifyContent: 'center', // Added to ensure vertical centering
+      gap: spacing.xs, // Reduced gap for tighter layout
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.1)',
       ...shadows.lg,
@@ -1281,7 +1293,8 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderColor: 'rgba(77, 123, 254, 0.3)', // Neon blue subtle border
+      backgroundColor: 'rgba(30, 41, 59, 0.4)', // Slightly lighter glass
       ...shadows.md,
     },
     automationMiniHeader: {
@@ -1354,5 +1367,107 @@ const createStyles = (colors: any, gradients: any, shadows: any) =>
     loadingText: {
       color: colors.mutedForeground,
       fontSize: fontSize.sm,
+    },
+    automationLoadingState: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    featuredAutomationCard: {
+      borderRadius: borderRadius.xl,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      borderWidth: 1,
+      borderColor: 'rgba(77, 123, 254, 0.3)',
+      ...shadows.neonPrimary,
+    },
+    automationHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: spacing.lg,
+    },
+    automationInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      flex: 1,
+    },
+    featuredAutomationIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: borderRadius.full,
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    featuredAutomationName: {
+      fontSize: fontSize.lg,
+      fontWeight: '600',
+      color: 'white',
+      marginBottom: 2,
+    },
+    featuredAutomationTime: {
+      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.7)',
+    },
+    automationControls: {
+      alignItems: 'flex-end',
+      gap: spacing.sm,
+    },
+    automationBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.full,
+    },
+    automationBadgeActive: {
+      backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    },
+    automationBadgePaused: {
+      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    automationBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: '600',
+      color: 'white',
+    },
+    featuredAutomationStats: {
+      flexDirection: 'row',
+      gap: spacing.lg,
+      marginTop: spacing.sm,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    featuredAutomationStat: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    featuredAutomationStatText: {
+      fontSize: fontSize.sm,
+      color: 'rgba(255, 255, 255, 0.8)',
+    },
+    automationEmptyState: {
+      padding: spacing.xl,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(30, 41, 59, 0.4)',
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderStyle: 'dashed',
+    },
+    automationEmptyTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: '600',
+      color: colors.foreground,
+      marginBottom: spacing.xs,
+    },
+    automationEmptySubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      textAlign: 'center',
     },
   });

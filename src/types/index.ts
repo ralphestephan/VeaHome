@@ -73,7 +73,7 @@ export interface Device {
   category: 'IR' | 'RF' | 'Relay' | 'Sensor' | 'Zigbee' | 'Matter' | 'WiFi' | 'climate' | 'media' | 'security' | 'lighting' | 'windows';
   isActive: boolean;
   isOnline?: boolean;
-  value?: number;
+  value?: number | string | boolean;
   unit?: string;
   roomId?: string; // Can inherit from hub.roomId
   hubId: string; // Required - all devices need a hub
@@ -141,11 +141,9 @@ export interface EnergyData {
 
 export interface DeviceAction {
   deviceId: string;
-  action: {
-    isActive?: boolean;
-    value?: number;
-  };
 }
+
+
 
 export interface Scene {
   id: string;
