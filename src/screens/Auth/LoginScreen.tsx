@@ -10,6 +10,10 @@ import { Mail, Lock, Sparkles, Home, Shield, Zap, Eye, EyeOff } from 'lucide-rea
 
 const heroGif = require('../../../assets/VeaHome.gif');
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import Constants from 'expo-constants';
+import { getApiClient } from '../../services/api';
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
 
 interface Props {
   onSwitchToSignup?: () => void;
@@ -25,7 +29,7 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -96,10 +100,10 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
         colors={[colors.background, '#0A0E1F', colors.background]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <Animated.View style={[styles.glowOrb, styles.glowOrb1, { opacity: glowOpacity }]} />
       <Animated.View style={[styles.glowOrb, styles.glowOrb2, { opacity: glowOpacity }]} />
-      
+
       <ExpoImage
         source={heroGif}
         style={styles.backgroundArt}
@@ -206,7 +210,7 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
                   value={password}
                   onChangeText={setPassword}
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.passwordToggle}
                   onPress={() => setShowPassword(!showPassword)}
                 >
@@ -219,9 +223,9 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
               </View>
             </View>
 
-            <TouchableOpacity 
-              style={styles.primaryButton} 
-              onPress={onSubmit} 
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={onSubmit}
               disabled={submitting}
               activeOpacity={0.8}
             >
@@ -239,8 +243,8 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.demoButton} 
+            <TouchableOpacity
+              style={styles.demoButton}
               onPress={loginDemo}
               activeOpacity={0.7}
             >
@@ -280,6 +284,19 @@ export default function LoginScreen({ onSwitchToSignup }: Props) {
             </View>
           </View>
         </Animated.View>
+
+        {/* Debug Info Overlay */}
+        <View style={{ padding: 10, alignItems: 'center', opacity: 0.5 }}>
+          <Text style={{ color: 'yellow', fontSize: 10 }}>
+            API: {getApiClient().defaults.baseURL}
+          </Text>
+          <Text style={{ color: 'cyan', fontSize: 10 }}>
+            Build: {Constants.expoConfig?.ios?.buildNumber || 'N/A'} (Native: {Application.nativeBuildVersion})
+          </Text>
+          <Text style={{ color: 'magenta', fontSize: 10 }}>
+            ATS: {JSON.stringify(Constants.expoConfig?.ios?.infoPlist?.NSAppTransportSecurity || 'Unknown')}
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
